@@ -1,0 +1,92 @@
+[
+  {
+    "text": "Information retrieval is the process of obtaining information system resources that are relevant to an information need from a collection of those resources.",
+    "title": "Introduction to Information Retrieval",
+    "doc_id": 0,
+    "category": "overview"
+  },
+  {
+    "text": "Boolean retrieval is one of the simplest forms of information retrieval. It uses Boolean operators AND, OR, and NOT to combine query terms.",
+    "title": "Boolean Retrieval Model",
+    "doc_id": 1,
+    "category": "models"
+  },
+  {
+    "text": "The vector space model represents documents and queries as vectors in a high-dimensional space. Similarity is measured using cosine similarity.",
+    "title": "Vector Space Model",
+    "doc_id": 2,
+    "category": "models"
+  },
+  {
+    "text": "An inverted index is a data structure that maps terms to the documents containing them. It enables fast retrieval of documents matching query terms.",
+    "title": "Inverted Index Data Structure",
+    "doc_id": 3,
+    "category": "indexing"
+  },
+  {
+    "text": "Positional indexing extends the inverted index by storing the positions of terms within documents. This enables phrase queries and proximity searches.",
+    "title": "Positional Index",
+    "doc_id": 4,
+    "category": "indexing"
+  },
+  {
+    "text": "TF-IDF weighting is a numerical statistic that reflects how important a word is to a document in a collection. TF stands for term frequency and IDF for inverse document frequency.",
+    "title": "TF-IDF Weighting Scheme",
+    "doc_id": 5,
+    "category": "ranking"
+  },
+  {
+    "text": "Precision and recall are fundamental metrics for evaluating information retrieval systems. Precision measures the fraction of retrieved documents that are relevant.",
+    "title": "Evaluation Metrics: Precision and Recall",
+    "doc_id": 6,
+    "category": "evaluation"
+  },
+  {
+    "text": "Query expansion is a technique to improve retrieval effectiveness by reformulating the original query. It can use relevance feedback or query term synonyms.",
+    "title": "Query Expansion Techniques",
+    "doc_id": 7,
+    "category": "enhancement"
+  },
+  {
+    "text": "Clustering algorithms group similar documents together. Common algorithms include K-means clustering and hierarchical clustering methods.",
+    "title": "Document Clustering",
+    "doc_id": 8,
+    "category": "clustering"
+  },
+  {
+    "text": "Text summarization aims to produce a concise summary of a document while preserving its key information. Methods include extractive and abstractive summarization.",
+    "title": "Automatic Text Summarization",
+    "doc_id": 9,
+    "category": "summarization"
+  },
+  {
+    "text": "The melamine milk scandal involved contaminated infant formula and dairy products. The scandal affected information retrieval systems tracking food safety.",
+    "title": "Case Study: Melamine Scandal",
+    "doc_id": 10,
+    "category": "case_study"
+  },
+  {
+    "text": "Chinese information retrieval faces unique challenges including word segmentation, character encoding, and phonetic similarity matching using systems like CSoundex.",
+    "title": "Chinese IR Challenges",
+    "doc_id": 11,
+    "category": "multilingual"
+  },
+  {
+    "text": "Relevance feedback allows users to refine search results by indicating which documents are relevant. The Rocchio algorithm is a classic relevance feedback method.",
+    "title": "Relevance Feedback and Rocchio",
+    "doc_id": 12,
+    "category": "enhancement"
+  },
+  {
+    "text": "Web search engines like Google use sophisticated ranking algorithms including PageRank to determine the relevance and importance of web pages.",
+    "title": "Web Search and PageRank",
+    "doc_id": 13,
+    "category": "web_search"
+  },
+  {
+    "text": "Natural language processing techniques are increasingly important in modern information retrieval systems. They help understand user intent and document semantics.",
+    "title": "NLP in Information Retrieval",
+    "doc_id": 14,
+    "category": "advanced"
+  }
+]

@@ -1,0 +1,224 @@
+================================================================================
+PHASE 3: 資料收集與預處理 - 完成總結報告
+================================================================================
+
+完成日期: 2025-11-17
+階段狀態: ✅ 完成
+
+================================================================================
+1. 資料預處理 (NLP Pipeline)
+================================================================================
+
+腳本: scripts/preprocess_news.py
+輸入: data/processed/cna_mvp_cleaned.jsonl (121 articles)
+輸出: data/preprocessed/cna_mvp_preprocessed.jsonl
+
+處理統計:
+- 成功處理: 121/121 (100%)
+- 處理時間: 32.07 秒
+- 平均速度: 0.265 秒/篇
+
+NLP 特徵:
+- 總詞彙數: 48,412 tokens
+- 平均每篇: 400.1 tokens
+- 總實體數: 5,493 entities
+- 平均每篇: 45.4 entities
+- 關鍵詞數: 605 (每篇 5 個)
+
+使用模組:
+✓ ChineseTokenizer (Jieba) - 中文分詞
+✓ NERExtractor (CKIP) - 命名實體識別
+✓ TextRankExtractor - 關鍵詞提取
+✓ StaticSummarizer - 自動摘要 (Lead-k)
+
+================================================================================
+2. 索引建構 (Search Indexes)
+================================================================================
+
+腳本: scripts/build_indexes.py
+輸出目錄: data/indexes/
+
+建構統計:
+- 文檔數: 121
+- 詞彙表: 10,248 unique terms
+- 總 tokens: 48,412
+- 建構時間: 0.11 秒
+- 吞吐量: 1,103.9 docs/second
+
+索引類型:
+✓ Inverted Index (inverted_index.pkl) - 354 KB
+  - 26,307 postings
+  - 倒排索引 (term -> documents)
+  
+✓ Positional Index (positional_index.pkl) - 350 KB
+  - 26,307 postings
+  - 39,133 positions
+  - 支援詞組查詢
+  
+✓ TF-IDF Vectors (tfidf_vectors.pkl) - 535 KB
+  - 向量空間模型
+  - L2 正規化
+  
+✓ BM25 Index (bm25_index.pkl) - 185 KB
+  - k1=1.5, b=0.75
+  - 預計算 IDF 值
+
+輔助文件:
+✓ doc_id_map.json - 文檔 ID 映射 (6 KB)
+
+================================================================================
+3. BERT Embeddings (語義檢索)
+================================================================================
+
+腳本: scripts/build_bert_embeddings.py
+模型: paraphrase-multilingual-MiniLM-L12-v2
+裝置: CUDA (GPU 加速)
+
+輸出:
+- bert_embeddings.npy - 182 KB (121 x 384 維度)
+- bert_embeddings.json - 2.6 KB (metadata)
+
+效能:
+- 編碼時間: 3.08 秒
+- 吞吐量: 39.3 docs/second
+- 每篇時間: 0.0254 秒
+- 批次大小: 16
+
+向量統計:
+- 嵌入維度: 384
+- L2 正規化: mean norm = 1.0000
+- 值範圍: [-0.2063, 0.2157]
+
+================================================================================
+4. SQLite 資料庫 (結構化儲存)
+================================================================================
+
+腳本: scripts/build_database.py
+輸出: data/database/cnirs.db (1.47 MB)
+
+資料表:
+✓ news - 主資料表 (121 rows)
+  - 欄位: id, article_id, title, content, category, date, author
+  - NLP: tokens, entities, keywords, summary, tags (JSON)
+  - 索引: article_id, published_date, category, source
+  
+✓ news_fts - 全文檢索表 (FTS5)
+  - 支援快速文本搜尋
+
+統計:
+- 日期範圍: 2025-11-07 to 2025-11-13 (7 days)
+- 分類分布: 政治 (121篇, 100%)
+- 來源分布: CNA (121篇, 100%)
+- 建構時間: 0.20 秒
+
+================================================================================
+5. 測試查詢與 QRELS (評估資料集)
+================================================================================
+
+腳本: scripts/create_test_queries.py
+
+輸出檔案:
+- data/evaluation/test_queries.txt (15 queries)
+- data/evaluation/qrels.txt (347 judgments)
+- data/evaluation/qrels.detailed.txt (詳細版)
+
+查詢類型:
+- Simple (簡單關鍵字): 5 queries
+- Entity (實體查詢): 3 queries
+- Phrase (詞組查詢): 2 queries
+- Multi (多詞查詢): 3 queries
+- Topic (主題查詢): 2 queries
+
+相關性判斷統計:
+- 總判斷數: 347
+- 高度相關 (2): 64 judgments
+- 相關 (1): 57 judgments
+- 不相關 (0): 226 judgments
+- 平均相關文檔/查詢: 8.1
+
+範例查詢:
+Q001	颱風災害
+Q002	淹水救援
+Q003	人工智慧
+Q006	蘇澳
+Q009	颱風鳳凰影響
+
+================================================================================
+6. 完整資料結構
+================================================================================
+
+data/
+├── preprocessed/
+│   └── cna_mvp_preprocessed.jsonl          (1.2 MB, 121 articles)
+├── indexes/
+│   ├── inverted_index.pkl                  (354 KB)
+│   ├── positional_index.pkl                (350 KB)
+│   ├── tfidf_vectors.pkl                   (535 KB)
+│   ├── bm25_index.pkl                      (185 KB)
+│   ├── bert_embeddings.npy                 (182 KB)
+│   ├── bert_embeddings.json                (2.6 KB)
+│   └── doc_id_map.json                     (6 KB)
+├── database/
+│   └── cnirs.db                            (1.47 MB)
+├── evaluation/
+│   ├── test_queries.txt                    (15 queries)
+│   ├── qrels.txt                           (347 judgments)
+│   └── qrels.detailed.txt                  (with scores)
+└── stats/
+    ├── preprocessing_report.txt
+    ├── index_build_stats.txt
+    ├── bert_embeddings_stats.txt
+    ├── database_stats.txt
+    ├── test_queries_stats.txt
+    └── phase3_summary.txt
+
+總儲存空間: ~5 MB
+
+================================================================================
+7. 已建立的工具腳本
+================================================================================
+
+✓ scripts/preprocess_news.py          - NLP 預處理管線
+✓ scripts/build_indexes.py            - 多類型索引建構
+✓ scripts/build_bert_embeddings.py    - BERT 向量化
+✓ scripts/build_database.py           - SQLite 資料庫建立
+✓ scripts/create_test_queries.py      - 測試查詢生成
+
+所有腳本皆支援:
+- 完整的 --help 說明
+- 詳細的日誌輸出
+- 統計報告生成
+- 錯誤處理
+
+================================================================================
+8. Phase 3 成功標準檢查
+================================================================================
+
+✅ 121 篇文章全部完成 NLP 預處理
+✅ 4 種索引成功建立 (Inverted, Positional, TF-IDF, BM25)
+✅ BERT embeddings 預計算完成 (GPU 加速)
+✅ SQLite 資料庫包含完整資料 (含 FTS5)
+✅ 15 個測試查詢 + 347 個 QRELS
+✅ 所有腳本可執行且有完整文檔
+
+Phase 3 完成度: 100% ✓
+
+================================================================================
+9. 下一步: Phase 4-5
+================================================================================
+
+Phase 4: 檢索系統整合
+- [ ] 整合 Boolean, TF-IDF, BM25, BERT 檢索模型
+- [ ] 實作統一檢索 API
+- [ ] 建立端到端測試腳本
+- [ ] 計算評估指標 (MAP, nDCG)
+
+Phase 5: Web UI 開發
+- [ ] Flask 後端 API
+- [ ] 前端搜尋介面
+- [ ] 結果展示與排序
+- [ ] 模型對比功能
+
+================================================================================
+報告結束
+================================================================================

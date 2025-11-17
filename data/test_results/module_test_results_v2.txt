@@ -1,0 +1,57 @@
+======================================================================
+COMPREHENSIVE MODULE TESTING REPORT
+Generated: 2025-11-13 09:51:19
+Dataset: data/processed/cna_mvp_cleaned.jsonl
+Documents: 100
+======================================================================
+
+======================================================================
+IR MODULES TESTING
+======================================================================
+
+## M1: Boolean Retrieval
+   ❌ Error: 'BooleanQueryEngine' object has no attribute 'search'
+
+## M2: Inverted Index & Positional Index
+   ✅ Inverted index built: 2889 terms
+   ✅ Positional index built: phrase search '中國' found in 0 docs
+   ❌ Error: cannot import name 'TFIDFWeighting' from 'src.ir.index.term_weighting' (/mnt/c/web-projects/information-retrieval/src/ir/index/term_weighting.py)
+
+## M4: Evaluation Metrics
+   ✅ Precision: 0.600
+   ✅ Recall: 0.600
+   ✅ F1-Score: 0.600
+   ✅ Average Precision: 0.453
+   ❌ Error: 'list' object has no attribute 'keys'
+
+## M5: Rocchio Query Expansion
+   ⚠️  No search results for query expansion
+
+## M6: Document & Term Clustering
+   ❌ Error: 'DocumentClusterer' object has no attribute 'cluster'
+   ❌ Error: cannot import name 'KWIC' from 'src.ir.summarize.dynamic' (/mnt/c/web-projects/information-retrieval/src/ir/summarize/dynamic.py)
+
+======================================================================
+NLP MODULES TESTING
+======================================================================
+
+## Phase 1: Tokenization
+   ✅ Tokenization: 463 tokens
+   ✅ Sample tokens: （ 中央社 記者 沈如峰 宜蘭縣 12日 電 ） 宜蘭縣 蘇澳鎮
+
+## Phase 2: Named Entity Recognition
+   ✅ NER extraction: 52 entities
+   ❌ Error: 'Entity' object has no attribute 'get'
+
+## Phase 3: Keyword Extraction
+   ✅ TextRank extraction: 10 keywords
+   ❌ Error: 'Keyword' object is not subscriptable
+   ❌ Error: cannot import name 'LDATopicModel' from 'src.ir.topic.lda_model' (/mnt/c/web-projects/information-retrieval/src/ir/topic/lda_model.py)
+
+## Phase 5: Syntactic Parsing
+   ✅ Dependency parsing completed
+   ✅ Sample text: '中國經濟快速發展'
+
+======================================================================
+TESTING COMPLETE
+======================================================================

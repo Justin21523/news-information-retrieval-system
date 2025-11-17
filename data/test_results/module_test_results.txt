@@ -1,0 +1,46 @@
+======================================================================
+COMPREHENSIVE MODULE TESTING REPORT
+Generated: 2025-11-13 09:45:48
+Dataset: /mnt/c/web-projects/information-retrieval/data/processed/cna_mvp_cleaned.jsonl
+Documents: 100
+======================================================================
+
+======================================================================
+IR MODULES TESTING
+======================================================================
+   ❌ Error: cannot import name 'BooleanRetrieval' from 'src.ir.retrieval.boolean' (/mnt/c/web-projects/information-retrieval/src/ir/retrieval/boolean.py)
+
+## M2: Inverted Index & Positional Index
+   ✅ Inverted index built: 2889 terms
+   ❌ Error: 'PositionalIndex' object has no attribute 'phrase_search'
+   ❌ Error: cannot import name 'VSMRetrieval' from 'src.ir.retrieval.vsm' (/mnt/c/web-projects/information-retrieval/src/ir/retrieval/vsm.py)
+   ❌ Error: cannot import name 'precision' from 'src.ir.eval.metrics' (/mnt/c/web-projects/information-retrieval/src/ir/eval/metrics.py)
+
+## M5: Rocchio Query Expansion
+   ❌ Error: RocchioExpander.expand_query() got an unexpected keyword argument 'top_k'
+   ❌ Error: cannot import name 'HierarchicalDocCluster' from 'src.ir.cluster.doc_cluster' (/mnt/c/web-projects/information-retrieval/src/ir/cluster/doc_cluster.py)
+   ❌ Error: cannot import name 'lead_k_summary' from 'src.ir.summarize.static' (/mnt/c/web-projects/information-retrieval/src/ir/summarize/static.py)
+
+======================================================================
+NLP MODULES TESTING
+======================================================================
+
+## Phase 1: Tokenization
+   ✅ Tokenization: 443 tokens
+   ✅ Sample tokens: （ 中央社 記者 沈如峰 宜蘭縣 12 日電 ） 宜蘭縣 蘇澳鎮
+
+## Phase 2: Named Entity Recognition
+   ❌ Error: CKIP Transformers not available. Install with: pip install ckip-transformers
+
+## Phase 3: Keyword Extraction
+   ✅ TextRank extraction: 10 keywords
+   ❌ Error: 'Keyword' object is not subscriptable
+   ❌ Error: No module named 'bertopic'
+
+## Phase 5: Syntactic Parsing
+   ✅ Dependency parsing completed
+   ✅ Sample text: '中國經濟快速發展'
+
+======================================================================
+TESTING COMPLETE
+======================================================================

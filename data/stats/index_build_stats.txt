@@ -1,0 +1,25 @@
+================================================================================
+INDEX BUILDING STATISTICS
+================================================================================
+
+Generated at: 2025-11-17 19:16:36
+
+COLLECTION STATISTICS
+--------------------------------------------------------------------------------
+Total documents:        121
+Vocabulary size:        10,248
+Total tokens:           48,412
+Avg document length:    400.1 tokens
+
+INDEX BUILD PERFORMANCE
+--------------------------------------------------------------------------------
+Total build time:       0.11 seconds
+Time per document:      0.0009 seconds
+Throughput:             1103.9 docs/second
+
+INDEX TYPES CREATED
+--------------------------------------------------------------------------------
+✓ Inverted Index (term -> documents)
+✓ Positional Index (term -> documents + positions)
+✓ TF-IDF Vectors (for VSM ranking)
+✓ BM25 Index (for BM25 ranking)

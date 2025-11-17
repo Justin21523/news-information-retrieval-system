@@ -1,0 +1,32 @@
+================================================================================
+BERT EMBEDDINGS STATISTICS
+================================================================================
+
+Generated at: 2025-11-17 19:19:39
+
+MODEL INFORMATION
+--------------------------------------------------------------------------------
+Model name:           paraphrase-multilingual-MiniLM-L12-v2
+Embedding dimension:  384
+Device:               cuda:0
+Batch size:           16
+
+COLLECTION STATISTICS
+--------------------------------------------------------------------------------
+Total documents:      121
+Embedding shape:      (121, 384)
+Total size:           0.18 MB
+Per document:         1.50 KB
+
+PERFORMANCE
+--------------------------------------------------------------------------------
+Encoding time:        3.08 seconds
+Throughput:           39.3 docs/second
+Time per document:    0.0254 seconds
+
+EMBEDDING STATISTICS
+--------------------------------------------------------------------------------
+Mean norm:            1.0000
+Std norm:             0.0000
+Min value:            -0.2063
+Max value:            0.2157

@@ -1,0 +1,65 @@
+================================================================================
+NEWS PREPROCESSING REPORT
+================================================================================
+
+Generated at: 2025-11-17 19:14:04
+
+PROCESSING STATISTICS
+--------------------------------------------------------------------------------
+Total articles:           121
+Successfully processed:   121
+Failed:                   0
+Success rate:             100.00%
+Processing time:          32.07 seconds
+Avg time per article:     0.265 seconds
+
+NLP FEATURES STATISTICS
+--------------------------------------------------------------------------------
+Total tokens extracted:   48412
+Avg tokens per article:   400.1
+Total entities found:     5493
+Avg entities per article: 45.4
+Total keywords extracted: 605
+Avg keywords per article: 5.0
+
+ENTITY TYPE DISTRIBUTION
+--------------------------------------------------------------------------------
+GPE              1362
+DATE              976
+PERSON            956
+ORG               796
+CARDINAL          544
+MONEY             218
+PERCENT           145
+LOC               107
+TIME               97
+QUANTITY           85
+ORDINAL            67
+FAC                47
+NORP               25
+WORK_OF_ART        25
+PRODUCT            17
+
+TOP 20 KEYWORDS
+--------------------------------------------------------------------------------
+，                              121
+                               116
+。                              105
+、                               45
+（                               22
+）                               19
+」                               13
+「                               12
+台灣                               6
+AI                               5
+中國                               4
+億元                               4
+林佳龍                              2
+陳                                2
+.                                2
+年                                2
+金融                               2
+律師                               2
+3                                2
+指數                               2
+

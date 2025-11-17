@@ -1,0 +1,88 @@
+======================================================================
+📊 DATASET ANALYSIS REPORT
+======================================================================
+
+## 1. BASIC STATISTICS
+   Total articles: 121
+   Date range: 2025-11-07 to 2025-11-13
+   Unique authors: 1
+   Unique categories: 1
+   Unique tags: 490
+
+## 2. DATE DISTRIBUTION
+   2025-11-13:  25 articles ██████████ (20.7%)
+   2025-11-12:  74 articles ██████████████████████████████ (61.2%)
+   2025-11-11:  12 articles ████ (9.9%)
+   2025-11-10:   5 articles ██ (4.1%)
+   2025-11-08:   2 articles  (1.7%)
+   2025-11-07:   3 articles █ (2.5%)
+
+## 3. CATEGORY DISTRIBUTION
+   aipl: 121 articles ██████████████████████████████████████████████████ (100.0%)
+
+## 4. AUTHOR DISTRIBUTION (Top 10)
+   中央通訊社: 121 articles (100.0%)
+
+## 5. TAG STATISTICS
+   Total unique tags: 490
+   Articles with tags: 105
+   Articles without tags: 16
+   Tags per article (avg): 5.31
+   Tags per article (median): 5.0
+   Tags per article (min): 0
+   Tags per article (max): 15
+
+   Top 20 tags:
+      中國: 12 articles
+      美國: 11 articles
+      人工智慧: 9 articles
+      減碳: 8 articles
+      颱風鳳凰: 6 articles
+      淨零台灣: 6 articles
+      東協財經: 5 articles
+      立法院: 4 articles
+      鄭麗文: 4 articles
+      習近平: 4 articles
+      台北市: 4 articles
+      沈伯洋: 4 articles
+      川普: 4 articles
+      聯合國氣候變化綱要公約: 4 articles
+      輝達: 4 articles
+      新北市: 4 articles
+      林佳龍: 3 articles
+      宜蘭: 3 articles
+      台灣: 3 articles
+      蕭美琴: 3 articles
+
+## 6. TITLE LENGTH STATISTICS
+   Min length: 5 characters
+   Max length: 32 characters
+   Mean length: 20.6 characters
+   Median length: 23.0 characters
+   Std dev: 6.5 characters
+
+## 7. CONTENT LENGTH STATISTICS
+   Min length: 121 characters
+   Max length: 1851 characters
+   Mean length: 711.4 characters
+   Median length: 659.0 characters
+   Std dev: 319.9 characters
+
+   Content length distribution:
+      Very short   (   0- 200):   3 articles (2.5%)
+      Short        ( 200- 500):  23 articles (19.0%)
+      Medium       ( 500-1000):  78 articles (64.5%)
+      Long         (1000-2000):  17 articles (14.0%)
+      Very long    (2000-   ∞):   0 articles (0.0%)
+
+## 8. DATA QUALITY SUMMARY
+   ✅ All articles have valid IDs
+   ✅ All articles have titles
+   ✅ All articles have content (min 50 chars)
+   ✅ 86.8% articles have tags
+   ✅ 100% articles have authors
+   ✅ 100% articles have publication dates
+
+======================================================================
+✅ Analysis complete!
+======================================================================

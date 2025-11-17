@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNIRS - 中文新聞智能檢索系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 CNIRS</h1>
+            <p class="subtitle">Chinese News Intelligent Retrieval System<br>中文新聞智能檢索系統</p>
+            <nav class="nav">
+                <a href="/" class="nav-link active">搜尋</a>
+                <a href="/compare" class="nav-link">模型對比</a>
+                <a href="/expand" class="nav-link">查詢擴展</a>
+                <a href="/evaluation" class="nav-link">評估分析</a>
+                <a href="/about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <!-- Search Box -->
+        <div class="search-box">
+            <input type="text" id="query-input" placeholder="輸入查詢關鍵字... (例如: 人工智慧、颱風災害、台灣經濟)" autofocus>
+
+            <div class="search-options">
+                <div class="option-group">
+                    <label for="model-select">檢索模型:</label>
+                    <select id="model-select">
+                        <option value="bm25">BM25 (推薦)</option>
+                        <option value="tfidf">TF-IDF</option>
+                        <option value="bert">BERT (語義)</option>
+                        <option value="boolean">Boolean</option>
+                    </select>
+                </div>
+
+                <div class="option-group" id="boolean-operator-group" style="display: none;">
+                    <label for="operator-select">運算子:</label>
+                    <select id="operator-select">
+                        <option value="AND">AND (且)</option>
+                        <option value="OR">OR (或)</option>
+                    </select>
+                </div>
+
+                <div class="option-group">
+                    <label for="topk-input">結果數量:</label>
+                    <input type="number" id="topk-input" value="20" min="5" max="100" step="5">
+                </div>
+
+                <button id="search-btn" class="btn btn-primary">搜尋</button>
+            </div>
+
+            <!-- Advanced Filters Toggle -->
+            <div class="filter-toggle">
+                <button id="filter-toggle-btn" class="filter-toggle-btn">
+                    🔽 進階篩選
+                </button>
+            </div>
+
+            <!-- Advanced Filters Panel -->
+            <div id="filter-panel" class="filter-panel" style="display: none;">
+                <h3>📋 進階篩選選項</h3>
+
+                <!-- Category Filter -->
+                <div class="filter-group">
+                    <label>🏷️ 新聞分類:</label>
+                    <div id="category-filters" class="checkbox-group">
+                        <!-- Dynamically loaded -->
+                    </div>
+                </div>
+
+                <!-- Date Range Filter -->
+                <div class="filter-group">
+                    <label>📅 日期範圍:</label>
+                    <div class="date-range">
+                        <input type="date" id="date-from" class="date-input">
+                        <span>至</span>
+                        <input type="date" id="date-to" class="date-input">
+                    </div>
+                </div>
+
+                <!-- Filter Actions -->
+                <div class="filter-actions">
+                    <button id="apply-filters-btn" class="filter-btn filter-btn-apply">套用篩選</button>
+                    <button id="clear-filters-btn" class="filter-btn filter-btn-clear">清除篩選</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Stats -->
+        <div id="stats-panel" class="stats-panel"></div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>搜尋中...</p>
+        </div>
+
+        <!-- Results -->
+        <div id="results-container">
+            <div id="results-header" class="results-header" style="display: none;">
+                <h2>搜尋結果</h2>
+                <div class="results-meta">
+                    <span id="result-count"></span>
+                    <span id="response-time"></span>
+                    <span id="model-name"></span>
+                </div>
+                <div class="export-actions">
+                    <button id="export-json-btn" class="btn-export btn-export-json" title="匯出為 JSON 格式">
+                        📥 JSON
+                    </button>
+                    <button id="export-csv-btn" class="btn-export btn-export-csv" title="匯出為 CSV 格式">
+                        📊 CSV
+                    </button>
+                </div>
+            </div>
+
+            <div id="results-list" class="results-list"></div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Information Retrieval System | Educational Use</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/document-modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-filters.js') }}"></script>
+</body>
+</html>

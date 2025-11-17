@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>關於 - CNIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔍 CNIRS</h1>
+            <p class="subtitle">關於系統 About</p>
+            <nav class="nav">
+                <a href="/" class="nav-link">搜尋</a>
+                <a href="/compare" class="nav-link">模型對比</a>
+                <a href="/expand" class="nav-link">查詢擴展</a>
+                <a href="/about" class="nav-link active">關於</a>
+            </nav>
+        </header>
+
+        <div class="about-content">
+            <section class="about-section">
+                <h2>📚 專案簡介</h2>
+                <p><strong>CNIRS (Chinese News Intelligent Retrieval System)</strong> 是一個針對中文新聞的智能檢索系統，整合了多種資訊檢索技術與模型。</p>
+                <p>本系統為 <strong>LIS5033 - Automatic Classification and Indexing</strong> 課程的期末專案，實作了從資料收集、預處理、索引建構到檢索評估的完整流程。</p>
+            </section>
+
+            <section class="about-section">
+                <h2>⚙️ 核心功能</h2>
+                <ul>
+                    <li><strong>多模型檢索</strong>: 支援 Boolean, TF-IDF, BM25, BERT 四種檢索模型</li>
+                    <li><strong>中文 NLP 處理</strong>: Jieba 分詞、CKIP NER 實體識別、TextRank 關鍵詞提取</li>
+                    <li><strong>索引結構</strong>: Inverted Index, Positional Index, TF-IDF Vectors, BM25 Index, BERT Embeddings</li>
+                    <li><strong>評估框架</strong>: 實作 MAP, nDCG, P@K, R@K, F1@K 等指標</li>
+                    <li><strong>模型對比</strong>: 並行比較不同模型的檢索效能</li>
+                </ul>
+            </section>
+
+            <section class="about-section">
+                <h2>🎯 檢索模型說明</h2>
+                <div class="model-card">
+                    <h3>Boolean Retrieval (布林檢索)</h3>
+                    <p><strong>原理</strong>: 精確匹配查詢詞，支援 AND/OR 運算</p>
+                    <p><strong>優點</strong>: 快速、可預測、適合精確查詢</p>
+                    <p><strong>缺點</strong>: 無排序、結果數量難以控制</p>
+                </div>
+
+                <div class="model-card">
+                    <h3>TF-IDF (向量空間模型)</h3>
+                    <p><strong>原理</strong>: 基於詞頻-逆文檔頻率，使用餘弦相似度排序</p>
+                    <p><strong>優點</strong>: 簡單有效、可解釋性強</p>
+                    <p><strong>缺點</strong>: 無法處理同義詞、語義理解有限</p>
+                    <p><strong>評估結果</strong>: MAP=0.3581, nDCG=0.4012</p>
+                </div>
+
+                <div class="model-card">
+                    <h3>BM25 (機率排序模型) ⭐ 推薦</h3>
+                    <p><strong>原理</strong>: 基於機率理論，考慮文檔長度正規化</p>
+                    <p><strong>優點</strong>: 業界標準、效能優異、速度快</p>
+                    <p><strong>缺點</strong>: 仍無法理解語義</p>
+                    <p><strong>評估結果</strong>: MAP=0.3708, nDCG=0.4064 (最佳)</p>
+                </div>
+
+                <div class="model-card">
+                    <h3>BERT (語義檢索)</h3>
+                    <p><strong>原理</strong>: 使用預訓練語言模型編碼文本語義</p>
+                    <p><strong>優點</strong>: 深層語義理解、處理同義詞與語義相似</p>
+                    <p><strong>缺點</strong>: 計算量大、小資料集表現較差</p>
+                    <p><strong>評估結果</strong>: MAP=0.1586, nDCG=0.2306</p>
+                </div>
+            </section>
+
+            <section class="about-section">
+                <h2>📊 資料集資訊</h2>
+                <ul>
+                    <li><strong>來源</strong>: 中央社 (CNA) 新聞</li>
+                    <li><strong>文章數量</strong>: 121 篇</li>
+                    <li><strong>時間範圍</strong>: 2025-11-07 ~ 2025-11-13</li>
+                    <li><strong>分類</strong>: 政治新聞</li>
+                    <li><strong>詞彙數</strong>: 10,248 unique terms</li>
+                    <li><strong>總 Tokens</strong>: 48,412 tokens</li>
+                </ul>
+            </section>
+
+            <section class="about-section">
+                <h2>🛠️ 技術架構</h2>
+                <ul>
+                    <li><strong>後端</strong>: Flask (Python)</li>
+                    <li><strong>前端</strong>: HTML5, CSS3, JavaScript</li>
+                    <li><strong>NLP</strong>: Jieba, CKIP Transformers, sentence-transformers</li>
+                    <li><strong>檢索</strong>: 自建索引與檢索引擎</li>
+                    <li><strong>評估</strong>: TREC QRELS format, pytrec_eval</li>
+                </ul>
+            </section>
+
+            <section class="about-section">
+                <h2>📖 參考文獻</h2>
+                <p><em>Introduction to Information Retrieval</em> - Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schütze</p>
+                <p>Stanford University, Cambridge University Press, 2008</p>
+            </section>
+
+            <section class="about-section">
+                <h2>👤 作者資訊</h2>
+                <p>National Taiwan University</p>
+                <p>LIS5033 - Automatic Classification and Indexing</p>
+                <p>2025 Fall Semester</p>
+            </section>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Educational Use Only</p>
+        </footer>
+    </div>
+</body>
+</html>

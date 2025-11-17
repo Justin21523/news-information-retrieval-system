@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>評估分析 - CNIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📊 評估分析</h1>
+            <p class="subtitle">Evaluation & Performance Analysis<br>檢索系統效能評估</p>
+            <nav class="nav">
+                <a href="/" class="nav-link">搜尋</a>
+                <a href="/compare" class="nav-link">模型對比</a>
+                <a href="/expand" class="nav-link">查詢擴展</a>
+                <a href="/evaluation" class="nav-link active">評估分析</a>
+                <a href="/about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <!-- Evaluation Control Panel -->
+        <div class="eval-control-panel">
+            <h2>🎯 評估設定</h2>
+
+            <div class="eval-config">
+                <div class="config-group">
+                    <label for="eval-query">測試查詢:</label>
+                    <input type="text" id="eval-query" placeholder="輸入測試查詢..." value="台灣">
+                </div>
+
+                <div class="config-group">
+                    <label for="eval-models">評估模型:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="tfidf" class="model-checkbox" checked>
+                            <span>TF-IDF</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="bm25" class="model-checkbox" checked>
+                            <span>BM25</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="boolean" class="model-checkbox">
+                            <span>Boolean</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="bert" class="model-checkbox">
+                            <span>BERT</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <label for="eval-topk">Top-K 文檔:</label>
+                    <input type="number" id="eval-topk" value="20" min="5" max="50" step="5">
+                </div>
+
+                <button id="run-eval-btn" class="btn btn-primary">▶️ 執行評估</button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="eval-loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>評估計算中...</p>
+        </div>
+
+        <!-- Results Container -->
+        <div id="eval-results" style="display: none;">
+            <!-- Metrics Summary Cards -->
+            <div class="metrics-summary">
+                <h2>📈 評估指標總覽</h2>
+                <div id="metrics-cards" class="metrics-cards"></div>
+            </div>
+
+            <!-- Chart Controls -->
+            <div class="chart-controls">
+                <h3>📊 圖表顯示選項</h3>
+                <div class="control-options">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="overlay-precision" checked>
+                        <span>疊加 Precision@K 圖表</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="overlay-recall" checked>
+                        <span>疊加 Recall@K 圖表</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="overlay-f1" checked>
+                        <span>疊加 F1-Score 圖表</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="show-interpolated" checked>
+                        <span>顯示 11-點插值 PR 曲線</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-section">
+                <div class="chart-container">
+                    <h3>Precision @ K</h3>
+                    <canvas id="precision-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Recall @ K</h3>
+                    <canvas id="recall-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3>F1-Score @ K</h3>
+                    <canvas id="f1-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3>nDCG @ K</h3>
+                    <canvas id="ndcg-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3>F-beta Scores (β=0.5, β=2)</h3>
+                    <canvas id="fbeta-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Precision at Recall Levels</h3>
+                    <canvas id="p-at-r-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Precision-Recall Curves -->
+            <div class="pr-curve-section">
+                <h2>📉 Precision-Recall Curves</h2>
+
+                <div class="pr-charts-grid">
+                    <div class="chart-container-large">
+                        <h3>原始 PR 曲線 (Raw PR Curve)</h3>
+                        <canvas id="pr-curve-chart"></canvas>
+                    </div>
+
+                    <div class="chart-container-large">
+                        <h3>11-點插值 PR 曲線 (11-Point Interpolated)</h3>
+                        <canvas id="pr-interpolated-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Comparison Table -->
+            <div class="comparison-table-section">
+                <h2>🔍 模型比較表</h2>
+                <div id="comparison-table"></div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Information Retrieval System | Educational Use</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/evaluation.js') }}"></script>
+</body>
+</html>

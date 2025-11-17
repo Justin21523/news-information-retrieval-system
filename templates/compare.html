@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型對比 - CNIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 CNIRS - 模型對比</h1>
+            <p class="subtitle">比較不同檢索模型的效能與結果</p>
+            <nav class="nav">
+                <a href="/" class="nav-link">搜尋</a>
+                <a href="/compare" class="nav-link active">模型對比</a>
+                <a href="/expand" class="nav-link">查詢擴展</a>
+                <a href="/about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <!-- Search Box -->
+        <div class="search-box">
+            <input type="text" id="query-input" placeholder="輸入查詢關鍵字進行模型對比...">
+
+            <div class="search-options">
+                <div class="option-group">
+                    <label>選擇模型 (可多選):</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" name="models" value="tfidf" checked> TF-IDF</label>
+                        <label><input type="checkbox" name="models" value="bm25" checked> BM25</label>
+                        <label><input type="checkbox" name="models" value="bert"> BERT</label>
+                        <label><input type="checkbox" name="models" value="boolean"> Boolean</label>
+                    </div>
+                </div>
+
+                <div class="option-group">
+                    <label for="topk-input">Top-K:</label>
+                    <input type="number" id="topk-input" value="10" min="5" max="20" step="5">
+                </div>
+
+                <button id="compare-btn" class="btn btn-primary">開始對比</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>正在比較模型...</p>
+        </div>
+
+        <!-- Comparison Results -->
+        <div id="comparison-container"></div>
+
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Model Comparison Tool</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/document-modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/compare.js') }}"></script>
+</body>
+</html>

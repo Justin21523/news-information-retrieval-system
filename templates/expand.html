@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查詢擴展 - CNIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🔍 CNIRS - 查詢擴展</h1>
+            <p class="subtitle">Rocchio 演算法與偽相關回饋 (Pseudo-Relevance Feedback)</p>
+            <nav class="nav">
+                <a href="/" class="nav-link">搜尋</a>
+                <a href="/compare" class="nav-link">模型對比</a>
+                <a href="/expand" class="nav-link active">查詢擴展</a>
+                <a href="/about" class="nav-link">關於</a>
+            </nav>
+        </header>
+        <!-- Search Box -->
+        <div class="search-box">
+                <input type="text" id="query-input" placeholder="輸入查詢關鍵字..." autofocus>
+
+                <div class="search-options">
+                    <div class="option-group">
+                        <label for="model-select">檢索模型</label>
+                        <select id="model-select">
+                            <option value="tfidf">TF-IDF</option>
+                            <option value="bm25" selected>BM25</option>
+                        </select>
+                    </div>
+
+                    <div class="option-group">
+                        <label for="topk-input">相關文檔數 (PRF)</label>
+                        <input type="number" id="topk-input" value="5" min="1" max="10">
+                    </div>
+
+                    <div class="option-group">
+                        <label for="expansion-terms">擴展詞數量</label>
+                        <input type="number" id="expansion-terms" value="5" min="1" max="10">
+                    </div>
+                </div>
+
+                <button id="expand-btn" class="search-btn">🚀 執行查詢擴展</button>
+        </div>
+
+        <!-- System Info -->
+        <div class="stats-card">
+                <h3>Rocchio 演算法參數</h3>
+                <div class="param-info">
+                    <div class="param-item">
+                        <span class="param-label">α (原始查詢權重):</span>
+                        <span class="param-value">1.0</span>
+                    </div>
+                    <div class="param-item">
+                        <span class="param-label">β (相關文檔權重):</span>
+                        <span class="param-value">0.75</span>
+                    </div>
+                    <div class="param-item">
+                        <span class="param-label">γ (非相關文檔權重):</span>
+                        <span class="param-value">0.0</span>
+                    </div>
+                </div>
+                <p class="param-description">
+                    <strong>公式:</strong> Q' = α × Q + β × (1/|Dr|) × ΣDr - γ × (1/|Dnr|) × ΣDnr<br>
+                    <strong>策略:</strong> 偽相關回饋 (Pseudo-Relevance Feedback) - 自動使用 Top-K 結果作為相關文檔
+                </p>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>正在執行查詢擴展...</p>
+        </div>
+
+        <!-- Expansion Results Container -->
+        <div id="expansion-container"></div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS - Chinese News Intelligent Retrieval System</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/document-modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/expand.js') }}"></script>
+</body>
+</html>

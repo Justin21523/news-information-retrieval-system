@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAT-tree 視覺化 - CNIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* PAT-tree specific styles */
+        .pat-tree-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .tree-controls {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .tree-visualization {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            min-height: 500px;
+        }
+
+        .tree-node {
+            margin-left: 24px;
+            padding: 8px 0;
+            border-left: 2px solid var(--border-color);
+            position: relative;
+        }
+
+        .tree-node::before {
+            content: '';
+            position: absolute;
+            left: -2px;
+            top: 20px;
+            width: 20px;
+            height: 2px;
+            background: var(--border-color);
+        }
+
+        .tree-node.terminal {
+            border-left-color: var(--primary-color);
+        }
+
+        .tree-node.terminal::before {
+            background: var(--primary-color);
+        }
+
+        .node-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .node-label:hover {
+            transform: translateX(4px);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+        }
+
+        .node-label.terminal {
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+            border: 2px solid var(--primary-color);
+        }
+
+        .node-stats {
+            display: inline-flex;
+            gap: 8px;
+            margin-left: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-badge {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .stat-badge.frequency {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+        }
+
+        .stat-badge.docs {
+            background: rgba(245, 158, 11, 0.1);
+            color: #d97706;
+        }
+
+        .keywords-section {
+            margin-top: 32px;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .keyword-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .keyword-item {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto auto;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .keyword-item:hover {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            transform: translateX(4px);
+        }
+
+        .keyword-rank {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            min-width: 40px;
+        }
+
+        .keyword-term {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .keyword-score {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .keyword-freq {
+            font-size: 0.9rem;
+            padding: 4px 10px;
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .keyword-docs {
+            font-size: 0.9rem;
+            padding: 4px 10px;
+            background: rgba(245, 158, 11, 0.1);
+            color: #d97706;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .statistics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .stat-box {
+            padding: 16px;
+            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .control-group input,
+        .control-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-visualize {
+            width: 100%;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--primary-color), #2563eb);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 16px;
+        }
+
+        .btn-visualize:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .processing-indicator {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        .spinner-small {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .tree-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .breadcrumb-sep {
+            color: var(--text-secondary);
+        }
+
+        .breadcrumb-item {
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🌳 PAT-tree 視覺化</h1>
+            <p class="subtitle">Patricia Trie Visualization & Keyword Extraction<br>壓縮字典樹結構與關鍵詞提取</p>
+            <nav class="nav">
+                <a href="/" class="nav-link">搜尋</a>
+                <a href="/compare" class="nav-link">模型對比</a>
+                <a href="/expand" class="nav-link">查詢擴展</a>
+                <a href="/evaluation" class="nav-link">評估分析</a>
+                <a href="/pat_tree" class="nav-link active">PAT-tree</a>
+                <a href="/about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <!-- Introduction -->
+        <div class="info-section">
+            <h2>📖 什麼是 PAT-tree？</h2>
+            <p><strong>PAT-tree (Patricia Trie)</strong> 是一種空間優化的字典樹（Trie）資料結構，通過路徑壓縮減少節點數量。</p>
+            <div class="features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 16px;">
+                <div style="padding: 16px; background: linear-gradient(135deg, #eff6ff, #dbeafe); border-radius: 8px;">
+                    <strong>🔄 路徑壓縮</strong><br>
+                    合併只有單一子節點的路徑，減少空間使用
+                </div>
+                <div style="padding: 16px; background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius: 8px;">
+                    <strong>⚡ 高效檢索</strong><br>
+                    O(k) 時間複雜度，k 為鍵值長度
+                </div>
+                <div style="padding: 16px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 8px;">
+                    <strong>🔍 前綴搜尋</strong><br>
+                    快速找出所有具有相同前綴的詞彙
+                </div>
+                <div style="padding: 16px; background: linear-gradient(135deg, #fce7f3, #fbcfe8); border-radius: 8px;">
+                    <strong>📊 統計資訊</strong><br>
+                    追蹤詞頻、文檔頻率等統計數據
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Dashboard -->
+        <div class="statistics-section">
+            <h2>📊 PAT-tree 統計資訊</h2>
+            <div id="tree-statistics" class="statistics-grid">
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">總詞彙數</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">唯一詞彙</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">樹節點數</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">最大深度</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">壓縮率</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">-</div>
+                    <div class="stat-label">平均詞頻</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="pat-tree-container">
+            <!-- Tree Controls -->
+            <div class="tree-controls">
+                <h2>🎛️ 樹結構控制</h2>
+
+                <div class="control-group">
+                    <label for="prefix-input">前綴搜尋:</label>
+                    <input type="text" id="prefix-input" placeholder="輸入前綴（例如：台）">
+                    <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                        留空顯示整棵樹，輸入前綴篩選特定分支
+                    </small>
+                </div>
+
+                <div class="control-group">
+                    <label for="max-nodes-input">最大節點數:</label>
+                    <input type="number" id="max-nodes-input" value="100" min="10" max="500" step="10">
+                    <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                        限制顯示的節點數量（10-500）
+                    </small>
+                </div>
+
+                <button class="btn-visualize" onclick="visualizeTree()">
+                    🔄 生成樹結構視覺化
+                </button>
+
+                <div class="processing-indicator" id="tree-processing">
+                    <div class="spinner-small"></div>
+                    <span>正在建構樹結構...</span>
+                </div>
+            </div>
+
+            <!-- Tree Visualization -->
+            <div class="tree-visualization">
+                <h2>🌲 樹結構視覺化</h2>
+                <div id="tree-breadcrumb" class="tree-breadcrumb" style="display: none;">
+                    <span>📍 位置:</span>
+                    <span class="breadcrumb-item" id="breadcrumb-path">ROOT</span>
+                </div>
+                <div id="tree-display" style="margin-top: 16px; max-height: 600px; overflow-y: auto;">
+                    <p style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        點擊「生成樹結構視覺化」按鈕開始
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keywords Extraction -->
+        <div class="keywords-section">
+            <h2>🔑 關鍵詞提取</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                使用 PAT-tree 進行高級關鍵詞提取，支援多種評分方法和後處理過濾
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                <div class="control-group">
+                    <label for="kw-method">評分方法:</label>
+                    <select id="kw-method">
+                        <option value="tfidf" selected>TF-IDF</option>
+                        <option value="frequency">詞頻統計</option>
+                        <option value="doc_frequency">文檔頻率</option>
+                        <option value="combined">綜合評分</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="kw-topk">Top-K:</label>
+                    <input type="number" id="kw-topk" value="20" min="5" max="100" step="5">
+                </div>
+
+                <div class="control-group">
+                    <label for="kw-min-freq">最小詞頻:</label>
+                    <input type="number" id="kw-min-freq" value="2" min="1" max="50">
+                </div>
+
+                <div class="control-group">
+                    <label for="kw-min-doc-freq">最小文檔頻率:</label>
+                    <input type="number" id="kw-min-doc-freq" value="1" min="1" max="50">
+                </div>
+            </div>
+
+            <button class="btn-visualize" onclick="extractKeywords()">
+                🔍 提取關鍵詞
+            </button>
+
+            <div class="processing-indicator" id="kw-processing">
+                <div class="spinner-small"></div>
+                <span>正在提取關鍵詞...</span>
+            </div>
+
+            <div id="keywords-result" style="display: none;">
+                <div style="margin: 16px 0; padding: 12px; background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius: 8px;">
+                    <strong>提取結果:</strong>
+                    <span id="kw-summary"></span>
+                </div>
+                <div id="keywords-list" class="keyword-list"></div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Information Retrieval System | Educational Use</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/pat-tree.js') }}"></script>
+</body>
+</html>

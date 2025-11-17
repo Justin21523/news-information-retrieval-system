@@ -1,0 +1,203 @@
+# CSoundex 中文語音編碼系統配置檔
+# Chinese Soundex Configuration File
+
+# ============================================
+# 聲母分組 (Initial Consonant Groups)
+# ============================================
+# 基於發音部位與發音方法分類
+# Classification based on place and manner of articulation
+
+initial_groups:
+  # 群組 0: 零聲母 (Zero initial - vowel onset)
+  0: []
+
+  # 群組 1: 雙唇音 (Bilabial sounds)
+  # b [p] - 不送氣, p [pʰ] - 送氣
+  1: [b, p]
+
+  # 群組 2: 唇齒音 (Labiodental sound)
+  # f [f]
+  2: [f]
+
+  # 群組 3: 雙唇鼻音 (Bilabial nasal)
+  # m [m]
+  3: [m]
+
+  # 群組 4: 舌尖中音 (Alveolar sounds)
+  # d [t] - 不送氣, t [tʰ] - 送氣
+  4: [d, t]
+
+  # 群組 5: 舌尖鼻音與邊音 (Alveolar nasal and lateral)
+  # n [n], l [l]
+  5: [n, l]
+
+  # 群組 6: 舌根音 (Velar sounds)
+  # g [k] - 不送氣, k [kʰ] - 送氣, h [x] - 擦音
+  6: [g, k, h]
+
+  # 群組 7: 舌面音 (Palatal sounds)
+  # j [tɕ] - 不送氣, q [tɕʰ] - 送氣, x [ɕ] - 擦音
+  7: [j, q, x]
+
+  # 群組 8: 舌尖後音/捲舌音 (Retroflex sounds)
+  # zh [ʈʂ], ch [ʈʂʰ], sh [ʂ], r [ʐ]
+  8: [zh, ch, sh, r]
+
+  # 群組 9: 舌尖前音/平舌音 (Dental/Alveolar sibilants)
+  # z [ts], c [tsʰ], s [s]
+  9: [z, c, s]
+
+# ============================================
+# 韻母分組 (Final Groups)
+# ============================================
+# 基於主元音與韻尾分類
+# Classification based on main vowel and coda
+
+final_groups:
+  # 群組 0: 零韻母 (Zero final - special cases)
+  0: []
+
+  # 群組 1: 主元音 a (Main vowel 'a')
+  # 開口呼 (Open articulation)
+  1: [a, ia, ua]
+
+  # 群組 2: 主元音 o (Main vowel 'o')
+  # 合口呼 (Rounded articulation)
+  2: [o, uo]
+
+  # 群組 3: 主元音 e (Main vowel 'e')
+  # 齊齒呼/撮口呼 (Unrounded/rounded front articulation)
+  3: [e, ie, ue, ve]
+
+  # 群組 4: 元音 i (Vowel 'i')
+  # 舌尖元音
+  4: [i]
+
+  # 群組 5: 元音 u (Vowel 'u')
+  # 合口呼
+  5: [u]
+
+  # 群組 6: 元音 ü (Vowel 'ü')
+  # 撮口呼 (Rounded front vowel)
+  6: [v, 'u:']  # v 代表 ü
+
+  # 群組 7: 複韻母（韻尾 i）(Diphthongs ending in 'i')
+  # 前響復韻母
+  7: [ai, ei, ui, uai]
+
+  # 群組 8: 複韻母（韻尾 u）(Diphthongs ending in 'u')
+  # 後響復韻母
+  8: [ao, ou, iu, iao]
+
+  # 群組 9: 鼻韻母 (Nasal finals)
+  # 包含所有帶鼻音韻尾的韻母 (-n, -ng)
+  9: [an, en, in, un, vn, ang, eng, ing, ong, ian, uan, van, iang, uang, iong, er]
+
+# ============================================
+# 拼音字典設定 (Pinyin Lexicon Settings)
+# ============================================
+
+# 拼音字典檔案路徑
+lexicon_path: datasets/lexicon/basic_pinyin.tsv
+
+# 是否使用 pypinyin 作為備用
+use_pypinyin_fallback: true
+
+# pypinyin 樣式 (Style options)
+# TONE3: 使用數字表示聲調 (e.g., zhang1)
+# NORMAL: 不帶聲調 (e.g., zhang)
+pypinyin_style: TONE3
+
+# ============================================
+# 多音字處理策略 (Polyphone Handling Strategy)
+# ============================================
+
+# 策略選項:
+# - most_common: 使用詞頻最高的讀音（預設，準確率 ~85%）
+# - context_aware: 基於詞彙脈絡判斷（需要分詞，準確率 ~95%）
+# - all_variants: 輸出所有可能讀音的編碼（用於檢索系統）
+polyphone_strategy: most_common
+
+# 是否啟用詞彙級別的多音字處理（需要 jieba 分詞）
+enable_word_segmentation: false
+
+# ============================================
+# 編碼模式設定 (Encoding Mode Settings)
+# ============================================
+
+# 預設編碼模式
+# - standard: 標準模式，4 字元 [首字母][聲母碼][韻母碼][聲調碼]
+# - extended: 擴展模式，5 字元 [首字母][聲母碼][主元音碼][韻尾碼][聲調碼]
+# - loose: 寬鬆模式，3 字元 [首字母][聲母碼][韻母碼]（無聲調）
+default_mode: standard
+
+# 預設是否包含聲調
+# true: 包含聲調（適合精確匹配）
+# false: 不含聲調（適合模糊搜尋）
+default_include_tone: false
+
+# ============================================
+# 正規化設定 (Normalization Settings)
+# ============================================
+
+# 聲調符號映射 (Tone mark mapping)
+# ü 的表示方式
+u_umlaut_representation: v  # 選項: 'v', 'u:', 'ü'
+
+# 是否將所有拼音轉為小寫
+lowercase: true
+
+# 是否移除空白字元
+strip_whitespace: true
+
+# ============================================
+# 效能最佳化設定 (Performance Optimization)
+# ============================================
+
+# 是否啟用 LRU 快取
+enable_cache: true
+
+# 快取大小（最多快取多少個字元的編碼結果）
+cache_size: 10000
+
+# 批次處理大小
+batch_size: 1000
+
+# ============================================
+# 相似度計算設定 (Similarity Calculation)
+# ============================================
+
+# 預設相似度計算模式
+# - exact: 精確匹配（二元判斷）
+# - fuzzy: 模糊匹配（字元級相似度）
+# - weighted: 加權匹配（位置加權）
+default_similarity_mode: fuzzy
+
+# 最小相似度閾值（用於模糊匹配）
+min_similarity_threshold: 0.6
+
+# ============================================
+# 日誌設定 (Logging Settings)
+# ============================================
+
+# 是否啟用詳細日誌
+verbose_logging: false
+
+# 日誌級別: DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_level: INFO
+
+# ============================================
+# 實驗性功能 (Experimental Features)
+# ============================================
+
+# 是否啟用簡繁轉換
+enable_traditional_simplified_conversion: false
+
+# 是否支援方言拼音（實驗性）
+enable_dialect_support: false
+
+# 支援的方言列表（未來擴展）
+supported_dialects: []
+  # - cantonese  # 粵語
+  # - hokkien    # 閩南語
+  # - hakka      # 客家話

@@ -1,0 +1,434 @@
+# Git Ignore File for Information Retrieval System
+# 資訊檢索系統 Git 忽略清單
+
+# ============================================
+# Python
+# ============================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Conda environments
+conda-meta/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ============================================
+# IDE / Editors
+# ============================================
+
+# Visual Studio Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# PyCharm / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ============================================
+# Project Specific
+# ============================================
+
+# Logs
+logs/
+*.log
+
+# Data files (except mini test data and lexicon)
+datasets/*.json
+datasets/*.csv
+datasets/*.txt
+datasets/*.tsv
+datasets/*.xml
+datasets/*.zip
+!datasets/mini/
+!datasets/lexicon/
+
+# Keep mini test data and lexicon
+!datasets/mini/**
+!datasets/lexicon/**
+
+# Generated indices
+index/
+indices/
+*.index
+*.idx
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Output files
+output/
+results/
+*.out
+
+# Cache files
+.cache/
+*.cache
+
+# Compiled models
+models/
+*.model
+*.pkl
+*.pickle
+*.joblib
+
+# Jupyter notebooks (optional, uncomment if not versioning)
+# *.ipynb
+
+# ============================================
+# Documentation
+# ============================================
+
+# Generated documentation
+docs/_build/
+docs/api/
+
+# LaTeX
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+.*.lb
+
+# PDF (uncomment if not versioning PDFs)
+# *.pdf
+
+# DOCX temporary files
+~$*.docx
+~$*.doc
+
+# ============================================
+# Testing
+# ============================================
+
+# pytest
+.pytest_cache/
+.tox/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# ============================================
+# Dependencies
+# ============================================
+
+# Node modules (if using any JS tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# OS Specific
+# ============================================
+
+# Windows thumbnail cache files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows shortcuts
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ============================================
+# Security
+# ============================================
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+*.cer
+
+# Credentials
+credentials/
+*credentials*
+*password*
+*secret*
+
+# ============================================
+# Misc
+# ============================================
+
+# Compressed files (unless specifically needed)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Database files (except for test data)
+*.db
+*.sqlite
+*.sqlite3
+!tests/**/*.db
+
+# Large files (adjust as needed)
+# *.bin
+
+# ============================================
+# Course Materials (EXCLUDE)
+# ============================================
+
+# Course lecture slides and materials
+ACI*.pdf
+ACI*.pptx
+ClassificationAndClustering.pdf
+報告格式.docx
+報告格式.pdf
+claude-code指南.md
+
+# Assignment files (keep only in docs/)
+# HW*.pdf
+# hw*.docx
+
+# ============================================
+# Temporary and Test Files
+# ============================================
+
+# Test result files
+test_results.txt
+test_prefix_fix.txt
+*_test.txt
+*_debug.txt
+
+# Temporary Python files
+*.tmp.py
+temp_*.py
+
+# ============================================
+# Large Data Files (可重建的索引)
+# ============================================
+
+# Indexes (can be rebuilt)
+data/indexes/*.pkl
+data/indexes/*.index
+data/indexes/*.idx
+data/database/*.db
+
+# Keep sample/mini data
+!data/indexes/.gitkeep
+
+# Raw data (too large)
+data/raw/cna_raw.jsonl
+data/raw/*.zip
+data/raw/*.tar.gz
+
+# ============================================
+# IDE Specific
+# ============================================
+
+# Claude Code directory
+.claude/
+
+# ============================================
+# Keep These Files
+# ============================================
+
+# Force include certain files even if matched above
+!.gitkeep
+!.gitignore
+!docs/**/*.pdf
+!docs/**/*.docx

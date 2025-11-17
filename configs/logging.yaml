@@ -1,0 +1,128 @@
+# Logging Configuration for Information Retrieval System
+# 資訊檢索系統日誌配置
+
+version: 1
+disable_existing_loggers: false
+
+# ============================================
+# Formatters - 日誌格式定義
+# ============================================
+formatters:
+  # 簡單格式（用於控制台輸出）
+  simple:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+  # 詳細格式（用於檔案輸出）
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+  # JSON 格式（用於結構化日誌分析）
+  json:
+    format: '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "file": "%(filename)s", "line": %(lineno)d, "message": "%(message)s"}'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+
+# ============================================
+# Handlers - 日誌處理器
+# ============================================
+handlers:
+  # 控制台輸出處理器
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stdout
+
+  # 一般日誌檔案處理器（輪轉）
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/ir_system.log
+    maxBytes: 10485760  # 10 MB
+    backupCount: 3
+    encoding: utf-8
+
+  # 錯誤日誌檔案處理器
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/ir_errors.log
+    maxBytes: 5242880  # 5 MB
+    backupCount: 5
+    encoding: utf-8
+
+  # 效能日誌處理器（用於記錄查詢時間等）
+  performance_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: simple
+    filename: logs/ir_performance.log
+    maxBytes: 5242880  # 5 MB
+    backupCount: 3
+    encoding: utf-8
+
+# ============================================
+# Loggers - 日誌記錄器
+# ============================================
+loggers:
+  # CSoundex 模組日誌
+  ir.text.csoundex:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
+  # 索引模組日誌
+  ir.index:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
+  # 檢索模組日誌
+  ir.retrieval:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  # 評估模組日誌
+  ir.eval:
+    level: INFO
+    handlers: [console, file]
+    propagate: false
+
+  # 效能日誌（用於記錄查詢時間）
+  ir.performance:
+    level: INFO
+    handlers: [performance_file]
+    propagate: false
+
+# ============================================
+# Root Logger - 根日誌記錄器
+# ============================================
+root:
+  level: INFO
+  handlers: [console, file, error_file]
+
+# ============================================
+# 使用範例 (Usage Example)
+# ============================================
+#
+# 在 Python 程式中載入配置：
+#
+# import logging.config
+# import yaml
+#
+# with open('configs/logging.yaml', 'r', encoding='utf-8') as f:
+#     config = yaml.safe_load(f)
+#     logging.config.dictConfig(config)
+#
+# logger = logging.getLogger('ir.text.csoundex')
+# logger.info("CSoundex module initialized")
+# logger.debug("Encoding character: 張")
+#
+# 效能日誌範例：
+#
+# perf_logger = logging.getLogger('ir.performance')
+# perf_logger.info(f"Query processed in {elapsed_time:.3f}s")

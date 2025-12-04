@@ -30,8 +30,9 @@ License: Educational Use
 
 import logging
 import heapq
+import math
 from typing import Dict, List, Set, Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import defaultdict
 
 import sys
@@ -54,6 +55,8 @@ class ExpandedQuery:
         term_weights: Weight for each term
         num_relevant: Number of relevant docs used
         num_nonrelevant: Number of non-relevant docs used
+        query_drift: Cosine distance between original and expanded query vectors
+        drift_warning: True if drift exceeds threshold
     """
     original_terms: List[str]
     expanded_terms: List[str]
@@ -61,6 +64,8 @@ class ExpandedQuery:
     term_weights: Dict[str, float]
     num_relevant: int = 0
     num_nonrelevant: int = 0
+    query_drift: float = 0.0
+    drift_warning: bool = False
 
 
 class RocchioExpander:
@@ -77,10 +82,16 @@ class RocchioExpander:
         gamma: Weight for non-relevant documents (default 0.15)
         max_expansion_terms: Maximum new terms to add (default 10)
         min_term_weight: Minimum weight threshold for new terms (default 0.1)
+        max_query_drift: Maximum allowed cosine distance from original query (default 0.7)
+        relevance_threshold: Only use docs with score >= threshold * max_score (default 0.0)
 
     Complexity:
         - Expansion: O(|D_r| × V + |D_nr| × V) where V is vocabulary size
         - With top-k selection: O(V × log(k))
+
+    Reference:
+        - Rocchio, J.J. (1971). Relevance feedback in information retrieval.
+        - Manning et al. (2008). Introduction to Information Retrieval, Ch. 9.
     """
 
     def __init__(self,
@@ -88,7 +99,9 @@ class RocchioExpander:
                  beta: float = 0.75,
                  gamma: float = 0.15,
                  max_expansion_terms: int = 10,
-                 min_term_weight: float = 0.1):
+                 min_term_weight: float = 0.1,
+                 max_query_drift: float = 0.7,
+                 relevance_threshold: float = 0.0):
         """
         Initialize Rocchio expander.
 
@@ -98,6 +111,11 @@ class RocchioExpander:
             gamma: Weight for non-relevant docs (avoid negative examples)
             max_expansion_terms: Maximum new terms to add
             min_term_weight: Minimum weight for expansion terms
+            max_query_drift: Maximum allowed query drift (cosine distance)
+                            0.0 = no expansion, 1.0 = unlimited drift
+                            Recommended: 0.5-0.7 for stability
+            relevance_threshold: Only use docs with score >= threshold * max_score
+                                 0.0 = use all, 0.5 = use top 50% quality docs
         """
         self.logger = logging.getLogger(__name__)
 
@@ -106,18 +124,63 @@ class RocchioExpander:
         self.gamma = gamma
         self.max_expansion_terms = max_expansion_terms
         self.min_term_weight = min_term_weight
+        self.max_query_drift = max_query_drift
+        self.relevance_threshold = relevance_threshold
 
         self.logger.info(
-            f"RocchioExpander initialized: α={alpha}, β={beta}, γ={gamma}"
+            f"RocchioExpander initialized: α={alpha}, β={beta}, γ={gamma}, "
+            f"max_drift={max_query_drift}, rel_threshold={relevance_threshold}"
         )
+
+    @staticmethod
+    def cosine_distance(vec1: Dict[str, float], vec2: Dict[str, float]) -> float:
+        """
+        Calculate cosine distance between two vectors.
+
+        Cosine distance = 1 - cosine_similarity
+
+        Args:
+            vec1: First vector {term: weight}
+            vec2: Second vector {term: weight}
+
+        Returns:
+            Cosine distance in range [0, 2]
+            0 = identical direction, 1 = orthogonal, 2 = opposite direction
+
+        Complexity:
+            Time: O(|vec1| + |vec2|)
+            Space: O(1)
+        """
+        # Find common terms
+        common_terms = set(vec1.keys()) & set(vec2.keys())
+
+        if not common_terms:
+            return 1.0  # Orthogonal if no overlap
+
+        # Calculate dot product
+        dot_product = sum(vec1[t] * vec2[t] for t in common_terms)
+
+        # Calculate magnitudes
+        mag1 = math.sqrt(sum(w ** 2 for w in vec1.values()))
+        mag2 = math.sqrt(sum(w ** 2 for w in vec2.values()))
+
+        if mag1 == 0 or mag2 == 0:
+            return 1.0
+
+        cosine_sim = dot_product / (mag1 * mag2)
+        # Clamp to [-1, 1] for numerical stability
+        cosine_sim = max(-1.0, min(1.0, cosine_sim))
+
+        return 1.0 - cosine_sim
 
     def expand_query(self,
                      query_vector: Dict[str, float],
                      relevant_vectors: List[Dict[str, float]],
                      nonrelevant_vectors: Optional[List[Dict[str, float]]] = None,
-                     original_terms: Optional[Set[str]] = None) -> ExpandedQuery:
+                     original_terms: Optional[Set[str]] = None,
+                     doc_scores: Optional[List[float]] = None) -> ExpandedQuery:
         """
-        Expand query using Rocchio algorithm.
+        Expand query using Rocchio algorithm with Query Drift protection.
 
         Q_new = α × Q + β × (1/|D_r|) × Σ D_r - γ × (1/|D_nr|) × Σ D_nr
 
@@ -126,9 +189,11 @@ class RocchioExpander:
             relevant_vectors: List of relevant document vectors
             nonrelevant_vectors: Optional list of non-relevant document vectors
             original_terms: Optional set of original query terms (for tracking)
+            doc_scores: Optional list of document scores (parallel to relevant_vectors)
+                       Used for relevance_threshold filtering
 
         Returns:
-            ExpandedQuery with new terms and weights
+            ExpandedQuery with new terms and weights, including drift metrics
 
         Complexity:
             Time: O(V × (|D_r| + |D_nr|)) where V is vocabulary size
@@ -160,6 +225,23 @@ class RocchioExpander:
         if original_terms is None:
             original_terms = set(query_vector.keys())
 
+        # Apply relevance threshold filtering if scores provided
+        filtered_vectors = relevant_vectors
+        if doc_scores and self.relevance_threshold > 0:
+            max_score = max(doc_scores) if doc_scores else 1.0
+            threshold = self.relevance_threshold * max_score
+            filtered_vectors = [
+                vec for vec, score in zip(relevant_vectors, doc_scores)
+                if score >= threshold
+            ]
+            if not filtered_vectors:
+                # Fall back to at least using top document
+                filtered_vectors = [relevant_vectors[0]]
+            self.logger.debug(
+                f"Relevance filtering: {len(relevant_vectors)} -> {len(filtered_vectors)} docs "
+                f"(threshold={threshold:.4f})"
+            )
+
         # Initialize new query vector
         new_query = defaultdict(float)
 
@@ -168,8 +250,8 @@ class RocchioExpander:
             new_query[term] += self.alpha * weight
 
         # Step 2: β × (1/|D_r|) × Σ D_r (relevant documents)
-        num_relevant = len(relevant_vectors)
-        for doc_vec in relevant_vectors:
+        num_relevant = len(filtered_vectors)
+        for doc_vec in filtered_vectors:
             for term, weight in doc_vec.items():
                 new_query[term] += (self.beta / num_relevant) * weight
 
@@ -185,6 +267,16 @@ class RocchioExpander:
         new_query = {term: max(0.0, weight)
                     for term, weight in new_query.items()}
 
+        # Calculate query drift BEFORE any limiting
+        query_drift = self.cosine_distance(query_vector, new_query)
+        drift_warning = query_drift > self.max_query_drift
+
+        if drift_warning:
+            self.logger.warning(
+                f"Query drift detected: {query_drift:.4f} > {self.max_query_drift:.4f}. "
+                f"Limiting expansion to prevent topic shift."
+            )
+
         # Select expansion terms (terms not in original query)
         expansion_candidates = []
         for term, weight in new_query.items():
@@ -193,8 +285,17 @@ class RocchioExpander:
 
         # Sort by weight and select top-k
         expansion_candidates.sort(key=lambda x: x[1], reverse=True)
+
+        # If drift is too high, reduce expansion terms
+        max_terms = self.max_expansion_terms
+        if drift_warning:
+            # Reduce expansion terms proportionally to drift severity
+            reduction_factor = self.max_query_drift / query_drift
+            max_terms = max(1, int(self.max_expansion_terms * reduction_factor))
+            self.logger.info(f"Reducing expansion terms: {self.max_expansion_terms} -> {max_terms}")
+
         expansion_terms = [term for term, _ in
-                          expansion_candidates[:self.max_expansion_terms]]
+                          expansion_candidates[:max_terms]]
 
         # Build final term list and weights
         all_terms = list(original_terms) + expansion_terms
@@ -206,7 +307,9 @@ class RocchioExpander:
             all_terms=all_terms,
             term_weights=term_weights,
             num_relevant=num_relevant,
-            num_nonrelevant=num_nonrelevant
+            num_nonrelevant=num_nonrelevant,
+            query_drift=query_drift,
+            drift_warning=drift_warning
         )
 
         self.logger.debug(

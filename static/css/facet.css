@@ -1,0 +1,501 @@
+/**
+ * Faceted Search CSS Styles (Enhanced for Left Sidebar)
+ *
+ * Styles for facet sidebar and filtering UI components
+ */
+
+/* Facet Groups */
+.facet-group {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+}
+
+.facet-group:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.facet-group.collapsed .facet-values,
+.facet-group.collapsed .show-more-btn {
+    display: none;
+}
+
+.facet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.facet-header:hover {
+    color: #2563eb;
+}
+
+.facet-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.facet-toggle {
+    font-size: 10px;
+    color: #94a3b8;
+    transition: transform 0.2s;
+}
+
+.facet-group:not(.collapsed) .facet-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.facet-values {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+/* Custom scrollbar for facet values */
+.facet-values::-webkit-scrollbar {
+    width: 5px;
+}
+
+.facet-values::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.facet-values::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.facet-values::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Facet Labels */
+.facet-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.facet-label:hover {
+    background-color: #e2e8f0;
+}
+
+.facet-label input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #2563eb;
+    flex-shrink: 0;
+}
+
+.facet-text {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.facet-value-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.facet-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.facet-label input[type="checkbox"]:checked + .facet-text {
+    font-weight: 600;
+    color: #2563eb;
+}
+
+.facet-label input[type="checkbox"]:checked + .facet-text .facet-count {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+/* Show More Button */
+.show-more-btn {
+    margin-top: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #0d6efd;
+    background: none;
+    border: 1px solid #0d6efd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.show-more-btn:hover {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Active Filters Display */
+.active-filters {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: #e7f3ff;
+    border: 1px solid #b6d4fe;
+    border-radius: 6px;
+}
+
+.active-filters-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: #084298;
+    margin-bottom: 8px;
+}
+
+.filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #0d6efd;
+    color: white;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.filter-tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    transition: background-color 0.2s;
+}
+
+.filter-tag-remove:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Results Info */
+.results-info {
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    background: #d1e7dd;
+    border: 1px solid #badbcc;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #0f5132;
+    font-weight: 500;
+}
+
+/* Filter Panel Enhancements */
+.filter-panel {
+    padding: 20px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-top: 15px;
+}
+
+.filter-panel h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 18px;
+    color: #212529;
+}
+
+/* Filter Actions */
+.filter-actions {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 2px solid #dee2e6;
+    display: flex;
+    gap: 10px;
+}
+
+.filter-btn {
+    flex: 1;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-btn-apply {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.filter-btn-apply:hover {
+    background-color: #0b5ed7;
+}
+
+.filter-btn-clear {
+    background-color: #6c757d;
+    color: white;
+}
+
+.filter-btn-clear:hover {
+    background-color: #5c636a;
+}
+
+/* Filter Toggle Button */
+.filter-toggle {
+    margin-top: 10px;
+}
+
+.filter-toggle-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-toggle-btn:hover {
+    background: #e9ecef;
+}
+
+/* Loading Indicator */
+.loading {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #0d6efd;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading p {
+    margin-top: 15px;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .filter-panel {
+        padding: 15px;
+    }
+
+    .facet-group {
+        padding: 10px;
+    }
+
+    .facet-values {
+        max-height: 200px;
+    }
+
+    .filter-actions {
+        flex-direction: column;
+    }
+
+    .filter-btn {
+        width: 100%;
+    }
+
+    .filter-tags {
+        flex-direction: column;
+    }
+
+    .filter-tag {
+        justify-content: space-between;
+    }
+}
+
+/* Accessibility */
+.facet-label:focus-within {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+.show-more-btn:focus,
+.filter-btn:focus,
+.filter-toggle-btn:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+/* Dark Mode Support (Optional) */
+@media (prefers-color-scheme: dark) {
+    .facet-group {
+        background: #2b3035;
+        border-color: #495057;
+    }
+
+    .facet-header {
+        color: #e9ecef;
+        border-bottom-color: #495057;
+    }
+
+    .facet-label:hover {
+        background-color: #343a40;
+    }
+
+    .facet-text {
+        color: #dee2e6;
+    }
+
+    .filter-panel {
+        background: #212529;
+        border-color: #495057;
+    }
+
+    .filter-panel h3 {
+        color: #f8f9fa;
+    }
+
+    .results-info {
+        background: #1e4620;
+        border-color: #2d5930;
+        color: #a3cfbb;
+    }
+
+    .active-filters {
+        background: #1e3a5f;
+        border-color: #375a7f;
+    }
+
+    .active-filters-header {
+        color: #9ec5fe;
+    }
+}
+
+/* Animation for facet appearance */
+.facet-group {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Empty state */
+.no-facets,
+.facet-empty {
+    padding: 20px;
+    text-align: center;
+    color: #64748b;
+    font-style: italic;
+    font-size: 13px;
+}
+
+/* Error state */
+.facet-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    color: #dc2626;
+    font-size: 13px;
+    text-align: center;
+}
+
+.facet-error .error-icon {
+    font-size: 18px;
+}
+
+/* Show more button enhanced */
+.show-more-btn {
+    margin-top: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    font-weight: 500;
+}
+
+.show-more-btn:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}

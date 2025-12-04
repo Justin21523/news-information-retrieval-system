@@ -92,7 +92,8 @@ async function openDocumentModal(docId) {
  */
 function displayDocumentDetails(data) {
     const contentArea = document.getElementById('modal-content-area');
-    const doc = data.document;
+    // Support both nested (data.document) and flat (data) response structures
+    const doc = data.document || data;
     const metadata = doc.metadata || {};
 
     let html = `
@@ -133,7 +134,7 @@ function displayDocumentDetails(data) {
             <div class="doc-content-section">
                 <h4>📖 完整內容</h4>
                 <div class="doc-content">
-                    ${metadata.content || '無內容'}
+                    ${doc.content || metadata.content || '無內容'}
                 </div>
             </div>
 

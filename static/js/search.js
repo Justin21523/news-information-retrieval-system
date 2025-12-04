@@ -15,32 +15,24 @@ const resultCount = document.getElementById('result-count');
 const responseTime = document.getElementById('response-time');
 const modelName = document.getElementById('model-name');
 
-// Filter DOM Elements
-const filterToggleBtn = document.getElementById('filter-toggle-btn');
-const filterPanel = document.getElementById('filter-panel');
-const categoryFilters = document.getElementById('category-filters');
-const dateFrom = document.getElementById('date-from');
-const dateTo = document.getElementById('date-to');
-const applyFiltersBtn = document.getElementById('apply-filters-btn');
-const clearFiltersBtn = document.getElementById('clear-filters-btn');
+// Filter DOM Elements (managed by facet.js, kept for legacy compatibility)
+// Note: These may be null if filter elements don't exist in the template
 
 // Export DOM Elements
 const exportJsonBtn = document.getElementById('export-json-btn');
 const exportCsvBtn = document.getElementById('export-csv-btn');
 
-// Filter state
-let availableCategories = [];
-let selectedCategories = new Set();
+// Note: Filter state is now managed by facet.js
 
 // Current search state (for export)
 let currentSearchResults = null;
 let currentSearchQuery = '';
 let currentSearchMetadata = {};
 
-// Load system stats and filters on page load
+// Load system stats on page load
+// Note: Filter options are loaded by facet.js
 window.addEventListener('DOMContentLoaded', () => {
     loadSystemStats();
-    loadFilterOptions();
 });
 
 // Show/hide Boolean operator select
@@ -60,7 +52,17 @@ queryInput.addEventListener('keypress', (e) => {
 });
 
 // Search button click
-searchBtn.addEventListener('click', performSearch);
+searchBtn.addEventListener('click', () => {
+    // Call performSearch (may be overridden by facet.js)
+    if (typeof window.performSearch === 'function') {
+        window.performSearch();
+    } else {
+        performSearch();
+    }
+});
+
+// Expose performSearch to window for facet.js override
+window.performSearch = performSearch;
 
 /**
  * Load system statistics
@@ -113,8 +115,8 @@ async function performSearch() {
     const topK = parseInt(topkInput.value);
     const operator = operatorSelect.value;
 
-    // Get active filters
-    const filters = getActiveFilters();
+    // Get active filters (with guard for facet.js not loaded)
+    const filters = typeof getActiveFilters === 'function' ? getActiveFilters() : null;
 
     // Show loading
     loading.style.display = 'block';
@@ -163,12 +165,19 @@ async function performSearch() {
  * Display search results
  */
 function displayResults(data) {
+    // Safety check: ensure data has required properties
+    if (!data || !data.results) {
+        console.error('displayResults: Invalid data structure', data);
+        resultsList.innerHTML = '<div class="no-results">搜尋結果格式錯誤，請重新搜尋</div>';
+        return;
+    }
+
     // Store current search results for export
     currentSearchResults = data.results;
-    currentSearchQuery = data.query;
+    currentSearchQuery = data.query || '';
     currentSearchMetadata = {
         model: data.model,
-        total_results: data.total_results,
+        total_results: data.total_results || data.filtered_results || data.results.length,
         response_time: data.response_time,
         filters: data.filters || null
     };
@@ -176,10 +185,11 @@ function displayResults(data) {
     // Show results header
     resultsHeader.style.display = 'block';
 
-    // Update meta info
-    resultCount.textContent = `找到 ${data.total_results} 筆結果`;
-    responseTime.textContent = `⏱️ ${(data.response_time * 1000).toFixed(2)} ms`;
-    modelName.textContent = `📊 ${data.model.toUpperCase()}`;
+    // Update meta info (handle faceted search response structure)
+    const totalCount = data.total_results || data.filtered_results || data.results.length;
+    resultCount.textContent = `找到 ${totalCount} 筆結果`;
+    responseTime.textContent = data.response_time ? `⏱️ ${(data.response_time * 1000).toFixed(2)} ms` : '';
+    modelName.textContent = `📊 ${data.model ? data.model.toUpperCase() : 'Unknown'}`;
 
     // Display results
     if (data.results.length === 0) {
@@ -188,23 +198,58 @@ function displayResults(data) {
         return;
     }
 
-    resultsList.innerHTML = data.results.map(result => `
-        <div class="result-item" data-doc-id="${result.doc_id}">
+    resultsList.innerHTML = data.results.map(result => {
+        // Get snippet/content to display
+        let displayText = '';
+        if (result.snippet && result.snippet.trim()) {
+            displayText = result.snippet;
+        } else if (result.metadata && result.metadata.content) {
+            displayText = result.metadata.content.substring(0, 200) + '...';
+        } else if (result.title && result.title.trim()) {
+            displayText = result.title;
+        } else {
+            displayText = '無內容摘要';
+        }
+
+        // Support both doc_id (regular search) and id (faceted search)
+        const docId = result.doc_id || result.id;
+        const publishedDate = result.pub_date || result.metadata?.published_date || result.metadata?.date || '';
+        const category = result.category_name || result.category || result.metadata?.category || '';
+        const source = result.source || result.metadata?.source || '';
+        const author = result.author || result.metadata?.author || '';
+
+        // Build metadata chips
+        let metaChips = `<span class="meta-chip meta-docid">📄 ${docId}</span>`;
+
+        if (source) {
+            metaChips += `<span class="meta-chip meta-source">📰 ${source}</span>`;
+        }
+        if (publishedDate) {
+            metaChips += `<span class="meta-chip meta-date">📅 ${publishedDate}</span>`;
+        }
+        if (category) {
+            metaChips += `<span class="meta-chip meta-category">🏷️ ${category}</span>`;
+        }
+        if (author) {
+            metaChips += `<span class="meta-chip meta-author">✍️ ${author}</span>`;
+        }
+
+        return `
+        <div class="result-item" data-doc-id="${docId}">
             <div class="result-header">
                 <div class="result-rank">#${result.rank}</div>
                 <div class="result-title">${highlightQuery(result.title, data.query)}</div>
                 <div class="result-score">${result.score.toFixed(4)}</div>
             </div>
             <div class="result-snippet">
-                ${result.metadata.content ? result.metadata.content.substring(0, 200) + '...' : '無內容摘要'}
+                ${highlightQuery(displayText, data.query)}
             </div>
-            <div class="result-meta" data-doc-id="${result.doc_id}">
-                <span>📄 ${result.doc_id}</span>
-                <span>📅 ${result.metadata.date || '未知日期'}</span>
-                <span>🏷️ ${result.metadata.category || '未分類'}</span>
+            <div class="result-meta" data-doc-id="${docId}">
+                ${metaChips}
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Make results clickable for document details
     makeResultsClickable();

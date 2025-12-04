@@ -1,0 +1,223 @@
+# Test Query Cases for IR System
+# Purpose: Comprehensive test cases for BM25, VSM, Boolean search, and field queries
+# Usage: python scripts/run_test_queries.py --test-file tests/test_queries.yaml
+
+# ==============================================================================
+# 1. Simple Keyword Queries (簡單關鍵字查詢)
+# ==============================================================================
+simple_queries:
+  - query: "台灣 經濟"
+    description: "Basic two-term query about Taiwan economy"
+    expected_topics: ["economic policy", "GDP", "trade", "finance"]
+    min_results: 10
+
+  - query: "人工智慧"
+    description: "AI and machine learning related articles"
+    expected_topics: ["AI", "ChatGPT", "technology", "innovation"]
+    min_results: 5
+
+  - query: "新冠疫情"
+    description: "COVID-19 pandemic coverage"
+    expected_topics: ["COVID-19", "vaccine", "health", "pandemic"]
+    min_results: 10
+
+  - query: "選舉 投票"
+    description: "Election and voting news"
+    expected_topics: ["election", "politics", "voting", "democracy"]
+    min_results: 5
+
+  - query: "氣候變遷"
+    description: "Climate change and environmental issues"
+    expected_topics: ["climate", "environment", "global warming", "carbon"]
+    min_results: 3
+
+# ==============================================================================
+# 2. Boolean Queries (布林查詢)
+# ==============================================================================
+boolean_queries:
+  - query: "台灣 AND 經濟"
+    description: "Articles containing both Taiwan AND economy"
+    mode: "boolean"
+    operator: "AND"
+    min_results: 5
+
+  - query: "人工智慧 OR 機器學習"
+    description: "Articles about AI OR machine learning"
+    mode: "boolean"
+    operator: "OR"
+    min_results: 8
+
+  - query: "疫苗 AND NOT 副作用"
+    description: "Vaccine news excluding side effects"
+    mode: "boolean"
+    operator: "AND NOT"
+    min_results: 3
+
+  - query: "(台灣 OR 中國) AND 貿易"
+    description: "Trade news about Taiwan or China"
+    mode: "boolean"
+    operator: "COMPLEX"
+    min_results: 5
+
+  - query: "政治 AND (選舉 OR 投票)"
+    description: "Political news related to elections or voting"
+    mode: "boolean"
+    operator: "COMPLEX"
+    min_results: 4
+
+# ==============================================================================
+# 3. Field Queries (欄位查詢)
+# ==============================================================================
+field_queries:
+  - query: "title:台灣"
+    description: "Articles with Taiwan in title"
+    mode: "field"
+    field: "title"
+    min_results: 10
+
+  - query: "category:政治"
+    description: "All political news articles"
+    mode: "field"
+    field: "category"
+    min_results: 15
+
+  - query: "source:ltn"
+    description: "All articles from Liberty Times News"
+    mode: "field"
+    field: "source"
+    min_results: 50
+
+  - query: "title:經濟 AND category:財經"
+    description: "Economic articles in finance category"
+    mode: "field"
+    fields: ["title", "category"]
+    min_results: 5
+
+  - query: "source:yahoo AND title:AI"
+    description: "AI articles from Yahoo News"
+    mode: "field"
+    fields: ["source", "title"]
+    min_results: 3
+
+# ==============================================================================
+# 4. Complex Queries (複雜查詢)
+# ==============================================================================
+complex_queries:
+  - query: "title:台灣 AND (經濟 OR 金融)"
+    description: "Taiwan in title with economy or finance in content"
+    mode: "field"
+    complexity: "high"
+    min_results: 5
+
+  - query: "(title:選舉 OR title:投票) AND category:政治"
+    description: "Election or voting in title, politics category"
+    mode: "field"
+    complexity: "high"
+    min_results: 3
+
+  - query: "人工智慧 AND (應用 OR 技術) AND NOT 風險"
+    description: "AI applications/technology excluding risks"
+    mode: "boolean"
+    complexity: "high"
+    min_results: 2
+
+# ==============================================================================
+# 5. Edge Cases (邊界案例)
+# ==============================================================================
+edge_cases:
+  - query: ""
+    description: "Empty query (should handle gracefully)"
+    expected_error: true
+
+  - query: "XYZ123極罕見詞彙"
+    description: "Very rare or non-existent term"
+    min_results: 0
+    max_results: 2
+
+  - query: "AND OR NOT"
+    description: "Query with only Boolean operators"
+    expected_behavior: "treat as keywords or error"
+
+  - query: "的 是 在"
+    description: "Common stopwords only"
+    expected_behavior: "no results or filtered out"
+    min_results: 0
+
+# ==============================================================================
+# 6. Performance Benchmarks (效能基準測試)
+# ==============================================================================
+performance_tests:
+  - query: "台灣"
+    description: "Single high-frequency term"
+    max_time_ms: 500
+    expected_results_range: [100, 10000]
+
+  - query: "台灣 經濟 政治 社會 文化"
+    description: "Multi-term query (5 terms)"
+    max_time_ms: 1000
+    expected_results_range: [10, 1000]
+
+  - query: "title:台灣 AND category:政治 AND (經濟 OR 外交)"
+    description: "Complex field + Boolean query"
+    max_time_ms: 1500
+    expected_results_range: [5, 500]
+
+# ==============================================================================
+# 7. Ranking Quality Tests (排序品質測試)
+# ==============================================================================
+ranking_tests:
+  - query: "台灣 經濟"
+    description: "BM25 ranking test"
+    model: "BM25"
+    check_relevance: true
+    top_k: 10
+
+  - query: "人工智慧 應用"
+    description: "VSM ranking test"
+    model: "VSM"
+    check_relevance: true
+    top_k: 10
+
+  - query: "疫情 防疫"
+    description: "Hybrid ranking test"
+    model: "HYBRID"
+    check_relevance: true
+    top_k: 10
+
+# ==============================================================================
+# 8. CKIP Tokenization Tests (CKIP 分詞測試)
+# ==============================================================================
+ckip_tests:
+  - query: "三聚氰胺事件"
+    description: "Chemical compound term"
+    expected_tokens: ["三聚氰胺", "事件"]
+
+  - query: "COVID-19疫苗"
+    description: "Mixed English and Chinese"
+    expected_tokens: ["COVID-19", "疫苗"]
+
+  - query: "馬英九總統"
+    description: "Person name and title"
+    expected_tokens: ["馬英九", "總統"]
+
+  - query: "台積電股價"
+    description: "Company name and finance term"
+    expected_tokens: ["台積電", "股價"]
+
+# ==============================================================================
+# Evaluation Criteria (評估標準)
+# ==============================================================================
+evaluation:
+  metrics:
+    - "precision@k"
+    - "recall@k"
+    - "response_time_ms"
+    - "num_results"
+    - "relevance_score"
+
+  thresholds:
+    min_precision: 0.6
+    min_recall: 0.4
+    max_response_time_ms: 2000
+    min_results_simple_query: 5
+    max_acceptable_errors: 2

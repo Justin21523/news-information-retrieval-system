@@ -182,6 +182,7 @@ class QueryParser:
             Time: O(n) where n = query string length
         """
         tokens = []
+        prev_token_type = None
 
         for match in self.TOKEN_RE.finditer(query_str):
             token_type = match.lastgroup
@@ -191,7 +192,15 @@ class QueryParser:
             if token_type == 'WHITESPACE':
                 continue
 
+            # Fix: After COLON, treat FIELD tokens as VALUE
+            # This handles cases like "category:aipl" where "aipl" is tokenized as FIELD
+            if prev_token_type == 'COLON' and token_type == 'FIELD':
+                # Check if it's a keyword (AND, OR, NOT, TO) - keep as is
+                if token_value.upper() not in ('AND', 'OR', 'NOT', 'TO'):
+                    token_type = 'VALUE'
+
             tokens.append((token_type, token_value))
+            prev_token_type = token_type
 
         self.logger.debug(f"Tokens: {tokens}")
         return tokens

@@ -56,10 +56,22 @@ class Sentence:
             self.tokens = self._tokenize(self.text)
 
     def _tokenize(self, text: str) -> List[str]:
-        """Simple word tokenization."""
-        # Remove punctuation and lowercase
-        text = re.sub(r'[^\w\s]', ' ', text.lower())
-        return [token for token in text.split() if token]
+        """Simple word tokenization with Chinese support."""
+        # Remove punctuation and lowercase for Latin text
+        text = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', text.lower())
+
+        # Split by whitespace first (for English words)
+        tokens = []
+        for segment in text.split():
+            # If segment contains Chinese characters, split by character
+            if any('\u4e00' <= c <= '\u9fff' for c in segment):
+                # Split Chinese text into characters (simple approach)
+                tokens.extend(c for c in segment if c.strip())
+            else:
+                if segment.strip():
+                    tokens.append(segment)
+
+        return tokens
 
     @property
     def length(self) -> int:
@@ -147,8 +159,10 @@ class StaticSummarizer:
             >>> len(sentences)
             3
         """
-        # Split by sentence terminators
-        sentence_pattern = r'[.!?]+'
+        # Split by sentence terminators (both English and Chinese)
+        # Support English: . ! ?
+        # Support Chinese: 。！？
+        sentence_pattern = r'[.!?。！？]+'
         raw_sentences = re.split(sentence_pattern, text.strip())
 
         sentences = []

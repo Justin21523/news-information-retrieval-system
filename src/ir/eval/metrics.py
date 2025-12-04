@@ -475,6 +475,348 @@ class Metrics:
         return dcg / idcg
 
     # ========================================================================
+    # Advanced Metrics (Academic Standard)
+    # ========================================================================
+
+    def expected_reciprocal_rank(self,
+                                  retrieved: List[int],
+                                  relevance_scores: Dict[int, float],
+                                  k: int,
+                                  max_grade: float = 3.0) -> float:
+        """
+        Calculate Expected Reciprocal Rank (ERR@K).
+
+        ERR models a cascade user model where the probability of stopping
+        depends on the relevance of documents seen so far.
+
+        ERR@K = Σ(r=1 to k) (1/r) × R(r) × Π(i=1 to r-1)(1 - R(i))
+
+        where R(i) = (2^rel(i) - 1) / 2^max_grade
+
+        Reference: Chapelle et al. "Expected Reciprocal Rank for Graded
+                   Relevance" (CIKM 2009)
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevance_scores: Dictionary {doc_id: relevance_score}
+            k: Cutoff rank
+            max_grade: Maximum relevance grade (default 3.0 for 0-3 scale)
+
+        Returns:
+            ERR@K score in [0, 1]
+
+        Complexity:
+            Time: O(k)
+            Space: O(1)
+
+        Examples:
+            >>> rel = {1: 3, 2: 1, 3: 0, 4: 2, 5: 0}
+            >>> metrics.expected_reciprocal_rank([1, 2, 3, 4, 5], rel, k=5)
+            0.631
+        """
+        if k <= 0 or not retrieved:
+            return 0.0
+
+        err = 0.0
+        prob_continue = 1.0  # Probability of not stopping before rank r
+
+        for r, doc_id in enumerate(retrieved[:k], start=1):
+            rel = relevance_scores.get(doc_id, 0.0)
+            # Probability of relevance at rank r
+            # R(r) = (2^rel - 1) / 2^max_grade
+            prob_relevant = (2 ** rel - 1) / (2 ** max_grade)
+
+            # ERR contribution: (1/r) * prob_relevant * prob_continue
+            err += prob_relevant * prob_continue / r
+
+            # Update probability of continuing
+            prob_continue *= (1 - prob_relevant)
+
+        return err
+
+    def geometric_mean_average_precision(self,
+                                          results: Dict[str, List[int]],
+                                          qrels: Dict[str, Set[int]],
+                                          epsilon: float = 1e-10) -> float:
+        """
+        Calculate Geometric Mean Average Precision (GMAP).
+
+        GMAP is more sensitive to per-query AP differences than MAP,
+        especially for low-performing queries.
+
+        GMAP = exp((1/n) × Σ log(AP_i + ε))
+
+        Reference: Robertson, S. "On GMAP - and other transformations"
+                   (CIKM 2006)
+
+        Args:
+            results: Dictionary {query_id: [ranked_doc_ids]}
+            qrels: Dictionary {query_id: {relevant_doc_ids}}
+            epsilon: Small constant to handle zero AP (default 1e-10)
+
+        Returns:
+            GMAP score in [0, 1]
+
+        Complexity:
+            Time: O(Q*k) where Q = queries, k = avg retrieved
+            Space: O(Q)
+
+        Examples:
+            >>> results = {'q1': [1, 2, 3], 'q2': [4, 5, 6]}
+            >>> qrels = {'q1': {1, 3}, 'q2': {5}}
+            >>> metrics.geometric_mean_average_precision(results, qrels)
+            0.645
+        """
+        if not results or not qrels:
+            return 0.0
+
+        log_ap_sum = 0.0
+        num_queries = 0
+
+        for query_id, retrieved in results.items():
+            if query_id in qrels:
+                relevant = qrels[query_id]
+                ap = self.average_precision(retrieved, relevant)
+                # Add epsilon to handle zero AP
+                log_ap_sum += math.log(ap + epsilon)
+                num_queries += 1
+
+        if num_queries == 0:
+            return 0.0
+
+        return math.exp(log_ap_sum / num_queries)
+
+    def rank_biased_precision(self,
+                               retrieved: List[int],
+                               relevant: Set[int],
+                               p: float = 0.8) -> float:
+        """
+        Calculate Rank-Biased Precision (RBP).
+
+        RBP models a user with probability p of continuing to the next result.
+        It provides a natural way to handle incomplete rankings.
+
+        RBP = (1 - p) × Σ(i=1 to n) p^(i-1) × rel(i)
+
+        Reference: Moffat & Zobel "Rank-biased precision for measurement
+                   of retrieval effectiveness" (TOIS 2008)
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevant: Set of relevant document IDs (binary relevance)
+            p: Persistence probability (default 0.8)
+                - Higher p = more weight on later ranks
+                - Lower p = more focus on top ranks
+
+        Returns:
+            RBP score in [0, 1]
+
+        Complexity:
+            Time: O(k) where k = len(retrieved)
+            Space: O(1)
+
+        Examples:
+            >>> metrics.rank_biased_precision([1, 2, 3, 4, 5], {1, 3, 5}, p=0.8)
+            0.469
+        """
+        if not retrieved or p < 0 or p >= 1:
+            return 0.0
+
+        rbp = 0.0
+        weight = 1 - p  # Base weight
+
+        for i, doc_id in enumerate(retrieved):
+            if doc_id in relevant:
+                rbp += weight * (p ** i)
+
+        return rbp
+
+    def rank_biased_precision_graded(self,
+                                      retrieved: List[int],
+                                      relevance_scores: Dict[int, float],
+                                      p: float = 0.8,
+                                      max_grade: float = 3.0) -> float:
+        """
+        Calculate Rank-Biased Precision with graded relevance.
+
+        RBP = (1 - p) × Σ(i=1 to n) p^(i-1) × rel(i) / max_grade
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevance_scores: Dictionary {doc_id: relevance_score}
+            p: Persistence probability (default 0.8)
+            max_grade: Maximum relevance grade for normalization
+
+        Returns:
+            RBP score in [0, 1]
+
+        Complexity:
+            Time: O(k)
+            Space: O(1)
+        """
+        if not retrieved or p < 0 or p >= 1:
+            return 0.0
+
+        rbp = 0.0
+        weight = 1 - p
+
+        for i, doc_id in enumerate(retrieved):
+            rel = relevance_scores.get(doc_id, 0.0)
+            normalized_rel = rel / max_grade if max_grade > 0 else 0
+            rbp += weight * (p ** i) * normalized_rel
+
+        return rbp
+
+    def bpref(self,
+              retrieved: List[int],
+              relevant: Set[int],
+              non_relevant: Optional[Set[int]] = None) -> float:
+        """
+        Calculate Binary Preference (Bpref).
+
+        Bpref is designed for evaluation with incomplete relevance judgments.
+        It only considers judged documents.
+
+        Bpref = (1/R) × Σ(r ∈ retrieved ∩ relevant)
+                       (1 - min(|n ranked higher than r|, R) / R)
+
+        Reference: Buckley & Voorhees "Retrieval Evaluation with Incomplete
+                   Information" (SIGIR 2004)
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevant: Set of relevant document IDs
+            non_relevant: Set of non-relevant document IDs (judged)
+                         If None, uses retrieved docs not in relevant
+
+        Returns:
+            Bpref score in [0, 1]
+
+        Complexity:
+            Time: O(k) where k = len(retrieved)
+            Space: O(1)
+
+        Examples:
+            >>> retrieved = [1, 2, 3, 4, 5, 6, 7, 8]
+            >>> relevant = {1, 4, 7}
+            >>> non_relevant = {2, 3, 5, 6, 8}
+            >>> metrics.bpref(retrieved, relevant, non_relevant)
+            0.556
+        """
+        if not relevant:
+            return 0.0
+
+        R = len(relevant)
+
+        # If non_relevant not provided, use retrieved docs not in relevant
+        if non_relevant is None:
+            non_relevant = set(retrieved) - relevant
+
+        bpref_sum = 0.0
+        non_rel_before = 0
+
+        for doc_id in retrieved:
+            if doc_id in relevant:
+                # Count non-relevant docs ranked before this relevant doc
+                # Cap at R as per original Bpref definition
+                capped_non_rel = min(non_rel_before, R)
+                bpref_sum += 1 - (capped_non_rel / R)
+            elif doc_id in non_relevant:
+                non_rel_before += 1
+
+        return bpref_sum / R
+
+    def r_precision(self, retrieved: List[int], relevant: Set[int]) -> float:
+        """
+        Calculate R-Precision.
+
+        R-Precision is precision at rank R, where R = |relevant|.
+        It normalizes for the number of relevant documents.
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevant: Set of relevant document IDs
+
+        Returns:
+            R-Precision score in [0, 1]
+
+        Complexity:
+            Time: O(R)
+            Space: O(1)
+
+        Examples:
+            >>> metrics.r_precision([1, 2, 3, 4, 5], {1, 3, 5})
+            0.667  # P@3 since there are 3 relevant docs
+        """
+        if not relevant:
+            return 0.0
+
+        R = len(relevant)
+        return self.precision_at_k(retrieved, relevant, R)
+
+    def success_at_k(self, retrieved: List[int], relevant: Set[int],
+                     k: int) -> float:
+        """
+        Calculate Success@K (S@K).
+
+        Success@K = 1 if at least one relevant document in top-k, else 0.
+        Useful for navigational queries.
+
+        Args:
+            retrieved: Ranked list of retrieved document IDs
+            relevant: Set of relevant document IDs
+            k: Cutoff rank
+
+        Returns:
+            1.0 if success, 0.0 otherwise
+
+        Complexity:
+            Time: O(k)
+            Space: O(1)
+        """
+        if k <= 0:
+            return 0.0
+
+        for doc_id in retrieved[:k]:
+            if doc_id in relevant:
+                return 1.0
+        return 0.0
+
+    def mean_ndcg(self,
+                  results: Dict[str, List[int]],
+                  relevance_scores: Dict[str, Dict[int, float]],
+                  k: int) -> float:
+        """
+        Calculate Mean nDCG@K across multiple queries.
+
+        Args:
+            results: Dictionary {query_id: [ranked_doc_ids]}
+            relevance_scores: Dictionary {query_id: {doc_id: score}}
+            k: Cutoff rank
+
+        Returns:
+            Mean nDCG@K score
+
+        Complexity:
+            Time: O(Q*k*log(k))
+            Space: O(1)
+        """
+        if not results or not relevance_scores:
+            return 0.0
+
+        ndcg_sum = 0.0
+        num_queries = 0
+
+        for query_id, retrieved in results.items():
+            if query_id in relevance_scores:
+                rel_scores = relevance_scores[query_id]
+                ndcg_score = self.ndcg_at_k(retrieved, rel_scores, k)
+                ndcg_sum += ndcg_score
+                num_queries += 1
+
+        return ndcg_sum / num_queries if num_queries > 0 else 0.0
+
+    # ========================================================================
     # Utility Methods
     # ========================================================================
 
@@ -526,14 +868,23 @@ class Metrics:
         results['ap'] = self.average_precision(retrieved, relevant)
         results['rr'] = self.reciprocal_rank(retrieved, relevant)
 
+        # Advanced binary metrics
+        results['r_precision'] = self.r_precision(retrieved, relevant)
+        results['bpref'] = self.bpref(retrieved, relevant)
+        results['rbp'] = self.rank_biased_precision(retrieved, relevant)
+
         # Metrics at various k
         for k in k_values:
             results[f'p@{k}'] = self.precision_at_k(retrieved, relevant, k)
             results[f'r@{k}'] = self.recall_at_k(retrieved, relevant, k)
+            results[f'success@{k}'] = self.success_at_k(retrieved, relevant, k)
 
-            # nDCG if graded relevance available
+            # Graded relevance metrics
             if relevance_scores:
                 results[f'ndcg@{k}'] = self.ndcg_at_k(retrieved, relevance_scores, k)
+                results[f'err@{k}'] = self.expected_reciprocal_rank(
+                    retrieved, relevance_scores, k
+                )
 
         return results
 
@@ -600,9 +951,10 @@ class Metrics:
         for metric_name, scores in per_query_metrics.items():
             aggregated[metric_name] = sum(scores) / len(scores) if scores else 0.0
 
-        # Add MAP and MRR explicitly (same as averaged ap/rr but more explicit)
+        # Add MAP, MRR, and GMAP explicitly
         aggregated['map'] = self.mean_average_precision(results, qrels)
         aggregated['mrr'] = self.mean_reciprocal_rank(results, qrels)
+        aggregated['gmap'] = self.geometric_mean_average_precision(results, qrels)
 
         return aggregated
 
@@ -739,6 +1091,38 @@ def ndcg(relevance_scores: Union[Dict[int, float], List[float]], k: int) -> floa
     # Create an ideal ranking based on the relevance scores
     retrieved = sorted(relevance_scores.keys(), key=lambda x: relevance_scores[x], reverse=True)
     return _metrics_instance.ndcg_at_k(retrieved, relevance_scores, k)
+
+
+def err(retrieved: List[int], relevance_scores: Dict[int, float], k: int,
+        max_grade: float = 3.0) -> float:
+    """Convenience function for ERR calculation."""
+    return _metrics_instance.expected_reciprocal_rank(
+        retrieved, relevance_scores, k, max_grade
+    )
+
+
+def rbp(retrieved: List[int], relevant: Set[int], p: float = 0.8) -> float:
+    """Convenience function for RBP calculation."""
+    return _metrics_instance.rank_biased_precision(retrieved, relevant, p)
+
+
+def bpref(retrieved: List[int], relevant: Set[int],
+          non_relevant: Optional[Set[int]] = None) -> float:
+    """Convenience function for Bpref calculation."""
+    return _metrics_instance.bpref(retrieved, relevant, non_relevant)
+
+
+def r_precision(retrieved: List[int], relevant: Set[int]) -> float:
+    """Convenience function for R-Precision calculation."""
+    return _metrics_instance.r_precision(retrieved, relevant)
+
+
+def gmap(results: Dict[str, List[int]], qrels: Dict[str, Set[int]],
+         epsilon: float = 1e-10) -> float:
+    """Convenience function for GMAP calculation."""
+    return _metrics_instance.geometric_mean_average_precision(
+        results, qrels, epsilon
+    )
 
 
 if __name__ == '__main__':

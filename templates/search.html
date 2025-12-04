@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNIRS - 中文新聞智能檢索系統</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/facet.css') }}">
 </head>
 <body>
     <div class="container">
@@ -21,103 +22,149 @@
             </nav>
         </header>
 
-        <!-- Search Box -->
-        <div class="search-box">
-            <input type="text" id="query-input" placeholder="輸入查詢關鍵字... (例如: 人工智慧、颱風災害、台灣經濟)" autofocus>
+        <!-- Mobile Filter Toggle Button -->
+        <button id="mobile-filter-toggle" class="mobile-filter-toggle">
+            <span class="filter-icon">☰</span>
+            <span>篩選</span>
+        </button>
 
-            <div class="search-options">
-                <div class="option-group">
-                    <label for="model-select">檢索模型:</label>
-                    <select id="model-select">
-                        <option value="bm25">BM25 (推薦)</option>
-                        <option value="tfidf">TF-IDF</option>
-                        <option value="bert">BERT (語義)</option>
-                        <option value="boolean">Boolean</option>
-                    </select>
+        <!-- Sidebar Overlay (Mobile) -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+        <!-- Main Layout: Sidebar + Content -->
+        <div class="main-layout">
+            <!-- Left Sidebar: Facet Filters -->
+            <aside id="filter-sidebar" class="filter-sidebar">
+                <div class="sidebar-header">
+                    <h3>🔍 篩選條件</h3>
+                    <button id="close-sidebar" class="close-sidebar-btn">&times;</button>
                 </div>
 
-                <div class="option-group" id="boolean-operator-group" style="display: none;">
-                    <label for="operator-select">運算子:</label>
-                    <select id="operator-select">
-                        <option value="AND">AND (且)</option>
-                        <option value="OR">OR (或)</option>
-                    </select>
-                </div>
+                <!-- Active Filters Display -->
+                <div id="active-filters" class="active-filters"></div>
 
-                <div class="option-group">
-                    <label for="topk-input">結果數量:</label>
-                    <input type="number" id="topk-input" value="20" min="5" max="100" step="5">
-                </div>
-
-                <button id="search-btn" class="btn btn-primary">搜尋</button>
-            </div>
-
-            <!-- Advanced Filters Toggle -->
-            <div class="filter-toggle">
-                <button id="filter-toggle-btn" class="filter-toggle-btn">
-                    🔽 進階篩選
-                </button>
-            </div>
-
-            <!-- Advanced Filters Panel -->
-            <div id="filter-panel" class="filter-panel" style="display: none;">
-                <h3>📋 進階篩選選項</h3>
-
-                <!-- Category Filter -->
-                <div class="filter-group">
-                    <label>🏷️ 新聞分類:</label>
-                    <div id="category-filters" class="checkbox-group">
-                        <!-- Dynamically loaded -->
-                    </div>
-                </div>
-
-                <!-- Date Range Filter -->
-                <div class="filter-group">
-                    <label>📅 日期範圍:</label>
-                    <div class="date-range">
-                        <input type="date" id="date-from" class="date-input">
-                        <span>至</span>
-                        <input type="date" id="date-to" class="date-input">
+                <!-- Facet Groups Container -->
+                <div id="facet-groups" class="facet-groups">
+                    <div class="facet-loading">
+                        <div class="spinner-small"></div>
+                        <span>載入篩選選項...</span>
                     </div>
                 </div>
 
                 <!-- Filter Actions -->
                 <div class="filter-actions">
-                    <button id="apply-filters-btn" class="filter-btn filter-btn-apply">套用篩選</button>
-                    <button id="clear-filters-btn" class="filter-btn filter-btn-clear">清除篩選</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- System Stats -->
-        <div id="stats-panel" class="stats-panel"></div>
-
-        <!-- Loading Indicator -->
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>搜尋中...</p>
-        </div>
-
-        <!-- Results -->
-        <div id="results-container">
-            <div id="results-header" class="results-header" style="display: none;">
-                <h2>搜尋結果</h2>
-                <div class="results-meta">
-                    <span id="result-count"></span>
-                    <span id="response-time"></span>
-                    <span id="model-name"></span>
-                </div>
-                <div class="export-actions">
-                    <button id="export-json-btn" class="btn-export btn-export-json" title="匯出為 JSON 格式">
-                        📥 JSON
-                    </button>
-                    <button id="export-csv-btn" class="btn-export btn-export-csv" title="匯出為 CSV 格式">
-                        📊 CSV
+                    <button id="clear-filters-btn" class="filter-btn filter-btn-clear">
+                        清除所有篩選
                     </button>
                 </div>
-            </div>
+            </aside>
 
-            <div id="results-list" class="results-list"></div>
+            <!-- Main Content Area -->
+            <main class="search-content">
+                <!-- Search Box -->
+                <div class="search-box">
+                    <input type="text" id="query-input" placeholder="輸入查詢關鍵字... (例如: 人工智慧、颱風災害、台灣經濟)" autofocus>
+
+                    <div class="search-options">
+                        <div class="option-group">
+                            <label for="model-select">檢索模型:</label>
+                            <select id="model-select">
+                                <option value="bm25">BM25 (推薦)</option>
+                                <option value="tfidf">TF-IDF</option>
+                                <option value="bert">BERT (語義)</option>
+                                <option value="boolean">Boolean</option>
+                            </select>
+                        </div>
+
+                        <div class="option-group" id="boolean-operator-group" style="display: none;">
+                            <label for="operator-select">運算子:</label>
+                            <select id="operator-select">
+                                <option value="AND">AND (且)</option>
+                                <option value="OR">OR (或)</option>
+                            </select>
+                        </div>
+
+                        <div class="option-group">
+                            <label for="topk-input">結果數量:</label>
+                            <input type="number" id="topk-input" value="20" min="5" max="100" step="5">
+                        </div>
+
+                        <button id="search-btn" class="btn btn-primary">搜尋</button>
+                    </div>
+                </div>
+
+                <!-- System Stats -->
+                <div id="stats-panel" class="stats-panel"></div>
+
+                <!-- Loading Indicator -->
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>搜尋中...</p>
+                </div>
+
+                <!-- Results Analytics Panel (shown after search) -->
+                <div id="analytics-panel" class="analytics-panel" style="display: none;">
+                    <div class="analytics-header">
+                        <h3>📊 結果分析</h3>
+                        <button id="toggle-analytics" class="btn-toggle-analytics" title="展開/收合">▼</button>
+                    </div>
+                    <div id="analytics-content" class="analytics-content">
+                        <!-- Result Distribution Charts -->
+                        <div class="analytics-grid">
+                            <!-- Source Distribution (Pie Chart) -->
+                            <div class="analytics-card">
+                                <h4>來源分佈</h4>
+                                <canvas id="source-chart"></canvas>
+                            </div>
+
+                            <!-- Category Distribution (Doughnut Chart) -->
+                            <div class="analytics-card">
+                                <h4>類別分佈</h4>
+                                <canvas id="category-chart"></canvas>
+                            </div>
+
+                            <!-- Score Distribution (Bar Chart) -->
+                            <div class="analytics-card">
+                                <h4>分數分佈</h4>
+                                <canvas id="score-chart"></canvas>
+                            </div>
+
+                            <!-- Model Performance Quick Compare -->
+                            <div class="analytics-card analytics-card-wide">
+                                <h4>模型效能快速比較</h4>
+                                <div id="model-compare-mini" class="model-compare-mini">
+                                    <button id="run-quick-compare" class="btn btn-secondary">
+                                        ⚡ 執行快速比較
+                                    </button>
+                                    <div id="model-compare-results" class="model-compare-results" style="display: none;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div id="results-container">
+                    <div id="results-header" class="results-header" style="display: none;">
+                        <h2>搜尋結果</h2>
+                        <div class="results-meta">
+                            <span id="result-count"></span>
+                            <span id="response-time"></span>
+                            <span id="model-name"></span>
+                        </div>
+                        <div class="export-actions">
+                            <button id="export-json-btn" class="btn-export btn-export-json" title="匯出為 JSON 格式">
+                                📥 JSON
+                            </button>
+                            <button id="export-csv-btn" class="btn-export btn-export-csv" title="匯出為 CSV 格式">
+                                📊 CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="results-list" class="results-list"></div>
+                </div>
+            </main>
         </div>
 
         <!-- Footer -->
@@ -126,8 +173,12 @@
         </footer>
     </div>
 
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     <script src="{{ url_for('static', filename='js/document-modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/search-filters.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/search-analytics.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/facet.js') }}"></script>
 </body>
 </html>

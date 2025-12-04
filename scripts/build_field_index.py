@@ -130,6 +130,10 @@ def build_field_index(
     logging.info(f"Saving field index to {output_file}...")
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
+    # Set tokenizer to None before pickling (tokenizer is only needed during build)
+    # Queries will be tokenized separately by QueryExecutor
+    indexer.tokenizer = None
+
     with open(output_file, 'wb') as f:
         pickle.dump(indexer, f, protocol=pickle.HIGHEST_PROTOCOL)
 

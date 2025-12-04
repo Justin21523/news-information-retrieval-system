@@ -235,7 +235,10 @@ class RetrievalEvaluator:
         """
         Compute Discounted Cumulative Gain (DCG).
 
-        DCG = sum(rel_i / log2(i+1)) for i in 1..k
+        DCG = sum((2^rel_i - 1) / log2(i+1)) for i in 1..k
+
+        Uses the standard exponential gain formula as per
+        Järvelin & Kekäläinen (2002) and Manning et al. IIR textbook.
 
         Args:
             results: List of search results
@@ -251,7 +254,9 @@ class RetrievalEvaluator:
         dcg = 0.0
         for rank, result in enumerate(results[:k], 1):
             relevance = relevant_docs.get(result.doc_id, 0)
-            dcg += relevance / math.log2(rank + 1)
+            # Use exponential gain formula: (2^rel - 1) / log2(i + 1)
+            gain = (2 ** relevance - 1) / math.log2(rank + 1)
+            dcg += gain
 
         return dcg
 
@@ -261,6 +266,11 @@ class RetrievalEvaluator:
         Compute Normalized Discounted Cumulative Gain (nDCG).
 
         nDCG = DCG / IDCG where IDCG is ideal DCG
+
+        Uses the same formula as DCG for consistency:
+        IDCG = sum((2^rel_i - 1) / log2(i+1)) for ideal ranking
+
+        Reference: Järvelin & Kekäläinen (2002)
 
         Args:
             results: List of search results
@@ -272,12 +282,18 @@ class RetrievalEvaluator:
         """
         dcg = self.compute_dcg(results, relevant_docs, k)
 
-        # Compute ideal DCG (IDCG)
+        # Compute ideal DCG (IDCG) using same formula as DCG
         ideal_ranking = sorted(relevant_docs.values(), reverse=True)
         if k is not None:
             ideal_ranking = ideal_ranking[:k]
 
-        idcg = sum(rel / math.log2(rank + 2) for rank, rel in enumerate(ideal_ranking))
+        # Use same exponential gain formula: (2^rel - 1) / log2(i + 1)
+        # Note: rank is 0-indexed, so we use rank + 1 to get 1-indexed position
+        idcg = sum(
+            (2 ** rel - 1) / math.log2(rank + 1)
+            for rank, rel in enumerate(ideal_ranking, 1)
+            if rel > 0  # Only consider relevant docs
+        )
 
         if idcg == 0.0:
             return 0.0

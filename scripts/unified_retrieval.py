@@ -111,11 +111,30 @@ class UnifiedRetrieval:
         self.doc_id_map = None
         self.reverse_doc_map = None
         self.doc_metadata = {}
+        self.field_index = None
 
         # BERT model (lazy loading)
         self.bert_model = None
 
         logger.info("UnifiedRetrieval initialized")
+
+    def _generate_snippet(self, metadata: Dict, max_length: int = 200) -> str:
+        """
+        Generate a text snippet from document content.
+
+        Args:
+            metadata: Document metadata containing 'content'
+            max_length: Maximum snippet length
+
+        Returns:
+            Truncated content snippet
+        """
+        content = metadata.get('content', '')
+        if not content:
+            return ''
+        if len(content) <= max_length:
+            return content
+        return content[:max_length] + '...'
 
     def load_indexes(self, index_dir: Path):
         """
@@ -181,6 +200,13 @@ class UnifiedRetrieval:
                 self.reverse_doc_map = {int(k): v for k, v in data['doc_to_article'].items()}
             logger.info(f"Loaded document ID mappings: {len(self.doc_id_map)} docs")
 
+        # Load field index for faceted search
+        field_index_path = index_dir / 'field_index.pkl'
+        if field_index_path.exists():
+            with open(field_index_path, 'rb') as f:
+                self.field_index = pickle.load(f)
+            logger.info(f"Loaded field index: {len(self.field_index)} fields")
+
     def search_boolean(self, query: str, operator: str = 'AND') -> List[SearchResult]:
         """
         Boolean retrieval (exact match).
@@ -230,6 +256,7 @@ class UnifiedRetrieval:
                 score=1.0,  # Boolean has no score
                 rank=rank,
                 title=metadata.get('title', ''),
+                snippet=self._generate_snippet(metadata),
                 metadata=metadata
             ))
 
@@ -298,6 +325,7 @@ class UnifiedRetrieval:
                 score=score,
                 rank=rank,
                 title=metadata.get('title', ''),
+                snippet=self._generate_snippet(metadata),
                 metadata=metadata
             ))
 
@@ -364,6 +392,7 @@ class UnifiedRetrieval:
                 score=score,
                 rank=rank,
                 title=metadata.get('title', ''),
+                snippet=self._generate_snippet(metadata),
                 metadata=metadata
             ))
 
@@ -419,6 +448,7 @@ class UnifiedRetrieval:
                 score=score,
                 rank=rank,
                 title=metadata.get('title', ''),
+                snippet=self._generate_snippet(metadata),
                 metadata=metadata
             ))
 

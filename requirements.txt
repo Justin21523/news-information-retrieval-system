@@ -7,7 +7,9 @@
 
 # Chinese text processing - 中文文字處理
 pypinyin==0.49.0              # 中文拼音轉換
-jieba==0.42.1                 # 中文分詞
+jieba==0.42.1                 # 中文分詞（備用）
+ckip-transformers==0.3.4      # CKIP中文斷詞（主要使用）
+transformers==4.35.0          # Transformer模型支援
 
 # Scientific computing - 科學計算
 numpy==1.24.3                 # 數值計算
@@ -50,14 +52,36 @@ pandas==2.0.3                 # 資料處理（可選）
 # Web Framework (For Final Project) - Web 框架（期末專案用）
 # ============================================
 
-# flask==2.3.3                # Web 應用框架
-# flask-cors==4.0.0           # CORS 支援
+flask==2.3.3                  # Web 應用框架
+flask-cors==4.0.0             # CORS 支援
+
+# ============================================
+# Web Crawling & Scraping - 網頁爬取
+# ============================================
+
+# Core crawling framework
+scrapy==2.11.0                # 爬蟲框架
+scrapy-playwright==0.0.34     # Playwright integration for Scrapy
+playwright==1.40.0            # Browser automation
+
+# Anti-detection & utilities
+fake-useragent==1.4.0         # User-agent rotation
+requests==2.31.0              # HTTP library
+beautifulsoup4==4.12.2        # HTML parsing (optional)
+lxml==4.9.3                   # XML/HTML parser
+
+# Proxy & rate limiting
+scrapy-rotating-proxies==0.6.2  # Proxy rotation (optional)
+
+# Scheduling & automation
+apscheduler==3.10.4           # Task scheduling
 
 # ============================================
 # Database (For Final Project) - 資料庫（期末專案用）
 # ============================================
 
 # sqlite3 is built-in          # SQLite 資料庫（內建）
+psycopg2-binary==2.9.9        # PostgreSQL 資料庫驅動
 
 # ============================================
 # Visualization (Optional) - 視覺化（可選）

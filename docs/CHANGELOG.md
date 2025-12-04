@@ -8,6 +8,169 @@
 ---
 
 ## [Unreleased]
+### [2025-11-18] 新聞爬蟲系統大規模擴充與測試框架建立
+
+#### ✅ 新增 - Phase 1: 擴充媒體來源
+
+**新增 4 個主要新聞媒體爬蟲**:
+1. **TVBS 新聞爬蟲** (`tvbs_spider.py`) ⚠️
+   - 12 個新聞分類 (政治、財經、娛樂、社會等)
+   - Playwright 動態網頁爬取
+   - 狀態: 需調整 (timeout 問題)
+
+2. **中時新聞網爬蟲** (`chinatimes_spider.py`) ⭐⭐⭐⭐⭐
+   - 13 個新聞分類
+   - 傳統 HTTP 爬蟲 (無需 Playwright)
+   - 測試結果: **100% 成功率**，19 篇文章，47 秒
+   - 評價: 最穩定的爬蟲
+
+3. **東森新聞雲爬蟲** (`ettoday_spider.py`) ⭐⭐⭐⭐
+   - 16 個新聞分類 (含寵物、電競等特色分類)
+   - Playwright 動態網頁爬取
+   - 測試結果: 發現 67 篇文章，成功爬取 3 篇
+
+4. **風傳媒爬蟲** (`storm_spider.py`) 🔄
+   - 10 個新聞分類 (含深度報導、長文)
+   - Playwright 動態網頁爬取
+   - 狀態: 測試中
+
+#### ✅ 新增 - Phase 2: 企業級測試框架
+
+**完整的自動化測試系統** (pytest + 健康檢查):
+
+1. **pytest 單元測試框架** (`tests/crawlers/`)
+   - `conftest.py`: 共享 fixtures 和測試配置
+     * 爬蟲註冊表 (9 個媒體)
+     * 文章結構驗證模板
+     * 日期範圍生成器
+     * Reactor 配置處理
+   - `test_crawlers_unit.py`: 20+ 單元測試
+     * TestCrawlerInitialization: 初始化測試
+     * TestCrawlerUtilities: 工具方法測試 (ID 生成、文字清理、日期解析)
+     * TestArticleValidation: 文章數據驗證
+     * TestCrawlerConfiguration: 配置檢查 (robots.txt, Playwright 設定)
+   - 參數化測試: 自動測試所有爬蟲
+
+2. **健康檢查系統** (`scripts/crawlers/health_check.py`)
+   - 自動化監控所有爬蟲狀態
+   - 生成 HTML 視覺化報告 (健康百分比、彩色卡片、詳細表格)
+   - 生成 JSON 結構化報告
+   - 支援快速檢查模式 (`--quick`)
+   - 可指定特定爬蟲檢查
+   - 180 秒超時保護
+   - CLI: `python scripts/crawlers/health_check.py --html-report`
+
+3. **單一爬蟲測試工具** (`test_single_crawler.py`)
+   - 獨立測試個別爬蟲
+   - 自動處理 Playwright reactor 安裝
+   - 詳細統計報告 (成功率、文章數、執行時間)
+
+#### ✅ 新增 - 統一爬蟲管理更新
+
+**UDN 聯合報爬蟲**: 完善實作，支援 Playwright、分類過濾、日期範圍查詢
+**Apple Daily 蘋果日報爬蟲**: 全新實作，支援 Next Apple 網站爬取
+**Twisted Reactor 配置**: 修復 Playwright 的 asyncio reactor 衝突問題
+**統一爬蟲管理**: 更新 `run_crawlers.py` 註冊所有爬蟲（**9 個媒體來源**）
+
+#### 🔧 修復
+- 修復 LTN 和 UDN 爬蟲的 reactor 安裝問題
+- 改善錯誤處理和日誌記錄
+- 優化 Playwright 配置參數
+- 修復 TVBS 爬蟲 PageMethod 使用錯誤 (多次迭代)
+- 統一輸出格式 (JSONL 標準)
+
+#### 📝 文檔
+- 更新 `scripts/crawlers/README.md`: 支援媒體列表、技術架構、反爬蟲機制
+- 新增 `tests/crawlers/README.md`: 完整測試文檔
+  * 快速開始指南
+  * pytest 使用範例
+  * 健康檢查系統說明
+  * CI/CD 整合範例
+  * 常見問題 FAQ
+- 添加安裝與使用說明
+- 記錄已知問題與解決方案
+
+#### 📊 測試結果總結
+
+**測試覆蓋**: 4 個新爬蟲
+- ✅ **中時新聞網**: 19 篇文章，100% 成功率，47 秒 (⭐ 最佳表現)
+- ✅ **東森新聞雲**: 67 篇發現，3 篇爬取，90 秒
+- ❌ **TVBS 新聞**: Playwright 超時問題 (待修復)
+- 🔄 **風傳媒**: 測試進行中
+
+**整體統計**:
+- **支援媒體數**: 9 個台灣主要新聞媒體
+- **爬蟲類型**: 3 個傳統爬蟲 + 6 個 Playwright 爬蟲
+- **測試數量**: 20+ 單元測試
+- **新增程式碼**: ~3,000+ 行
+- **文檔字數**: ~10,000+ 字
+
+#### 🎯 技術亮點
+
+**反爬蟲機制**:
+- User-Agent 輪換
+- 視窗尺寸隨機化
+- 人性化延遲 (Gaussian 分佈)
+- 瀏覽器指紋隨機化
+- Stealth 模式
+
+**錯誤處理**:
+- 自動重試機制 (3 次)
+- 超時設置 (60 秒)
+- 詳細日誌記錄
+- 統計數據追蹤
+
+**輸出格式**:
+- 統一 JSONL 格式
+- 包含 article_id, title, content, url, source, published_date, author, category, tags, image_url, crawled_at
+
+**檔案變更**:
+- **新增 (10+ 檔案)**:
+  * `scripts/crawlers/tvbs_spider.py`
+  * `scripts/crawlers/chinatimes_spider.py`
+  * `scripts/crawlers/ettoday_spider.py`
+  * `scripts/crawlers/storm_spider.py`
+  * `scripts/crawlers/test_single_crawler.py`
+  * `scripts/crawlers/health_check.py`
+  * `tests/crawlers/conftest.py`
+  * `tests/crawlers/test_crawlers_unit.py`
+  * `tests/crawlers/README.md`
+  * `apple_daily_spider.py`, `test_udn.py`
+
+- **修改**:
+  * `scripts/crawlers/run_crawlers.py` (註冊 4 個新爬蟲)
+  * `scripts/crawlers/README.md` (更新媒體列表與技術說明)
+  * `udn_spider.py`, `ltn_spider.py`
+
+**目前支援媒體** (9 個):
+1. CNA（中央社）
+2. LTN（自由時報）
+3. PTS（公視）
+4. UDN（聯合報）
+5. Apple Daily（蘋果日報）
+6. **TVBS 新聞** ⭐ 新增
+7. **中時新聞網** ⭐ 新增
+8. **東森新聞雲** ⭐ 新增
+9. **風傳媒** ⭐ 新增
+
+#### ⚠️ 已知問題
+
+1. **TVBS 爬蟲超時**: Playwright `wait_for_selector` 持續超時，需要:
+   - 改用 `networkidle` 等待策略，或
+   - 轉為傳統爬蟲（如果是靜態 HTML），或
+   - 暫時標記為 optional
+
+2. **Playwright 效能**:
+   - Playwright 爬蟲速度較慢 (~25-30 秒/篇)
+   - 傳統爬蟲快 10 倍 (~2.5 秒/篇)
+   - 建議: 優先使用傳統爬蟲，Playwright 僅用於必要的動態網站
+
+3. **Twisted Reactor 衝突**:
+   - 已在測試腳本中妥善處理
+   - 必須在導入 spider 前安裝 asyncioreactor
+
+---
+
 
 ### 計劃新增 *Planned*
 - [ ] Docker 容器化部署

@@ -251,3 +251,4 @@ For questions about this project, please refer to the course materials or contac
 **Note**: This is an academic project. For production use, consider using established IR frameworks like Apache Lucene, Elasticsearch, or Whoosh.
 # news-information-retrieval-system
 # information-retrieval
+# information-retrieval

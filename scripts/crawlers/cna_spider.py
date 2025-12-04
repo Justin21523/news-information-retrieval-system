@@ -13,6 +13,8 @@ import json
 import logging
 import re
 from typing import Optional, List
+from scrapy.spidermiddlewares.httperror import HttpError
+from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,11 @@ class CNANewsSpider(scrapy.Spider):
 
     # Custom settings (can be overridden by scrapy_settings.py)
     custom_settings = {
-        'DOWNLOAD_DELAY': 2,  # 2 seconds between requests
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+        'DOWNLOAD_DELAY': 1,  # 1 second between requests (faster with direct URLs)
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 4,  # Increase concurrency for efficiency
         'ROBOTSTXT_OBEY': True,
         'USER_AGENT': 'CNIRS Academic Research Bot (Educational Use)',
+        'HTTPERROR_ALLOW_404': True,  # Allow 404 responses to reach errback
         'FEEDS': {
             'data/raw/cna_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
@@ -54,13 +57,30 @@ class CNANewsSpider(scrapy.Spider):
         }
     }
 
-    def __init__(self, start_date: str = '2022-01-01', end_date: str = '2024-12-31', *args, **kwargs):
+    # CNA news categories (updated 2025-11)
+    CATEGORIES = [
+        'aipl',  # 政治
+        'afe',   # 財經
+        'ait',   # 科技
+        'asoc',  # 社會
+        'aopl',  # 國際
+        'ahel',  # 生活
+        'acul',  # 文化
+        'aspt',  # 運動
+        'acn',   # 兩岸
+        'aloc',  # 地方
+        'amov',  # 影視
+    ]
+
+    def __init__(self, start_date: str = '2023-01-01', end_date: str = '2025-11-18',
+                 max_id: int = 500, *args, **kwargs):
         """
-        Initialize spider with date range.
+        Initialize spider with date range and ID range.
 
         Args:
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
+            max_id: Maximum article ID to try per day per category (default: 500)
         """
         super(CNANewsSpider, self).__init__(*args, **kwargs)
 
@@ -69,74 +89,61 @@ class CNANewsSpider(scrapy.Spider):
             self.end_date = datetime.strptime(end_date, '%Y-%m-%d')
         except ValueError as e:
             logger.error(f"Invalid date format: {e}")
-            self.start_date = datetime(2022, 1, 1)
-            self.end_date = datetime(2024, 12, 31)
+            self.start_date = datetime(2023, 1, 1)
+            self.end_date = datetime(2025, 11, 18)
 
+        self.max_id = int(max_id)
         logger.info(f"CNA Spider initialized: {self.start_date.date()} to {self.end_date.date()}")
+        logger.info(f"Max ID per day/category: {self.max_id}")
 
         # Statistics
         self.articles_count = 0
         self.failed_count = 0
+        self.not_found_count = 0
 
     def start_requests(self):
         """
-        Generate start requests for all dates in range.
+        Generate start requests by directly constructing article URLs.
 
-        Yields:
-            scrapy.Request: Requests for daily news list pages
-        """
-        current_date = self.start_date
-
-        while current_date <= self.end_date:
-            # CNA daily news list URL format:
-            # https://www.cna.com.tw/list/aall/YYYYMMDD.aspx
-            date_str = current_date.strftime('%Y%m%d')
-            url = f"https://www.cna.com.tw/list/aall/{date_str}.aspx"
-
-            yield scrapy.Request(
-                url=url,
-                callback=self.parse_list_page,
-                errback=self.handle_error,
-                meta={'date': current_date.strftime('%Y-%m-%d')},
-                dont_filter=True
-            )
-
-            current_date += timedelta(days=1)
-
-    def parse_list_page(self, response):
-        """
-        Parse daily news list page to extract article URLs.
-
-        Args:
-            response: Scrapy response object
+        Strategy: Since CNA removed date-based list pages, we generate URLs directly:
+        Format: https://www.cna.com.tw/news/{category}/{YYYYMMDD}{ID}.aspx
 
         Yields:
             scrapy.Request: Requests for individual article pages
         """
-        date = response.meta.get('date', 'unknown')
+        current_date = self.start_date
+        total_requests = 0
 
-        # Extract article links
-        # CNA structure: <div class="mainList"><a href="/news/...">
-        article_links = response.css('div.mainList ul li a::attr(href)').getall()
+        while current_date <= self.end_date:
+            date_str = current_date.strftime('%Y%m%d')
 
-        if not article_links:
-            logger.warning(f"No articles found for date {date}")
-            return
+            # For each date, try all categories
+            for category in self.CATEGORIES:
+                # Generate sequential IDs for this date/category
+                for article_id in range(1, self.max_id + 1):
+                    # Format ID as 4 digits: 0001, 0002, ..., 9999
+                    id_str = f"{article_id:04d}"
 
-        logger.info(f"Found {len(article_links)} articles for date {date}")
+                    # Construct article URL
+                    url = f"https://www.cna.com.tw/news/{category}/{date_str}{id_str}.aspx"
 
-        for link in article_links:
-            # Convert relative URL to absolute URL
-            article_url = response.urljoin(link)
+                    yield scrapy.Request(
+                        url=url,
+                        callback=self.parse_article,
+                        errback=self.handle_error,
+                        meta={
+                            'date': current_date.strftime('%Y-%m-%d'),
+                            'category': category,
+                            'article_id': id_str
+                        },
+                        dont_filter=True
+                    )
 
-            # Check if it's a news article (not video/photo gallery)
-            if '/news/' in article_url:
-                yield scrapy.Request(
-                    url=article_url,
-                    callback=self.parse_article,
-                    errback=self.handle_error,
-                    meta={'date': date}
-                )
+                    total_requests += 1
+
+            current_date += timedelta(days=1)
+
+        logger.info(f"Generated {total_requests} article URL requests")
 
     def parse_article(self, response):
         """
@@ -151,8 +158,10 @@ class CNANewsSpider(scrapy.Spider):
         try:
             # Extract article metadata
             article = {
+                'article_id': f"CNA_{response.meta.get('date', '')}_{response.meta.get('category', '')}_{response.meta.get('article_id', '')}",
                 'url': response.url,
                 'source': 'CNA',
+                'source_name': '中央社',
                 'crawled_at': datetime.now().isoformat(),
             }
 
@@ -226,9 +235,28 @@ class CNANewsSpider(scrapy.Spider):
         Args:
             failure: Twisted failure object
         """
-        logger.error(f"Request failed: {failure.request.url}")
-        logger.error(f"Error: {repr(failure.value)}")
-        self.failed_count += 1
+        # Check if it's a 404 (expected for non-existent article IDs)
+        if failure.check(HttpError):
+            response = failure.value.response
+            if response.status == 404:
+                # 404 is expected when article ID doesn't exist
+                self.not_found_count += 1
+                if self.not_found_count % 200 == 0:
+                    logger.info(f"404 count: {self.not_found_count}")
+                return
+            else:
+                logger.warning(f"HTTP {response.status} for {failure.request.url}")
+                self.failed_count += 1
+        elif failure.check(DNSLookupError):
+            logger.error(f"DNS error: {failure.request.url}")
+            self.failed_count += 1
+        elif failure.check(TimeoutError, TCPTimedOutError):
+            logger.error(f"Timeout: {failure.request.url}")
+            self.failed_count += 1
+        else:
+            logger.error(f"Request failed: {failure.request.url}")
+            logger.error(f"Error: {repr(failure.value)}")
+            self.failed_count += 1
 
     def closed(self, reason):
         """
@@ -237,13 +265,18 @@ class CNANewsSpider(scrapy.Spider):
         Args:
             reason: Reason for closing
         """
+        total_attempts = self.articles_count + self.failed_count + self.not_found_count
         logger.info("=" * 70)
         logger.info("CNA Spider Finished")
         logger.info("=" * 70)
         logger.info(f"Reason: {reason}")
-        logger.info(f"Articles crawled: {self.articles_count}")
+        logger.info(f"Articles successfully crawled: {self.articles_count}")
+        logger.info(f"Not found (404): {self.not_found_count}")
         logger.info(f"Failed requests: {self.failed_count}")
-        logger.info(f"Success rate: {100 * self.articles_count / max(1, self.articles_count + self.failed_count):.1f}%")
+        logger.info(f"Total attempts: {total_attempts}")
+        if total_attempts > 0:
+            logger.info(f"Success rate: {100 * self.articles_count / total_attempts:.2f}%")
+            logger.info(f"Hit rate: {100 * self.articles_count / (self.articles_count + self.not_found_count):.2f}%")
         logger.info("=" * 70)
 
     # Utility methods

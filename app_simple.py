@@ -23,14 +23,18 @@ sys.path.insert(0, str(project_root))
 
 from scripts.unified_retrieval import UnifiedRetrieval, SearchResult
 from src.ir.ranking.rocchio import RocchioExpander
-from src.ir.eval.metrics import precision, recall, f_measure, average_precision, ndcg, reciprocal_rank
+from src.ir.eval.metrics import precision, recall, f_measure, average_precision, ndcg, reciprocal_rank, _metrics_instance
 from src.ir.summarize.static import lead_k_summary, key_sentence_summary
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.cluster.term_cluster import TermClusterer
 from src.ir.cluster.doc_cluster import DocumentClusterer
 from src.ir.index.pat_tree import PatriciaTree, build_pat_tree_from_documents
+from src.ir.query import QueryParser, QueryExecutor, parse_query
+from src.ir.index.field_indexer import FieldIndexer
+from src.ir.facet import FacetEngine, FacetFilter, FilterCondition, FilterOperator, RangeFilter
 from collections import Counter
 import json
+import pickle
 
 # Configure logging
 logging.basicConfig(
@@ -44,7 +48,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuration
-app.config['INDEX_DIR'] = project_root / 'data' / 'indexes'
+app.config['INDEX_DIR'] = project_root / 'data' / 'indexes_10k'  # Full index (9808 docs)
 app.config['MAX_RESULTS'] = 100
 app.config['DEFAULT_TOP_K'] = 20
 
@@ -56,6 +60,13 @@ _doc_content_cache = None
 
 # PAT-tree cache (lazy loading)
 _pat_tree_cache = None
+
+# Field indexer cache (lazy loading) - for advanced metadata search
+_field_indexer_cache = None
+_documents_cache = None
+
+# Facet engine cache (lazy loading)
+_facet_engine_cache = None
 
 
 def get_pat_tree():
@@ -78,7 +89,7 @@ def get_pat_tree():
         tokenizer = ChineseTokenizer()
 
         # Load documents from preprocessed file
-        preprocessed_file = project_root / 'data' / 'preprocessed' / 'cna_mvp_preprocessed.jsonl'
+        preprocessed_file = project_root / 'data' / 'preprocessed' / 'merged_14days_preprocessed.jsonl'
         documents = []
 
         try:
@@ -131,7 +142,7 @@ def load_document_content(doc_id):
     # Build cache on first access
     if _doc_content_cache is None:
         _doc_content_cache = {}
-        preprocessed_file = project_root / 'data' / 'preprocessed' / 'cna_mvp_preprocessed.jsonl'
+        preprocessed_file = project_root / 'data' / 'preprocessed' / 'merged_14days_preprocessed.jsonl'
 
         try:
             with open(preprocessed_file, 'r', encoding='utf-8') as f:
@@ -166,6 +177,80 @@ def get_retriever():
         logger.info("Retrieval system ready")
 
     return retriever
+
+
+def get_field_indexer():
+    """
+    Get or load the field indexer for advanced metadata search.
+
+    Returns:
+        tuple: (FieldIndexer, List[Dict]) - indexer and documents list
+    """
+    global _field_indexer_cache, _documents_cache
+
+    if _field_indexer_cache is None:
+        logger.info("Loading field indexer for advanced search...")
+        start_time = time.time()
+
+        # Load field index
+        field_index_path = project_root / 'data' / 'indexes' / 'field_index.pkl'
+
+        try:
+            with open(field_index_path, 'rb') as f:
+                _field_indexer_cache = pickle.load(f)
+
+            # Load documents for metadata
+            preprocessed_file = project_root / 'data' / 'preprocessed' / 'merged_14days_preprocessed.jsonl'
+            _documents_cache = []
+
+            with open(preprocessed_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        doc = json.loads(line)
+                        _documents_cache.append(doc)
+
+            load_time = time.time() - start_time
+            logger.info(f"Field indexer loaded in {load_time:.2f}s")
+            logger.info(f"  Documents: {len(_documents_cache)}")
+            logger.info(f"  Fields indexed: {_field_indexer_cache.doc_count}")
+
+        except FileNotFoundError:
+            logger.error(f"Field index not found at {field_index_path}")
+            logger.error("Please run: python scripts/build_field_index.py")
+            _field_indexer_cache = None
+            _documents_cache = []
+        except Exception as e:
+            logger.error(f"Failed to load field indexer: {e}", exc_info=True)
+            _field_indexer_cache = None
+            _documents_cache = []
+
+    return _field_indexer_cache, _documents_cache
+
+
+def get_facet_engine():
+    """
+    Get or initialize facet engine.
+
+    Returns:
+        FacetEngine: Initialized facet engine with configured facets
+    """
+    global _facet_engine_cache
+
+    if _facet_engine_cache is None:
+        logger.info("Initializing facet engine...")
+        engine = FacetEngine()
+
+        # Configure news-specific facets
+        engine.configure_facet("source", "新聞來源", "term", max_values=20)
+        engine.configure_facet("category", "分類", "term")
+        engine.configure_facet("category_name", "分類名稱", "term")
+        engine.configure_facet("published_date", "發布月份", "date_range", date_format="%Y-%m")
+        engine.configure_facet("author", "作者", "term", max_values=15)
+
+        _facet_engine_cache = engine
+        logger.info("Facet engine initialized")
+
+    return _facet_engine_cache
 
 
 @app.route('/')
@@ -263,14 +348,24 @@ def api_search():
 
         response_time = time.time() - start_time
 
-        # Convert results to JSON
+        # Convert results to JSON with standardized field names
         results_json = [
             {
                 'doc_id': r.doc_id,
+                'id': r.doc_id,  # Alias for faceted search compatibility
                 'title': r.title,
                 'score': r.score,
                 'rank': r.rank,
                 'snippet': r.snippet,
+                # Standardized date fields at top level
+                'published_date': r.metadata.get('published_date', ''),
+                'pub_date': r.metadata.get('published_date', ''),
+                'date': r.metadata.get('published_date', ''),
+                # Other common fields at top level
+                'category': r.metadata.get('category', ''),
+                'category_name': r.metadata.get('category_name', ''),
+                'source': r.metadata.get('source', ''),
+                'author': r.metadata.get('author', ''),
                 'metadata': r.metadata
             }
             for r in results
@@ -378,10 +473,18 @@ def api_compare():
                 'results': [
                     {
                         'doc_id': r.doc_id,
+                        'id': r.doc_id,
                         'title': r.title,
                         'score': r.score,
                         'rank': r.rank,
                         'snippet': r.snippet,
+                        'published_date': r.metadata.get('published_date', ''),
+                        'pub_date': r.metadata.get('published_date', ''),
+                        'date': r.metadata.get('published_date', ''),
+                        'category': r.metadata.get('category', ''),
+                        'category_name': r.metadata.get('category_name', ''),
+                        'source': r.metadata.get('source', ''),
+                        'author': r.metadata.get('author', ''),
                         'metadata': r.metadata
                     }
                     for r in results
@@ -421,15 +524,29 @@ def api_document(doc_id):
         include_similar = request.args.get('include_similar', 'true').lower() == 'true'
         top_k = min(int(request.args.get('top_k', 5)), 10)
 
+        # Get content - try metadata first, then load from file if empty
+        content = metadata.get('content', '')
+        if not content:
+            content = load_document_content(doc_id)
+
+        # Ensure metadata has content for modal display
+        enriched_metadata = {
+            **metadata,
+            'content': content,
+            'source': metadata.get('source', ''),
+            'author': metadata.get('author', ''),
+            'category_name': metadata.get('category_name', ''),
+        }
+
         response = {
             'success': True,
             'doc_id': doc_id,
             'title': metadata.get('title', ''),
-            'content': metadata.get('content', ''),
+            'content': content,
             'url': metadata.get('url', ''),
             'date': metadata.get('published_date', ''),
             'category': metadata.get('category', ''),
-            'metadata': metadata
+            'metadata': enriched_metadata
         }
 
         # Find similar documents using TF-IDF cosine similarity
@@ -489,14 +606,263 @@ def find_similar_documents(retriever, doc_id: int, top_k: int = 5):
         results.append({
             'doc_id': article_id,
             'title': metadata.get('title', ''),
-            'score': round(score, 4),
+            'similarity': round(score, 4),  # Frontend expects 'similarity' not 'score'
+            'score': round(score, 4),  # Keep for backward compatibility
             'rank': rank,
-            'date': metadata.get('published_date', ''),
+            'published_date': metadata.get('published_date', ''),
+            'date': metadata.get('published_date', ''),  # Alias
             'category': metadata.get('category', ''),
             'url': metadata.get('url', '')
         })
 
     return results
+
+
+@app.route('/api/advanced_search', methods=['POST'])
+def api_advanced_search():
+    """
+    Advanced metadata-based search API endpoint.
+
+    Supports library-style queries with field-specific searches, boolean operators,
+    and date ranges.
+
+    Request JSON:
+        {
+            "query": "title:台灣 AND category:政治",  // Query string format
+            // OR structured format:
+            "conditions": [
+                {"field": "title", "operator": "contains", "value": "台灣"},
+                {"field": "category", "operator": "equals", "value": "aipl"}
+            ],
+            "logic": "AND",  // For structured queries: AND or OR
+            "top_k": 20,
+            "sort_by": "date",  // date, relevance (doc_id for now)
+            "sort_order": "desc"  // asc or desc
+        }
+
+    Response JSON:
+        {
+            "success": true,
+            "query": "...",
+            "total_results": 15,
+            "response_time": 0.023,
+            "results": [
+                {
+                    "doc_id": 0,
+                    "article_id": "202511...",
+                    "title": "...",
+                    "category": "...",
+                    "date": "2025-11-10",
+                    "matched_fields": ["title", "category"],
+                    "snippet": "..."
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        # Get field indexer and documents
+        field_indexer, documents = get_field_indexer()
+
+        if field_indexer is None:
+            return jsonify({
+                'success': False,
+                'error': 'Field index not available. Please run: python scripts/build_field_index.py'
+            }), 503
+
+        start_time = time.time()
+
+        # Create query executor
+        executor = QueryExecutor(field_indexer, documents)
+
+        # Determine query mode: query string or structured
+        if 'query' in data and data['query']:
+            # Query string mode
+            query_str = data['query'].strip()
+
+            try:
+                query_node = parse_query(query_str)
+            except SyntaxError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Query syntax error: {str(e)}'
+                }), 400
+
+            top_k = data.get('top_k', app.config['DEFAULT_TOP_K'])
+            search_results = executor.execute(query_node, top_k=top_k)
+
+            query_repr = query_str
+
+        elif 'conditions' in data:
+            # Structured query mode
+            conditions = data['conditions']
+            logic = data.get('logic', 'AND')
+            top_k = data.get('top_k', app.config['DEFAULT_TOP_K'])
+
+            if not conditions:
+                return jsonify({
+                    'success': False,
+                    'error': 'No conditions provided'
+                }), 400
+
+            search_results = executor.execute_structured_query(
+                conditions, logic=logic, top_k=top_k
+            )
+
+            query_repr = f"{len(conditions)} conditions with {logic}"
+
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Must provide either "query" (string) or "conditions" (list)'
+            }), 400
+
+        # Apply sorting
+        sort_by = data.get('sort_by', 'relevance')
+        sort_order = data.get('sort_order', 'desc')
+
+        if sort_by == 'date' and documents:
+            # Sort by publication date
+            def get_date_key(result):
+                doc = documents[result.doc_id] if result.doc_id < len(documents) else {}
+                return doc.get('published_date', '')
+
+            search_results.sort(
+                key=get_date_key,
+                reverse=(sort_order == 'desc')
+            )
+
+        response_time = time.time() - start_time
+
+        # Format results with metadata
+        results_json = []
+        for result in search_results:
+            doc_id = result.doc_id
+            doc = documents[doc_id] if doc_id < len(documents) else {}
+
+            results_json.append({
+                'doc_id': doc_id,
+                'id': doc_id,  # Alias
+                'article_id': doc.get('article_id', str(doc_id)),
+                'title': doc.get('title', ''),
+                'score': getattr(result, 'score', 0),
+                'rank': len(results_json) + 1,
+                'category': doc.get('category', ''),
+                'category_name': doc.get('category_name', ''),
+                # Standardized date fields
+                'published_date': doc.get('published_date', ''),
+                'pub_date': doc.get('published_date', ''),
+                'date': doc.get('published_date', ''),
+                'author': doc.get('author', ''),
+                'source': doc.get('source', ''),
+                'url': doc.get('url', ''),
+                'matched_fields': result.matched_fields,
+                'snippet': doc.get('content', '')[:200] + '...' if doc.get('content') else ''
+            })
+
+        return jsonify({
+            'success': True,
+            'query': query_repr,
+            'total_results': len(results_json),
+            'response_time': response_time,
+            'results': results_json
+        })
+
+    except Exception as e:
+        logger.error(f"Advanced search error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/query_fields', methods=['GET'])
+def api_query_fields():
+    """
+    Get available fields for advanced search queries.
+
+    Returns:
+        JSON with field definitions and example queries.
+    """
+    try:
+        field_indexer, _ = get_field_indexer()
+
+        if field_indexer is None:
+            return jsonify({
+                'success': False,
+                'error': 'Field index not available'
+            }), 503
+
+        fields_info = {
+            'title': {
+                'type': 'text',
+                'description': '文章標題 (tokenized)',
+                'example': 'title:台灣'
+            },
+            'content': {
+                'type': 'text',
+                'description': '文章內容 (tokenized)',
+                'example': 'content:人工智慧'
+            },
+            'category': {
+                'type': 'exact',
+                'description': '類別代碼 (exact match)',
+                'example': 'category:aipl',
+                'values': ['aipl', 'afe', 'aie', 'aloc', 'aopl', 'asoc', 'aspt', 'ait', 'acul', 'amov']
+            },
+            'category_name': {
+                'type': 'text',
+                'description': '類別名稱 (tokenized)',
+                'example': 'category_name:政治'
+            },
+            'author': {
+                'type': 'text',
+                'description': '作者 (tokenized)',
+                'example': 'author:記者'
+            },
+            'source': {
+                'type': 'exact',
+                'description': '來源媒體 (exact match)',
+                'example': 'source:中央社'
+            },
+            'published_date': {
+                'type': 'date',
+                'description': '發布日期 (range queries)',
+                'example': 'published_date:[2025-11-01 TO 2025-11-13]'
+            },
+            'tags': {
+                'type': 'multi',
+                'description': '標籤 (multi-value)',
+                'example': 'tags:(AI OR 機器學習)'
+            }
+        }
+
+        example_queries = [
+            "title:台灣",
+            "title:台灣 AND category:aipl",
+            "(title:台灣 OR title:中國) AND NOT category:aspt",
+            "published_date:[2025-11-01 TO 2025-11-13]",
+            "category:aipl AND tags:(政治 OR 選舉)",
+            "author:記者 AND content:人工智慧"
+        ]
+
+        return jsonify({
+            'success': True,
+            'fields': fields_info,
+            'example_queries': example_queries,
+            'operators': {
+                'boolean': ['AND', 'OR', 'NOT'],
+                'grouping': ['(', ')'],
+                'field': ':',
+                'range': ['[', 'TO', ']']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Query fields error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/stats', methods=['GET'])
@@ -555,6 +921,308 @@ def api_filters():
 
     except Exception as e:
         logger.error(f"Filters error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/all_facets', methods=['GET'])
+def api_all_facets():
+    """
+    Get all available facets from all documents (without search).
+
+    This endpoint is used to preload facet options when the page loads,
+    before any search is performed. Uses field_index directly for efficiency
+    since doc_metadata may be empty.
+
+    Response JSON:
+        {
+            "success": true,
+            "total_documents": 9808,
+            "facets": {
+                "source": { ... },
+                "category": { ... },
+                "published_date": { ... },
+                ...
+            }
+        }
+    """
+    try:
+        ret = get_retriever()
+
+        # Facet configuration with display names and types
+        facet_config = {
+            'source': {'display_name': '新聞來源', 'type': 'term'},
+            'category': {'display_name': '分類', 'type': 'term'},
+            'category_name': {'display_name': '分類名稱', 'type': 'term'},
+            'published_date': {'display_name': '發布日期', 'type': 'date_range'},
+            'author': {'display_name': '作者', 'type': 'term', 'max_values': 15}
+        }
+
+        # Build facets directly from field_index (more reliable than doc_metadata)
+        facets_data = {}
+        total_docs = len(ret.doc_map) if hasattr(ret, 'doc_map') else 0
+
+        for field_name, config in facet_config.items():
+            if hasattr(ret, 'field_index') and field_name in ret.field_index:
+                field_data = ret.field_index[field_name]
+
+                # Build value list with counts
+                values = []
+                for value, doc_ids in field_data.items():
+                    count = len(doc_ids) if isinstance(doc_ids, (list, set)) else doc_ids
+
+                    # For date fields, convert to readable Chinese format
+                    if config['type'] == 'date_range' and isinstance(value, str):
+                        try:
+                            # Parse date and display with full date for clarity
+                            from datetime import datetime
+                            dt = datetime.strptime(value, '%Y-%m-%d')
+                            label = dt.strftime('%Y年%m月%d日')
+                        except:
+                            label = value
+                    else:
+                        label = value
+
+                    values.append({
+                        'value': value,
+                        'count': count,
+                        'label': label
+                    })
+
+                # Sort by count descending
+                values.sort(key=lambda x: (-x['count'], x['value']))
+
+                # Apply max_values limit if configured
+                max_values = config.get('max_values')
+                if max_values:
+                    values = values[:max_values]
+
+                facets_data[field_name] = {
+                    'field_name': field_name,
+                    'display_name': config['display_name'],
+                    'facet_type': config['type'],
+                    'total_docs': sum(v['count'] for v in values),
+                    'values': values
+                }
+
+        return jsonify({
+            'success': True,
+            'total_documents': total_docs,
+            'facets': facets_data
+        })
+
+    except Exception as e:
+        logger.error(f"All facets error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/facets', methods=['POST'])
+def api_facets():
+    """
+    Get facet information from search results.
+
+    Request JSON:
+        {
+            "query": str,
+            "model": str (default: "bm25"),
+            "top_k": int (default: 100),
+            "facet_fields": list (optional, all if not specified)
+        }
+
+    Response JSON:
+        {
+            "success": true,
+            "total_results": 156,
+            "facets": {
+                "source": {
+                    "field_name": "source",
+                    "display_name": "新聞來源",
+                    "facet_type": "term",
+                    "total_docs": 156,
+                    "values": [
+                        {"value": "CNA", "count": 45, "label": "CNA"},
+                        ...
+                    ]
+                },
+                ...
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'query' not in data:
+            return jsonify({'success': False, 'error': 'Missing query'}), 400
+
+        query = data.get('query', '').strip()
+        model = data.get('model', 'bm25')
+        top_k = min(data.get('top_k', 100), app.config['MAX_RESULTS'])
+        facet_fields = data.get('facet_fields', None)
+
+        if not query:
+            return jsonify({'success': False, 'error': 'Empty query'}), 400
+
+        # Perform search
+        ret = get_retriever()
+        results = ret.search(query, model=model, top_k=top_k)
+
+        # Convert SearchResult to dict format for facet engine
+        documents = []
+        for r in results:
+            doc_dict = {
+                'id': r.doc_id,
+                'title': r.title,
+                'source': r.metadata.get('source', ''),
+                'category': r.metadata.get('category', ''),
+                'category_name': r.metadata.get('category_name', ''),
+                'pub_date': r.metadata.get('published_date', ''),
+                'author': r.metadata.get('author', '')
+            }
+            documents.append(doc_dict)
+
+        # Build facets
+        engine = get_facet_engine()
+        facets = engine.build_facets(documents, field_name=facet_fields)
+
+        # Format response
+        facets_data = {}
+        for field_name, facet_result in facets.items():
+            facets_data[field_name] = {
+                'field_name': facet_result.field_name,
+                'display_name': facet_result.display_name,
+                'facet_type': facet_result.facet_type,
+                'total_docs': facet_result.total_docs,
+                'values': [
+                    {
+                        'value': fv.value,
+                        'count': fv.count,
+                        'label': fv.label
+                    }
+                    for fv in facet_result.values
+                ]
+            }
+
+        return jsonify({
+            'success': True,
+            'total_results': len(documents),
+            'facets': facets_data
+        })
+
+    except Exception as e:
+        logger.error(f"Facets error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/search/faceted', methods=['POST'])
+def api_faceted_search():
+    """
+    Search with faceted filtering.
+
+    Request JSON:
+        {
+            "query": str,
+            "model": str,
+            "top_k": int,
+            "filters": {
+                "source": ["CNA", "UDN"],  // Multi-select
+                "category": "finance",      // Single select
+                "pub_date": ["2024-11-01", "2024-11-30"]  // Range
+            }
+        }
+
+    Response JSON:
+        {
+            "success": true,
+            "query": "...",
+            "total_results": 45,
+            "filtered_results": 23,
+            "results": [...],
+            "active_filters": {
+                "count": 3,
+                "conditions": [...]
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'query' not in data:
+            return jsonify({'success': False, 'error': 'Missing query'}), 400
+
+        query = data.get('query', '').strip()
+        model = data.get('model', 'bm25')
+        top_k = min(data.get('top_k', 20), app.config['MAX_RESULTS'])
+        filters = data.get('filters', {})
+
+        if not query:
+            return jsonify({'success': False, 'error': 'Empty query'}), 400
+
+        # Perform search - get more results for filtering
+        ret = get_retriever()
+        results = ret.search(query, model=model, top_k=top_k * 5)
+
+        # Convert to document format
+        documents = []
+        for r in results:
+            doc_dict = {
+                'id': r.doc_id,
+                'title': r.title,
+                'snippet': r.snippet,
+                'score': r.score,
+                'rank': r.rank,
+                'source': r.metadata.get('source', ''),
+                'category': r.metadata.get('category', ''),
+                'category_name': r.metadata.get('category_name', ''),
+                'pub_date': r.metadata.get('published_date', ''),
+                'author': r.metadata.get('author', ''),
+                'url': r.metadata.get('url', ''),
+                'metadata': r.metadata
+            }
+            documents.append(doc_dict)
+
+        total_before_filter = len(documents)
+
+        # Apply filters if provided
+        if filters:
+            filter_mgr = FacetFilter()
+
+            for field, value in filters.items():
+                if isinstance(value, list):
+                    if len(value) == 2 and field in ['pub_date', 'score']:
+                        # Range filter
+                        filter_mgr.add_condition(
+                            RangeFilter(field, value[0], value[1])
+                        )
+                    else:
+                        # Multi-select filter
+                        filter_mgr.add_condition(
+                            FilterCondition(field, FilterOperator.IN, value)
+                        )
+                else:
+                    # Single value filter
+                    filter_mgr.add_condition(
+                        FilterCondition(field, FilterOperator.EQUALS, value)
+                    )
+
+            documents = filter_mgr.filter(documents)
+
+        # Limit to top_k after filtering
+        documents = documents[:top_k]
+
+        return jsonify({
+            'success': True,
+            'query': query,
+            'model': model,
+            'total_results': total_before_filter,
+            'filtered_results': len(documents),
+            'results': documents,
+            'active_filters': {
+                'count': len(filters),
+                'filters': filters
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Faceted search error: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -731,22 +1399,41 @@ def api_expand_query():
                     relevant_vectors.append(doc_vec)
 
         elif model == 'bm25' and ret.bm25_data and ret.inverted_index:
-            # Build BM25-style vectors from inverted index
+            # Build proper BM25-style vectors using correct formula
+            # BM25 = IDF × (tf × (k1 + 1)) / (tf + k1 × (1 - b + b × dl/avgdl))
+            k1 = ret.bm25_data.get('k1', 1.5)
+            b = ret.bm25_data.get('b', 0.75)
+            avgdl = ret.bm25_data.get('avg_doc_length', 100)
+            idf = ret.bm25_data.get('idf', {})
+
+            # Build a reverse index for faster lookup: doc_id -> {term: tf}
+            # Only build once and cache if not exists
+            if not hasattr(ret, '_doc_term_tf_cache'):
+                ret._doc_term_tf_cache = {}
+                for term, postings in ret.inverted_index.items():
+                    for posting_doc_id, tf in postings:
+                        if posting_doc_id not in ret._doc_term_tf_cache:
+                            ret._doc_term_tf_cache[posting_doc_id] = {}
+                        ret._doc_term_tf_cache[posting_doc_id][term] = tf
+
             for doc_id in relevant_doc_ids:
                 if doc_id not in ret.doc_id_map:
                     continue
                 numeric_id = ret.doc_id_map[doc_id]
 
-                # Build document vector from inverted index
+                # Get document length from metadata
+                doc_metadata = ret.doc_metadata.get(numeric_id, {})
+                doc_length = doc_metadata.get('length', avgdl)
+
+                # Build document vector using cached term frequencies
                 doc_vec = {}
-                for term, postings in ret.inverted_index.items():
-                    # Find this document in postings
-                    for posting_doc_id, tf in postings:
-                        if posting_doc_id == numeric_id:
-                            # Use IDF weight as approximation
-                            if term in ret.bm25_data['idf']:
-                                doc_vec[term] = ret.bm25_data['idf'][term] * tf
-                            break
+                term_freqs = ret._doc_term_tf_cache.get(numeric_id, {})
+
+                for term, tf in term_freqs.items():
+                    if term in idf:
+                        # Proper BM25 term weight formula
+                        tf_component = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_length / avgdl))
+                        doc_vec[term] = idf[term] * tf_component
 
                 if doc_vec:
                     relevant_vectors.append(doc_vec)
@@ -881,6 +1568,16 @@ def api_evaluate():
 
         results = {}
 
+        # If no ground truth provided, use pseudo-relevance feedback
+        # Use BM25 top-5 as pseudo-relevant (BM25 is generally more reliable)
+        if not relevant_docs:
+            # Prefer BM25 for pseudo-relevance, fall back to first model
+            prf_model = 'bm25' if 'bm25' in models else models[0]
+            prf_results = ret.search(query, model=prf_model, top_k=5)
+            for result in prf_results:
+                if result.doc_id in ret.doc_id_map:
+                    relevant_docs.add(ret.doc_id_map[result.doc_id])
+
         for model in models:
             try:
                 # Run search
@@ -893,10 +1590,6 @@ def api_evaluate():
                     doc_id = result.doc_id
                     if doc_id in ret.doc_id_map:
                         retrieved_ids.append(ret.doc_id_map[doc_id])
-
-                # If no relevant docs provided, use top-5 as pseudo-relevant
-                if not relevant_docs:
-                    relevant_docs = set(retrieved_ids[:5])
 
                 # Calculate metrics at different K values
                 k_values = [5, 10, 15, 20] if top_k >= 20 else [5, 10]
@@ -921,13 +1614,16 @@ def api_evaluate():
                     recall_at_k.append({'k': k, 'value': round(rec, 4)})
                     f1_at_k.append({'k': k, 'value': round(f1, 4)})
 
-                    # Calculate nDCG (use scores as relevance)
+                    # Calculate nDCG using document IDs as keys
+                    # Build relevance scores dict with doc_id as key
                     relevance_scores = {}
-                    for i, doc_id in enumerate(retrieved_k):
+                    for doc_id in retrieved_k:
                         # Binary relevance: 1 if relevant, 0 otherwise
-                        relevance_scores[i] = 1.0 if doc_id in relevant_docs else 0.0
+                        relevance_scores[doc_id] = 1.0 if doc_id in relevant_docs else 0.0
 
-                    ndcg_score = ndcg(relevance_scores, k)
+                    # Use the Metrics class's ndcg_at_k which properly computes
+                    # DCG for actual ranking vs IDCG for ideal ranking
+                    ndcg_score = _metrics_instance.ndcg_at_k(retrieved_k, relevance_scores, k)
                     ndcg_at_k.append({'k': k, 'value': round(ndcg_score, 4)})
 
                 # Calculate MAP
@@ -1132,7 +1828,8 @@ def api_algorithms():
         'keyword_extraction': {
             'tfidf': 'TF-IDF: Term frequency × Inverse document frequency',
             'term_frequency': 'Term Frequency: Simple frequency counting',
-            'textrank': 'TextRank: Graph-based keyword extraction (simulated)'
+            'textrank': 'TextRank: Graph-based keyword extraction (simulated)',
+            'pat_tree': 'PAT-Tree: Patricia tree-based substring frequency extraction'
         },
         'clustering': {
             'kmeans': 'K-Means: Partition-based clustering',
@@ -1155,7 +1852,7 @@ def api_extract_keywords():
         {
             "doc_id": "20251107_001",
             "top_k": 10,  // number of keywords
-            "method": "tfidf"  // "tfidf", "term_frequency", or "textrank"
+            "method": "tfidf"  // "tfidf", "term_frequency", "textrank", or "pat_tree"
         }
 
     Response JSON:
@@ -1223,6 +1920,32 @@ def api_extract_keywords():
                 # Score based on frequency and term length (as proxy for importance)
                 score = freq * (1 + len(term) / 10.0)
                 keywords.append({'word': term, 'score': round(score, 4)})
+
+        elif method == 'pat_tree':
+            # PAT-Tree method: Use Patricia tree for substring extraction
+            # Build document-specific PAT-tree from tokens
+            from src.ir.index.pat_tree import PatriciaTree
+            doc_pat_tree = PatriciaTree()
+
+            # Insert each token into the PAT-tree
+            for token in tokens:
+                if len(token) >= 2:  # Only consider terms with 2+ chars
+                    doc_pat_tree.insert(token, doc_id)
+
+            # Use term_stats from PAT-tree to extract keywords
+            if hasattr(doc_pat_tree, 'term_stats') and doc_pat_tree.term_stats:
+                for term, stats in doc_pat_tree.term_stats.items():
+                    if len(term) >= 2:
+                        freq = stats.get('frequency', 1)
+                        # Score based on frequency and term length (longer terms are more specific)
+                        score = freq * (1 + len(term) * 0.5)
+                        keywords.append({'word': term, 'score': round(score, 4)})
+            else:
+                # Fallback: use term frequency with length bonus
+                for term, freq in tf.items():
+                    if len(term) >= 2:
+                        score = freq * (1 + len(term) * 0.5)
+                        keywords.append({'word': term, 'score': round(score, 4)})
 
         else:
             return jsonify({'success': False, 'error': f'Unknown method: {method}'}), 400

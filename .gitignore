@@ -412,9 +412,20 @@ data/database/*.db
 !data/indexes/.gitkeep
 
 # Raw data (too large)
-data/raw/cna_raw.jsonl
+data/raw/*.jsonl
 data/raw/*.zip
 data/raw/*.tar.gz
+data/raw/data/
+
+# Preprocessed data
+data/preprocessed/*.jsonl
+
+# All index directories
+data/index*/
+data/indexes*/
+
+# Health check data
+data/health_check/
 
 # ============================================
 # IDE Specific

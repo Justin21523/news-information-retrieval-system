@@ -1,0 +1,10 @@
+{"timestamp": "2025-11-19T23:40:00.931801", "operation": "index_update", "file": "data/raw/chinatimes_news_2025-11-18T14-21-46+00-00.jsonl", "limit": 100, "docs_added": 17, "duplicates": 0}
+{"timestamp": "2025-11-19T23:40:00.959324", "operation": "index_update", "file": "data/raw/chinatimes_news_2025-11-18T14-43-40+00-00.jsonl", "limit": 83, "docs_added": 28, "duplicates": 7}
+{"timestamp": "2025-11-19T23:40:00.969787", "operation": "index_update", "file": "data/raw/cna_news_2025-11-18T15-04-49+00-00.jsonl", "limit": 65, "docs_added": 29, "duplicates": 8}
+{"timestamp": "2025-11-19T23:40:00.977085", "operation": "index_update", "file": "data/raw/cna_news_2025-11-18T15-07-50+00-00.jsonl", "limit": 63, "docs_added": 29, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:00.993417", "operation": "index_update", "file": "data/raw/ettoday_news_2025-11-18T13-19-45+00-00.jsonl", "limit": 60, "docs_added": 34, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:01.010607", "operation": "index_update", "file": "data/raw/ettoday_news_2025-11-18T14-22-32+00-00.jsonl", "limit": 55, "docs_added": 39, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:01.017133", "operation": "index_update", "file": "data/raw/ftv_news_2025-11-18T16-58-20+00-00.jsonl", "limit": 50, "docs_added": 39, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:01.022836", "operation": "index_update", "file": "data/raw/ftv_news_2025-11-19T15-17-10+00-00.jsonl", "limit": 50, "docs_added": 39, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:01.029236", "operation": "index_update", "file": "data/raw/ftv_news_2025-11-19T15-19-17+00-00.jsonl", "limit": 50, "docs_added": 39, "duplicates": 11}
+{"timestamp": "2025-11-19T23:40:01.146341", "operation": "index_update", "file": "data/raw/ltn_14days.jsonl", "limit": 50, "docs_added": 89, "duplicates": 11}

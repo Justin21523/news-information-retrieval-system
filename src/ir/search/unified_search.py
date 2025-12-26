@@ -86,7 +86,8 @@ class UnifiedSearchResult:
     matched_fields: List[str] = None
     ranking_model: str = "unknown"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Normalize optional list fields to safe defaults."""
         if self.matched_fields is None:
             self.matched_fields = []
 

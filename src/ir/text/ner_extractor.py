@@ -74,9 +74,11 @@ class Entity:
     source_text: Optional[str] = None
 
     def __str__(self) -> str:
+        """Return a compact human-readable representation."""
         return f"{self.text} ({self.type})"
 
     def __repr__(self) -> str:
+        """Return a debug-friendly representation."""
         return f"Entity(text='{self.text}', type='{self.type}', pos={self.start_pos}-{self.end_pos})"
 
 

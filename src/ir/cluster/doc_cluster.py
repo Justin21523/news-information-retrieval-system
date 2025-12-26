@@ -52,6 +52,7 @@ class Cluster:
 
     @property
     def size(self) -> int:
+        """Return the number of documents in the cluster."""
         return len(self.doc_ids)
 
 

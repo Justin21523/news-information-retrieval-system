@@ -456,3 +456,48 @@ doc_id = explicit_doc_id if isinstance(explicit_doc_id, int) else i
   - `pytest tests/test_field_indexer.py`
   - `pytest tests/test_incremental_builder.py`
   - `pytest tests/test_query_executor.py`
+
+---
+
+## 2025-12-26：補齊核心模組缺漏 docstring（第 9 批）
+
+### 目標
+
+- 針對多個核心模組中「容易被忽略」但仍會被讀到的函式，補齊簡潔的英文 docstring：
+  - dataclass 的 `__post_init__`
+  - `@property`（如 `size`/`length`）
+  - `__str__` / `__repr__`
+  - 小型 nested helper（如 phrase placeholder 的 replacer）
+
+### 本次修改範圍
+
+- `src/ir/search/unified_search.py`
+- `src/ir/index/pat_tree.py`
+- `src/ir/facet/facet_engine.py`
+- `src/ir/summarize/static.py`
+- `src/ir/cluster/doc_cluster.py`
+- `src/ir/cluster/term_cluster.py`
+- `src/ir/text/ner_extractor.py`
+- `src/ir/retrieval/boolean.py`
+
+### 片段程式碼（dataclass __post_init__ 的意圖補註）
+
+dataclass 常見的陷阱是 mutable default；即使現有程式碼已正確初始化，也應用 docstring 把「為什麼要這樣做」寫清楚：
+
+```python
+def __post_init__(self) -> None:
+    \"\"\"Initialize mutable default fields safely.\"\"\"
+    if self.children is None:
+        self.children = {}
+```
+
+### 原理整理（重點）
+
+- `__post_init__`、`__repr__` 這些方法雖然小，但會直接影響：
+  - IDE tooltip / `help()` 顯示內容
+  - 除錯輸出可讀性
+  - 讀者理解「物件初始化後的狀態不變量（invariants）」是否成立（例如 `tokens` 永遠不是 `None`）
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/search/unified_search.py src/ir/summarize/static.py src/ir/retrieval/boolean.py src/ir/cluster/doc_cluster.py src/ir/cluster/term_cluster.py src/ir/facet/facet_engine.py src/ir/index/pat_tree.py src/ir/text/ner_extractor.py`

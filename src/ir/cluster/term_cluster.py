@@ -46,6 +46,7 @@ class TermCluster:
 
     @property
     def size(self) -> int:
+        """Return the number of terms in the cluster."""
         return len(self.terms)
 
 

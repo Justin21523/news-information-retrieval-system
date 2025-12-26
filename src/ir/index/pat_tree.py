@@ -38,7 +38,8 @@ class PatNode:
     doc_ids: Set[str] = None
     metadata: Dict = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialize mutable default fields safely."""
         if self.children is None:
             self.children = {}
         if self.doc_ids is None:

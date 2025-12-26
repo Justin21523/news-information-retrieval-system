@@ -51,7 +51,8 @@ class Sentence:
     tokens: Optional[List[str]] = None
     score: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Tokenize the sentence text if tokens are not provided."""
         if self.tokens is None:
             self.tokens = self._tokenize(self.text)
 
@@ -75,6 +76,7 @@ class Sentence:
 
     @property
     def length(self) -> int:
+        """Return the number of tokens in this sentence."""
         return len(self.tokens)
 
 

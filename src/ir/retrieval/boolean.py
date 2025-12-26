@@ -213,6 +213,7 @@ class BooleanQueryEngine:
         phrase_pattern = r'"([^"]+)"'
 
         def replace_phrase(match):
+            """Replace a quoted phrase with a stable placeholder token."""
             phrase = match.group(1)
             placeholder = f"__PHRASE_{len(phrases)}__"
             phrases.append(phrase)

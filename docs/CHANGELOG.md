@@ -18,6 +18,7 @@
 - 補強查詢最佳化/整合式搜尋教學向註解：`src/ir/retrieval/query_optimization.py`、`src/ir/search/unified_search.py`。
 - 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。
 - 補強欄位查詢執行器教學向註解：`src/ir/query/query_executor.py`。
+- 補齊多個核心模組的英文 docstring（`__post_init__`、`__repr__/__str__`、`@property` 等）：`src/ir/search/unified_search.py`、`src/ir/summarize/static.py`、`src/ir/cluster/*`、`src/ir/facet/facet_engine.py`、`src/ir/index/pat_tree.py`、`src/ir/text/ner_extractor.py`。
 
 #### 🔧 修復
 - `src/ir/search/unified_search.py`：統一 BM25/VSM score 形狀（list vs dict），修正簡單查詢與 hybrid 融合流程中的取分/normalize 邏輯，並支援 content boolean 與 field boolean 的分流執行。

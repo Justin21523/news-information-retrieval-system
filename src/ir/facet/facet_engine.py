@@ -36,7 +36,8 @@ class FacetValue:
     count: int
     label: Optional[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Default `label` to `value` when not provided."""
         if self.label is None:
             self.label = self.value
 

@@ -211,3 +211,50 @@ while i < len(pos1) and j < len(pos2):
 ### 驗證方式
 
 - 已通過：`pytest tests/test_inverted_index.py tests/test_positional_index.py tests/test_term_weighting.py`
+
+---
+
+## 2025-12-26：查詢最佳化與整合式搜尋流程補強（第 4 批）
+
+### 目標
+
+- 補齊「Top‑K 查詢最佳化」的關鍵概念註解（WAND 迴圈：pivot、threshold θ、skip）。
+- 修正 `UnifiedSearchEngine` 在整合 BM25/VSM 時的回傳結構不一致問題，並補上流程註解，讓整合式搜尋可用且好讀。
+
+### 本次修改範圍
+
+- 查詢最佳化：`src/ir/retrieval/query_optimization.py`
+- 整合式搜尋：`src/ir/search/unified_search.py`
+
+### 片段程式碼（UnifiedSearch：把不同模型的 score 轉成同一種 mapping）
+
+BM25 與 VSM 的 `scores` 形狀不同，先轉成共同格式 `{doc_id: score}` 才能寫出一致的排序/融合邏輯：
+
+```python
+if isinstance(scores, dict):
+    return scores
+if isinstance(scores, list) and isinstance(doc_ids, list):
+    return {doc_id: score for doc_id, score in zip(doc_ids, scores)}
+```
+
+### 原理整理（重點）
+
+- **WAND（Weak AND）**：
+  - 維護一個 top‑k 的 min‑heap，heap 最小值就是 threshold θ（第 k 名分數）。
+  - 依目前各 postings cursor 的 doc_id 排序，累加 term upper bounds 找到 pivot：
+    - 若 pivot doc_id == min doc_id：此 doc 有機會超過 θ → 進行「精確打分」並更新 heap/θ
+    - 否則：可以安全地把 pivot 前面的 term cursor 直接跳到 pivot doc_id（skip）
+
+- **UnifiedSearch 的整合重點**：
+  - `BM25Result.scores` 是「與 doc_ids 對齊的 list」，`VSMResult.scores` 是「以 doc_id 為 key 的 dict」；若直接混用會在 runtime 爆掉（`.values()/.items()` 或用 index 取 dict）。
+  - 以 `_scores_to_dict()` 做一次正規化後：
+    - `_execute_simple_query()` 可以一致地取分數
+    - `_execute_hybrid_query()` 可以先各自 normalize，再做加權融合
+  - Boolean 模式分兩類：  
+    - **field boolean**（含 `title:` 等欄位前綴）→ 走 `QueryParser/QueryExecutor`，可回傳 matched_fields  
+    - **content boolean**（純內容詞項 AND/OR/NOT）→ 走 `BooleanRetrieval`
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/retrieval/query_optimization.py src/ir/search/unified_search.py`
+- 回歸測試（確保既有檢索核心不受影響）：`pytest tests/test_boolean.py tests/test_vsm.py`

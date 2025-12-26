@@ -238,16 +238,19 @@ class WANDRetrieval:
                 algorithm='WAND'
             )
 
-        # Create posting list iterators
+        # Create posting lists as sorted sequences of (doc_id, tf).
+        # This sorted order is the key invariant that makes WAND skipping
+        # possible (we can advance pointers toward a target doc_id).
         posting_lists = {
             term: sorted(self.inverted_index[term].items())
             for term in valid_terms
         }
 
-        # Current position in each posting list
+        # Current cursor position in each posting list (term -> index into list).
         positions = {term: 0 for term in valid_terms}
 
-        # Top-k heap (min-heap of (score, doc_id))
+        # Top-k heap is a min-heap of size <= k:
+        # the smallest element is the current threshold θ (k-th best score).
         topk_heap = []
         threshold = 0.0  # θ: score of k-th best document
 
@@ -257,7 +260,10 @@ class WANDRetrieval:
         for term in valid_terms:
             candidate_docs.update(doc_id for doc_id, _ in posting_lists[term])
 
-        # WAND main loop
+        # WAND main loop:
+        # Repeatedly find a "pivot" term whose cumulative upper bound reaches θ.
+        # If the pivot aligns with the minimum doc_id across cursors, we score
+        # that doc exactly; otherwise we can skip some postings safely.
         while True:
             # Get current document IDs for each term
             current_docs = {}
@@ -273,7 +279,8 @@ class WANDRetrieval:
             # Sort terms by current document ID
             sorted_terms = sorted(current_docs.items(), key=lambda x: x[1])
 
-            # Find pivot: first term where Σ UB ≥ θ
+            # Find pivot: first term where Σ UB(t_i) >= θ.
+            # Terms are considered in increasing doc_id order.
             pivot_idx = 0
             cumulative_ub = 0.0
 
@@ -286,7 +293,9 @@ class WANDRetrieval:
             pivot_term, pivot_doc_id = sorted_terms[pivot_idx]
             min_doc_id = sorted_terms[0][1]
 
-            # Check if pivot doc = min doc (all terms align)
+            # If pivot doc_id equals the current minimum doc_id, then the document
+            # is "fully aligned" up to the pivot and may exceed θ, so we compute
+            # its exact score and update the top-k heap.
             if pivot_doc_id == min_doc_id:
                 # Score this document
                 score = self._score_document(min_doc_id, valid_terms, posting_lists, positions)
@@ -308,7 +317,9 @@ class WANDRetrieval:
                         if current_id == min_doc_id:
                             positions[term] += 1
             else:
-                # Advance all terms before pivot to pivot_doc_id
+                # Otherwise, the sum of upper bounds before pivot is < θ, so none
+                # of the docs before pivot can beat θ. We can safely advance the
+                # cursors of all terms before pivot up to pivot_doc_id.
                 for i in range(pivot_idx):
                     term, _ = sorted_terms[i]
                     # Binary search to find position >= pivot_doc_id
@@ -372,6 +383,9 @@ class WANDRetrieval:
         Advance position in posting list to target doc ID or beyond.
 
         Uses binary search for efficiency.
+
+        Precondition:
+            posting_list is sorted by doc_id.
 
         Args:
             posting_list: List of (doc_id, tf) tuples

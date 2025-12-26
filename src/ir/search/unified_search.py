@@ -497,17 +497,33 @@ class UnifiedSearchEngine:
         if mode == QueryMode.AUTO:
             mode = self._detect_query_mode(query)
 
-        # Execute query based on mode
-        if mode == QueryMode.FIELD or mode == QueryMode.BOOLEAN:
-            # Parse and execute structured query
+        # Execute query based on mode.
+        #
+        # Notes:
+        # - FIELD queries are executed via QueryParser/QueryExecutor over FieldIndexer.
+        # - BOOLEAN queries are split into two cases:
+        #     (a) field-boolean (e.g., title:台灣 AND category:政治) -> QueryExecutor
+        #     (b) content-boolean (e.g., information AND retrieval) -> BooleanRetrieval
+        # - SIMPLE queries are ranked retrieval over content (BM25/VSM/HYBRID).
+        if mode == QueryMode.FIELD:
             return self._execute_field_query(query, top_k)
 
-        elif mode == QueryMode.SIMPLE:
-            # Simple keyword query - use ranking model
+        if mode == QueryMode.BOOLEAN:
+            # If the query contains known field prefixes, treat it as a field query
+            # so we can return matched_fields.
+            query_lower = query.lower()
+            has_known_field = any(
+                prefix in query_lower
+                for prefix in ['title:', 'category:', 'source:', 'author:', 'content:', 'date:']
+            )
+            if has_known_field:
+                return self._execute_field_query(query, top_k)
+            return self._execute_boolean_query(query, top_k)
+
+        if mode == QueryMode.SIMPLE:
             return self._execute_simple_query(query, ranking_model, top_k)
 
-        else:
-            raise ValueError(f"Unsupported query mode: {mode}")
+        raise ValueError(f"Unsupported query mode: {mode}")
 
     def _detect_query_mode(self, query: str) -> QueryMode:
         """
@@ -613,11 +629,14 @@ class UnifiedSearchEngine:
         else:
             raise ValueError(f"Unsupported ranking model: {ranking_model}")
 
+        # Normalize model-specific outputs to a common mapping:
+        #   doc_id -> score
+        score_map = self._scores_to_dict(result)
+
         # Convert to unified results
         unified_results = []
         for rank, doc_id in enumerate(result.doc_ids, 1):
-            # Scores is a list parallel to doc_ids, not a dict
-            score = result.scores[rank - 1]  # rank starts at 1, list index at 0
+            score = score_map.get(doc_id, 0.0)
             metadata = self.doc_metadata.get(doc_id, {})
 
             # Get content snippet
@@ -657,18 +676,21 @@ class UnifiedSearchEngine:
         bm25_weight = 0.6
         vsm_weight = 0.4
 
-        combined_scores = {}
+        bm25_scores = self._scores_to_dict(bm25_result)
+        vsm_scores = self._scores_to_dict(vsm_result)
+
+        combined_scores: Dict[int, float] = {}
 
         # Normalize and combine BM25 scores
-        bm25_max = max(bm25_result.scores.values()) if bm25_result.scores else 1.0
-        for doc_id, score in bm25_result.scores.items():
+        bm25_max = max(bm25_scores.values()) if bm25_scores else 1.0
+        for doc_id, score in bm25_scores.items():
             combined_scores[doc_id] = (score / bm25_max) * bm25_weight
 
         # Normalize and add VSM scores
-        vsm_max = max(vsm_result.scores.values()) if vsm_result.scores else 1.0
-        for doc_id, score in vsm_result.scores.items():
+        vsm_max = max(vsm_scores.values()) if vsm_scores else 1.0
+        for doc_id, score in vsm_scores.items():
             normalized = (score / vsm_max) * vsm_weight
-            combined_scores[doc_id] = combined_scores.get(doc_id, 0) + normalized
+            combined_scores[doc_id] = combined_scores.get(doc_id, 0.0) + normalized
 
         # Sort by combined score and get top-k
         sorted_docs = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
@@ -693,6 +715,64 @@ class UnifiedSearchEngine:
             ))
 
         return unified_results
+
+    def _execute_boolean_query(self, query: str, top_k: int) -> List[UnifiedSearchResult]:
+        """
+        Execute a content boolean query via BooleanRetrieval.
+
+        This path is used for boolean operators over the main content terms
+        when the query does not contain field prefixes.
+
+        Args:
+            query: Boolean query string (e.g., "information AND retrieval")
+            top_k: Maximum number of results
+
+        Returns:
+            List of UnifiedSearchResult objects (unranked by default)
+        """
+        result = self.boolean_model.query(query, optimize=True, rank_results=False)
+
+        unified_results = []
+        for rank, doc_id in enumerate(result.doc_ids[:top_k], 1):
+            metadata = self.doc_metadata.get(doc_id, {})
+            content = self._get_content_snippet(doc_id, query)
+            unified_results.append(
+                UnifiedSearchResult(
+                    doc_id=doc_id,
+                    score=1.0,
+                    rank=rank,
+                    title=metadata.get('title', ''),
+                    content=content,
+                    source=metadata.get('source', ''),
+                    category=metadata.get('category', ''),
+                    published_at=metadata.get('published_at', ''),
+                    url=metadata.get('url', ''),
+                    ranking_model='boolean'
+                )
+            )
+
+        return unified_results
+
+    @staticmethod
+    def _scores_to_dict(result: Any) -> Dict[int, float]:
+        """
+        Convert model-specific search result scores into a {doc_id: score} mapping.
+
+        This engine integrates multiple retrieval models whose result objects use
+        different score representations:
+            - BM25Result: doc_ids + scores (list aligned to doc_ids)
+            - VSMResult: scores is a dict keyed by doc_id
+        """
+        scores = getattr(result, 'scores', None)
+        doc_ids = getattr(result, 'doc_ids', None)
+
+        if isinstance(scores, dict):
+            return scores
+
+        if isinstance(scores, list) and isinstance(doc_ids, list):
+            return {doc_id: score for doc_id, score in zip(doc_ids, scores)}
+
+        return {}
 
     def _get_content_snippet(self, doc_id: int, query: str, max_length: int = 200) -> str:
         """

@@ -103,21 +103,36 @@ class TermClusterer:
         """
         m, n = len(str1), len(str2)
 
-        # Create DP table
+        # Dynamic programming table dp[i][j] means:
+        #   edit distance between str1[:i] and str2[:j]
+        #
+        # This classic Levenshtein DP has three edit operations:
+        # - deletion:     dp[i-1][j] + 1
+        # - insertion:    dp[i][j-1] + 1
+        # - substitution: dp[i-1][j-1] + cost
+        #
+        # Space note:
+        # This implementation uses the full (m+1)*(n+1) table for clarity.
+        # In production, you can reduce space to O(min(m, n)) by keeping only
+        # two rows.
         dp = [[0] * (n + 1) for _ in range(m + 1)]
 
-        # Initialize base cases
+        # Base cases:
+        # - Transform a prefix of length i into empty string => i deletions
+        # - Transform empty string into prefix of length j => j insertions
         for i in range(m + 1):
             dp[i][0] = i
         for j in range(n + 1):
             dp[0][j] = j
 
-        # Fill DP table
+        # Fill the table row by row (increasing prefix lengths).
         for i in range(1, m + 1):
             for j in range(1, n + 1):
                 if str1[i-1] == str2[j-1]:
+                    # No cost when characters match.
                     dp[i][j] = dp[i-1][j-1]
                 else:
+                    # Choose the cheapest single edit that moves toward a match.
                     dp[i][j] = 1 + min(
                         dp[i-1][j],    # deletion
                         dp[i][j-1],    # insertion
@@ -137,6 +152,8 @@ class TermClusterer:
         Returns:
             Normalized distance (0 = identical, 1 = completely different)
         """
+        # Normalize by the longer string length to keep the score comparable
+        # across different-length term pairs.
         max_len = max(len(str1), len(str2))
         if max_len == 0:
             return 0.0
@@ -154,6 +171,9 @@ class TermClusterer:
         Returns:
             Prefix similarity in [0, 1]
         """
+        # Prefix similarity is a cheap proxy for string similarity.
+        # It is useful for tolerant retrieval where many spelling variants share
+        # a long common prefix (e.g., "search", "searching", "searched").
         min_len = min(len(str1), len(str2))
         common_prefix = 0
 
@@ -201,7 +221,7 @@ class TermClusterer:
         Examples:
             >>> clusterer = TermClusterer()
             >>> terms = ["color", "colour", "colored", "paint", "painted"]
-            >>> clusters = clusterer.star_clustering(terms, threshold=0.7)
+            >>> clusters = clusterer.star_clustering(terms, similarity_threshold=0.7)
             >>> len(clusters)
             2
         """
@@ -213,19 +233,26 @@ class TermClusterer:
             f"threshold={similarity_threshold}"
         )
 
-        # Compute similarity matrix
+        # Compute similarity matrix once:
+        #   (term_i, term_j) -> similarity in [0, 1]
+        #
+        # This is O(n^2) and dominates runtime for large vocabularies.
         similarities = self._compute_term_similarities(
             terms, similarity_metric
         )
 
-        # Calculate potential for each term
+        # Calculate "potential" for each term: how many neighbors it can attract.
+        # The greedy algorithm chooses the unclustered term with the highest
+        # potential as the next star center.
         potentials = {}
         for term in terms:
             potential = sum(1 for other in terms
                           if similarities.get((term, other), 0) >= similarity_threshold)
             potentials[term] = potential
 
-        # Star clustering
+        # Star clustering state:
+        # - clustered_terms tracks terms already assigned to some center
+        # - each iteration picks a new center and absorbs neighbors above threshold
         clusters = []
         clustered_terms = set()
         cluster_id = 0
@@ -287,7 +314,8 @@ class TermClusterer:
                     continue
 
                 if metric == 'edit_distance':
-                    # Convert distance to similarity
+                    # Convert normalized distance to similarity:
+                    #   dist in [0, 1] -> sim = 1 - dist
                     dist = self.normalized_edit_distance(terms[i], terms[j])
                     sim = 1.0 - dist
                 elif metric == 'prefix':
@@ -342,6 +370,12 @@ class TermClusterer:
         clustered_terms = set()
         cluster_id = 0
 
+        # Greedy clustering:
+        # the first unclustered term becomes a cluster center.
+        #
+        # Note:
+        # This makes results order-dependent. Sorting terms (e.g., by frequency)
+        # before clustering can produce more stable clusters.
         for center_term in terms:
             if center_term in clustered_terms:
                 continue
@@ -403,7 +437,14 @@ class TermClusterer:
             f"{len(documents)} documents"
         )
 
-        # Build co-occurrence matrix
+        # Build co-occurrence matrix (pair counts).
+        #
+        # For each document, we only consider terms from `terms` that appear in it,
+        # then increment counts for all pairs in that document.
+        #
+        # This is a simple bag-of-words co-occurrence signal:
+        # - it ignores order and distance
+        # - it is sensitive to document length (long docs create many pairs)
         cooccurrence = defaultdict(int)
 
         for doc_terms in documents:
@@ -414,7 +455,9 @@ class TermClusterer:
                     cooccurrence[(t1, t2)] += 1
                     cooccurrence[(t2, t1)] += 1
 
-        # Cluster terms with high co-occurrence
+        # Cluster terms with high co-occurrence using a greedy center-based rule.
+        # Terms that co-occur with the center at least `min_cooccurrence` times
+        # will be absorbed into the center's cluster.
         clusters = []
         clustered_terms = set()
         cluster_id = 0

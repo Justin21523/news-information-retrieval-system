@@ -942,3 +942,49 @@ code = f\"{first_letter}{initial_code}{final_code}\"
 
 - 靜態語法檢查：`python -m py_compile src/ir/text/csoundex.py`
 - 單元測試：`pytest tests/test_csoundex.py`
+
+---
+
+## 2025-12-26：Clustering（DocumentClusterer / TermClusterer）教科書式行內註解（第 18 批）
+
+### 目標
+
+- 把 `src/ir/cluster/` 兩個 clustering 模組補上更教科書式的逐步註解，協助你理解：
+  - 文件分群：HAC（single/complete/average linkage）與 K-means（assignment/update/convergence）
+  - 文字/詞項分群：edit distance（Levenshtein DP）、star clustering、co-occurrence clustering
+  - 這些方法在 IR 的典型用途（同義詞/拼字變體、結果分群、主題探索）
+
+### 本次修改範圍
+
+- `src/ir/cluster/doc_cluster.py`
+  - 補強 cosine similarity 的稀疏向量計算心智模型與目前實作的複雜度說明。
+  - 補強 HAC 的資料結構（cluster -> set(doc_id)）、linkage 定義與 naive merge loop 的瓶頸註解。
+  - 修正文檔敘述：本實作為教學用 naive HAC（非 priority queue 版本）。
+  - 補強 K-means 的初始化、assignment/update、空 cluster re-init 與兩種 convergence check 的註解。
+  - 補強 silhouette score 的公式與「距離 = 1 - cosine」假設註解。
+- `src/ir/cluster/term_cluster.py`
+  - 補強 Levenshtein DP table 的定義、base cases 與轉移方程註解（並標註可用兩列降空間）。
+  - 補強 star clustering 的 potential（吸引力）概念與 greedy center selection 的註解，並修正文檔範例參數名。
+  - 補強 co-occurrence matrix 的建構直覺與限制（bag-of-words、長文造成 pair 爆炸）。
+
+### 片段程式碼（HAC：linkage 將 doc-level similarity 升到 cluster-level）
+
+以 complete-link 為例：兩群的相似度是「跨群 pairs 的最小相似度」（等價於最大距離最小化）：
+
+```python
+if linkage == 'complete':
+    return min(sims)
+```
+
+### 片段程式碼（Edit distance：DP 轉移）
+
+Levenshtein 的核心轉移是取三種 edit 的最小值：
+
+```python
+dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+```
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/cluster/doc_cluster.py src/ir/cluster/term_cluster.py`
+- 單元測試：`pytest tests/test_clustering.py`

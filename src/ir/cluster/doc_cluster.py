@@ -95,7 +95,13 @@ class DocumentClusterer:
     def _default_tokenizer(self, text: str) -> List[str]:
         """Default tokenization for Chinese text."""
         import re
-        # Simple tokenization - split on whitespace and punctuation
+        # Simple tokenization that extracts:
+        # - contiguous CJK runs (Chinese words without true segmentation)
+        # - alphanumeric runs (English words / numbers)
+        #
+        # This is intentionally lightweight for demos. For real IR pipelines,
+        # use a word segmenter (CKIP/Jieba) so Chinese phrases are segmented
+        # into meaningful tokens instead of long character sequences.
         tokens = re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z0-9]+', text.lower())
         return tokens
 
@@ -116,10 +122,19 @@ class DocumentClusterer:
             Similarity score in [0, 1]
 
         Complexity:
-            Time: O(min(|v1|, |v2|))
+            Time: O(|v1| + |v2|) in this implementation (iterates key union)
         """
-        dot_product = sum(vec1.get(term, 0) * vec2.get(term, 0)
-                         for term in set(vec1.keys()) | set(vec2.keys()))
+        # Cosine similarity for sparse vectors:
+        #   cos(v1, v2) = (v1 · v2) / (||v1|| * ||v2||)
+        #
+        # We compute the dot product by iterating the union of keys and using
+        # vec.get(term, 0). This is correct but not optimal: iterating the
+        # smaller vector and checking membership in the larger one would reduce
+        # hash lookups for highly sparse data.
+        dot_product = sum(
+            vec1.get(term, 0) * vec2.get(term, 0)
+            for term in set(vec1.keys()) | set(vec2.keys())
+        )
 
         if dot_product == 0:
             return 0.0
@@ -198,7 +213,12 @@ class DocumentClusterer:
         """
         from collections import Counter
 
-        # Vectorize documents using simple TF representation
+        # Vectorize documents using a simple TF (term frequency) representation.
+        #
+        # This intentionally avoids heavy dependencies and keeps the example
+        # self-contained. In a full IR system, you'd typically use:
+        # - TF-IDF weights (global IDF downweights common terms)
+        # - normalization (cosine length normalization)
         doc_vectors = {}
         for doc_id, doc_text in enumerate(documents):
             tokens = self._default_tokenizer(doc_text)
@@ -250,8 +270,8 @@ class DocumentClusterer:
             ClusteringResult with k clusters
 
         Complexity:
-            Time: O(n² log n) with priority queue
-            Space: O(n²) for similarity matrix
+            Time: O(n³) in this naive implementation (re-scans all cluster pairs)
+            Space: O(n²) for pairwise similarity matrix
 
         Examples:
             >>> clusterer = DocumentClusterer()
@@ -280,14 +300,24 @@ class DocumentClusterer:
         )
 
         # Initialize: each document is a cluster
+        # Represent clusters as sets of doc_ids:
+        #   cluster_key -> {doc_id, ...}
+        #
+        # This makes merges easy via set union.
         clusters = {i: {doc_id} for i, doc_id in enumerate(documents.keys())}
         cluster_id_counter = len(documents)
 
-        # Build similarity matrix
+        # Build pairwise document similarity matrix once (doc_id, doc_id) -> sim.
+        # Cluster similarity is computed from these doc-level similarities.
         sim_func = self._get_similarity_function(similarity_metric)
         similarities = self._compute_pairwise_similarities(documents, sim_func)
 
-        # Merge until k clusters remain
+        # Merge until k clusters remain.
+        #
+        # NOTE:
+        # This is a pedagogical / small-corpus implementation:
+        # each iteration scans all cluster pairs and recomputes linkage scores,
+        # which is significantly slower than a priority-queue based HAC.
         while len(clusters) > k:
             # Find most similar pair of clusters
             best_pair = None
@@ -297,6 +327,10 @@ class DocumentClusterer:
             for i in range(len(cluster_ids)):
                 for j in range(i + 1, len(cluster_ids)):
                     c1_id, c2_id = cluster_ids[i], cluster_ids[j]
+                    # Linkage turns doc-level similarities into a cluster-level score:
+                    # - single-link: max sim across cross pairs
+                    # - complete-link: min sim across cross pairs
+                    # - average-link: mean sim across cross pairs
                     sim = self._cluster_similarity(
                         clusters[c1_id], clusters[c2_id],
                         similarities, linkage
@@ -313,6 +347,7 @@ class DocumentClusterer:
             c1_id, c2_id = best_pair
             new_cluster = clusters[c1_id] | clusters[c2_id]
 
+            # Remove merged clusters and insert the new one with a fresh id.
             del clusters[c1_id]
             del clusters[c2_id]
             clusters[cluster_id_counter] = new_cluster
@@ -343,7 +378,9 @@ class DocumentClusterer:
         if metric == 'cosine':
             return self.cosine_similarity
         elif metric == 'euclidean':
-            # Convert distance to similarity
+            # Convert a distance into a bounded similarity in (0, 1]:
+            #   sim = 1 / (1 + dist)
+            # so dist=0 -> sim=1, dist->∞ -> sim->0.
             return lambda v1, v2: 1.0 / (1.0 + self.euclidean_distance(v1, v2))
         elif metric == 'jaccard':
             return self.jaccard_similarity
@@ -360,6 +397,8 @@ class DocumentClusterer:
             for j in range(i + 1, len(doc_ids)):
                 doc1_id, doc2_id = doc_ids[i], doc_ids[j]
                 sim = sim_func(documents[doc1_id], documents[doc2_id])
+                # Store both directions so we can look up similarity without
+                # sorting (doc1, doc2) pairs at query time.
                 similarities[(doc1_id, doc2_id)] = sim
                 similarities[(doc2_id, doc1_id)] = sim
 
@@ -380,6 +419,10 @@ class DocumentClusterer:
         Returns:
             Cluster similarity score
         """
+        # Compute all cross-pair similarities between two clusters.
+        #
+        # For linkage criteria, we need the set of similarities across the
+        # Cartesian product cluster1 × cluster2.
         sims = []
         for doc1 in cluster1:
             for doc2 in cluster2:
@@ -453,7 +496,9 @@ class DocumentClusterer:
         if random_seed is not None:
             random.seed(random_seed)
 
-        # Initialize centroids randomly
+        # Initialize centroids by sampling k documents uniformly at random.
+        # This is the simplest initialization strategy and is sufficient for
+        # educational purposes. More robust variants include k-means++.
         doc_ids = list(documents.keys())
         initial_doc_ids = random.sample(doc_ids, k)
         centroids = {i: documents[doc_id].copy()
@@ -462,7 +507,9 @@ class DocumentClusterer:
         assignments = {}
 
         for iteration in range(max_iterations):
-            # Assignment step
+            # Assignment step:
+            # assign each document to the cluster with the highest similarity
+            # (using cosine similarity here).
             new_assignments = {}
             for doc_id, doc_vec in documents.items():
                 # Find nearest centroid
@@ -477,14 +524,14 @@ class DocumentClusterer:
 
                 new_assignments[doc_id] = best_cluster
 
-            # Check convergence
+            # Convergence check #1: assignments stop changing.
             if new_assignments == assignments:
                 self.logger.info(f"K-means converged at iteration {iteration}")
                 break
 
             assignments = new_assignments
 
-            # Update step: recompute centroids
+            # Update step: recompute centroids as mean vectors of assigned docs.
             cluster_docs = defaultdict(list)
             for doc_id, cluster_id in assignments.items():
                 cluster_docs[cluster_id].append(documents[doc_id])
@@ -498,12 +545,19 @@ class DocumentClusterer:
                         cluster_docs[cluster_id]
                     )
                 else:
-                    # Empty cluster: reinitialize
+                    # Empty cluster:
+                    # If no documents were assigned to a cluster, we must
+                    # reinitialize its centroid to avoid losing a cluster.
                     centroids[cluster_id] = old_centroids.get(
                         cluster_id, documents[random.choice(doc_ids)].copy()
                     )
 
-            # Check centroid change
+            # Convergence check #2: centroid movement is below tolerance.
+            #
+            # NOTE:
+            # Assignment uses cosine similarity, while centroid movement uses
+            # Euclidean distance. This is a pragmatic stopping criterion and
+            # is acceptable for non-negative sparse vectors.
             max_change = 0.0
             for cluster_id in range(k):
                 if cluster_id in old_centroids:
@@ -560,7 +614,8 @@ class DocumentClusterer:
             for term, weight in doc_vec.items():
                 centroid[term] += weight
 
-        # Average
+        # Average the accumulated weights across documents.
+        # The result remains a sparse vector over the union of terms.
         num_docs = len(doc_vectors)
         return {term: weight / num_docs for term, weight in centroid.items()}
 
@@ -599,7 +654,13 @@ class DocumentClusterer:
         for doc_id, doc_vec in documents.items():
             cluster_id = result.assignments[doc_id]
 
-            # Compute a(i): mean distance to points in same cluster
+            # Silhouette for a point i uses:
+            #   a(i): mean distance to points in its own cluster
+            #   b(i): minimum mean distance to points in any other cluster
+            #   s(i) = (b(i) - a(i)) / max(a(i), b(i))
+            #
+            # We use distance = 1 - cosine_similarity for non-negative vectors.
+            # This is a common choice in IR where cosine is the primary similarity.
             same_cluster_docs = result.clusters[cluster_id].doc_ids
             if len(same_cluster_docs) <= 1:
                 silhouette_scores.append(0.0)

@@ -63,7 +63,14 @@ class Pattern:
         """Get pattern as text string."""
         return ''.join(self.tokens)  # No spaces for Chinese
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact representation for printing/debugging.
+
+        Complexity:
+            Time: O(m) where m is pattern length (for joining tokens)
+            Space: O(m)
+        """
         return f"Pattern('{self.text}', freq={self.frequency}, MI={self.mi_score:.3f})"
 
 
@@ -78,13 +85,27 @@ class PATNode:
         positions: List of starting positions in original text
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Initialize an empty PAT-tree node.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         self.children: Dict[str, 'PATNode'] = {}
         self.frequency: int = 0
         self.is_end: bool = False
         self.positions: List[int] = []
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact node summary for debugging.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         return f"PATNode(freq={self.frequency}, children={len(self.children)})"
 
 
@@ -409,6 +430,13 @@ class PATTree:
             Dictionary with statistics
         """
         def count_nodes(node):
+            """
+            Count nodes in the subtree rooted at `node`.
+
+            Complexity:
+                Time: O(N) where N is number of nodes in the subtree
+                Space: O(H) where H is the tree height (recursion stack)
+            """
             count = 1  # Current node
             for child in node.children.values():
                 count += count_nodes(child)
@@ -454,7 +482,14 @@ class PATTree:
                 tokens + [token]
             )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a concise summary of the tree (tokens/nodes/vocabulary).
+
+        Complexity:
+            Time: O(N) due to `get_statistics()` (node counting)
+            Space: O(H) where H is tree height (recursion stack)
+        """
         stats = self.get_statistics()
         return (
             f"PATTree(tokens={stats['total_tokens']}, "

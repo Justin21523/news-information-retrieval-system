@@ -64,7 +64,14 @@ class EvaluationResult:
     diversity: Optional[float] = None
     coverage: Optional[float] = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact, human-readable representation for debugging/logging.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         return (
             f"EvaluationResult(\n"
             f"  P@5={self.precision_at_k.get(5, 0.0):.4f}, "

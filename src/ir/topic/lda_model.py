@@ -71,6 +71,13 @@ class LDATopicInfo:
     topic_proportion: float
 
     def __str__(self) -> str:
+        """
+        Return a short, human-readable summary of the topic.
+
+        Complexity:
+            Time: O(m) where m is number of shown topic words (constant-bounded)
+            Space: O(m)
+        """
         words = ", ".join([f"{w}({p:.3f})" for w, p in self.topic_words[:5]])
         return f"Topic {self.topic_id} ({self.topic_proportion:.1%}): {words}"
 
@@ -581,6 +588,13 @@ class LDAModel:
         return instance
 
     def __repr__(self) -> str:
+        """
+        Return a compact representation of the model state.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         if self.is_fitted:
             return f"LDAModel(fitted=True, topics={self.n_topics}, vocabulary={len(self.dictionary)})"
         else:

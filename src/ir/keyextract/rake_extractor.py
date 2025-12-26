@@ -70,7 +70,14 @@ class Keyword:
     positions: List[int]
     frequency: int
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a debug-friendly representation.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         return f"Keyword(word='{self.word}', score={self.score:.4f}, freq={self.frequency})"
 
 

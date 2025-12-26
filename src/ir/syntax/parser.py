@@ -64,7 +64,14 @@ class DependencyEdge:
     dependent_word: str
     relation: str
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact edge representation (dependent --rel--> head).
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         return f"{self.dependent_word} --{self.relation}--> {self.head_word}"
 
 
@@ -90,7 +97,14 @@ class SVOTriple:
     object_index: Optional[int] = None
     confidence: float = 1.0
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact representation of the extracted triple.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         if self.object:
             return f"({self.subject}, {self.verb}, {self.object})"
         else:
@@ -186,6 +200,7 @@ class DependencyParser:
             original_load = torch.load
 
             def patched_load(*args, **kwargs):
+                """Proxy `torch.load` forcing `weights_only=False` for SuPar models."""
                 # Force weights_only=False for SuPar models
                 kwargs['weights_only'] = False
                 return original_load(*args, **kwargs)

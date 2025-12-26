@@ -70,7 +70,14 @@ class HybridRecommendation:
     method: str
     explanation: str
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Return a compact representation for debugging/logging.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         return f"HybridRec(doc={self.doc_id}, score={self.score:.3f}, method={self.method})"
 
 

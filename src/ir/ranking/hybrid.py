@@ -492,10 +492,28 @@ def demo():
     class MockRanker:
         """Minimal ranker stub used by demo() to simulate external rankers."""
         def __init__(self, name, results):
+            """
+            Initialize a mock ranker with a fixed result set.
+
+            Complexity:
+                Time: O(1)
+                Space: O(1)
+            """
             self.name = name
             self.results = results
 
         def search(self, query, topk=10):
+            """
+            Return the top-k documents from the pre-baked mock results.
+
+            Args:
+                query: Query string (unused; kept for interface compatibility)
+                topk: Number of results to return
+
+            Complexity:
+                Time: O(k)
+                Space: O(k)
+            """
             from collections import namedtuple
             Result = namedtuple('Result', ['doc_ids', 'scores'])
             return Result(

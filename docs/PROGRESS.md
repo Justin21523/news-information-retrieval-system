@@ -501,3 +501,40 @@ def __post_init__(self) -> None:
 ### 驗證方式
 
 - 靜態語法檢查：`python -m py_compile src/ir/search/unified_search.py src/ir/summarize/static.py src/ir/retrieval/boolean.py src/ir/cluster/doc_cluster.py src/ir/cluster/term_cluster.py src/ir/facet/facet_engine.py src/ir/index/pat_tree.py src/ir/text/ner_extractor.py`
+
+---
+
+## 2025-12-26：`src/ir/` 全面補齊缺漏函式 docstring（第 10 批）
+
+### 目標
+
+- 將 `src/ir/` 內剩餘尚未補齊的函式 docstring 全數補上（英文），把「核心 IR 程式碼」的函式 docstring 覆蓋率推到 100%。
+
+### 本次修改範圍（重點模組）
+
+- `src/ir/keyextract/*`：補齊 `__repr__` 等小型方法 docstring（方便除錯與輸出理解）。
+- `src/ir/patterns/pat_tree.py`：補齊 `Pattern/PATNode/PATTree` 的 `__repr__`、`__init__`、以及內部遞迴 helper 的 docstring（含複雜度）。
+- `src/ir/ranking/hybrid.py`：補齊 demo 用 `MockRanker` 方法 docstring（明確標出 query 參數僅為介面相容）。
+- `src/ir/recommendation/*`：補齊結果 dataclass 的 `__repr__` docstring。
+- `src/ir/syntax/parser.py`：補齊 `DependencyEdge/SVOTriple` 的 `__repr__`，以及 PyTorch 相容性 patch 的 nested helper docstring。
+- `src/ir/topic/*`：補齊 topic info 的 `__str__` 與 model 的 `__repr__` docstring。
+
+### 片段程式碼（nested helper：遞迴計數的複雜度註記）
+
+像 `PATTree.get_statistics()` 的 `count_nodes()` 是遞迴掃樹，讀者若不知道它是 O(N) 很容易在 debug/印出時誤踩效能坑：
+
+```python
+def count_nodes(node):
+    \"\"\"Count nodes in the subtree rooted at `node`.\"\"\"
+    ...
+```
+
+### 盤點結果（本批結束）
+
+以 AST 掃描 `src/ir/**/*.py` 的函式 docstring 缺口：
+
+- `src/ir` functions without docstrings：`0`
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/keyextract/evaluator.py src/ir/patterns/pat_tree.py src/ir/syntax/parser.py src/ir/topic/bertopic_model.py src/ir/topic/lda_model.py`

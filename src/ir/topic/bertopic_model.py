@@ -71,6 +71,13 @@ class TopicInfo:
     representative_docs: Optional[List[str]] = None
 
     def __str__(self) -> str:
+        """
+        Return a short, human-readable summary of the topic.
+
+        Complexity:
+            Time: O(m) where m is number of shown topic words (constant-bounded)
+            Space: O(m)
+        """
         words = ", ".join([f"{w}" for w, s in self.topic_words[:5]])
         return f"Topic {self.topic_id} ({self.topic_size} docs): {words}"
 
@@ -662,6 +669,13 @@ class BERTopicModel:
         return list(zip(similar_topics, similarities))
 
     def __repr__(self) -> str:
+        """
+        Return a compact representation of the model state.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
         if self.is_fitted:
             n_topics = len(set(self.topics))
             n_docs = len(self.topics)

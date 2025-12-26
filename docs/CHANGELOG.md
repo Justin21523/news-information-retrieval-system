@@ -14,6 +14,7 @@
 - 新增 `docs/PROGRESS.md`：以繁體中文記錄每次實作的進度、片段程式碼與原理整理。
 - 補齊 `src/**/__init__.py`、主要 `tests/test_*.py` 與多個 `scripts/*` CLI 入口的英文 docstring（提升可讀性與可維護性）。
 - 補強核心模組教學向註解：`src/ir/retrieval/boolean.py`、`src/ir/retrieval/vsm.py`、`src/ir/retrieval/bm25.py`、`src/ir/ranking/rocchio.py`、`src/ir/query/query_parser.py`。
+- 補強索引/加權教學向註解：`src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`。
 
 #### 🧪 測試
 - `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。

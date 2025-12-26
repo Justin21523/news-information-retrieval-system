@@ -152,3 +152,62 @@ result = self._evaluate_postfix(postfix, phrases, optimize)
   - Boolean query 的 AST/RPN 圖示（含 precedence/associativity）
   - VSM 與 BM25 的逐步手算例子（小型 corpus）
   - Rocchio 的 drift 案例（何時會跑偏、如何調 α/β/γ）
+
+---
+
+## 2025-12-26：索引結構與加權教學註解補強（第 3 批）
+
+### 目標
+
+- 讓「索引」與「加權」兩個底層模組更容易閱讀：倒排索引、位置索引、TF‑IDF/餘弦相似度。
+- 保持行為不變的前提下，補上英文註解把關鍵不變量（invariants）與時間複雜度寫清楚。
+
+### 本次修改範圍
+
+- 倒排索引：`src/ir/index/inverted_index.py`
+- 位置索引：`src/ir/index/positional_index.py`
+- 加權與相似度：`src/ir/index/term_weighting.py`
+
+### 片段程式碼（倒排索引：postings list 的 merge 與二分搜尋）
+
+Postings list 以 `doc_id` 排序後，可以用 merge 做 AND/OR，也可以用二分搜尋查詢某個文件中的 tf：
+
+```python
+idx = bisect_left(postings, (doc_id, 0))
+if idx < len(postings) and postings[idx][0] == doc_id:
+    return postings[idx][1]
+```
+
+### 片段程式碼（位置索引：proximity 的 two‑pointer）
+
+兩個位置列表都已排序時，用 two-pointer 可把 proximity 從 O(p1*p2) 降到 O(p1+p2)：
+
+```python
+i = j = 0
+while i < len(pos1) and j < len(pos2):
+    if abs(pos1[i] - pos2[j]) <= max_distance:
+        return True
+    if pos1[i] < pos2[j]:
+        i += 1
+    else:
+        j += 1
+```
+
+### 原理整理（重點）
+
+- **倒排索引 *Inverted Index***：
+  - 核心資料結構是 `term -> postings list`；postings 以 `doc_id` 排序是關鍵不變量，讓 AND/OR 可以用 merge 線性掃過。
+  - `term_frequency(term, doc_id)` 若 postings 有序，可用二分搜尋從 O(k) 改為 O(log k)（k 為 postings 長度）。
+
+- **位置索引 *Positional Index***：
+  - 額外存 `term -> {doc_id: [positions...]}`，讓 phrase query / proximity query 成為可能。
+  - phrase query 的核心是「位置對齊」：第一個詞出現在 pos，第二個詞要在 pos+1，第三個詞要在 pos+2…。
+  - proximity query 在 positions 有序時，用 two-pointer 可以避免雙重迴圈的 O(p1*p2)。
+
+- **TF‑IDF 與 Cosine Similarity**：
+  - `vectorize()` 只輸出「出現過的詞」的稀疏向量（dict），避免建立巨大的 dense 向量。
+  - cosine similarity 計算 dot product 時，迭代較小的向量可以減少 hash lookup 次數。
+
+### 驗證方式
+
+- 已通過：`pytest tests/test_inverted_index.py tests/test_positional_index.py tests/test_term_weighting.py`

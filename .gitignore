@@ -209,6 +209,10 @@ indices/
 *.index
 *.idx
 
+# Do not ignore source code packages named "index/" (keep bytecode ignored)
+!src/ir/index/
+!src/ir/index/**/*.py
+
 # Temporary files
 tmp/
 temp/

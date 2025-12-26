@@ -143,7 +143,8 @@ class BM25Ranker:
         self.doc_count = len(documents)
         total_length = 0
 
-        # Build inverted index
+        # Build a postings-style inverted index:
+        #   term -> {doc_id: tf_in_doc}
         for doc_id, doc_text in enumerate(documents):
             tokens = self.tokenizer(doc_text)
             doc_length = len(tokens)
@@ -151,12 +152,12 @@ class BM25Ranker:
             self.doc_lengths[doc_id] = doc_length
             total_length += doc_length
 
-            # Count term frequencies
+            # Count term frequencies within this document (bag-of-words).
             term_freqs = defaultdict(int)
             for token in tokens:
                 term_freqs[token] += 1
 
-            # Update inverted index
+            # Update postings (store tf for this doc under each term).
             for term, tf in term_freqs.items():
                 if term not in self.inverted_index:
                     self.inverted_index[term] = {}
@@ -186,7 +187,8 @@ class BM25Ranker:
         for term, postings in self.inverted_index.items():
             df = len(postings)  # Document frequency
 
-            # BM25 IDF formula (Robertson-Sparck Jones weight)
+            # BM25 IDF (Robertson-Sparck Jones weight). The "+ 1.0" makes the
+            # value non-negative when df is close to N.
             idf = math.log((self.doc_count - df + 0.5) / (df + 0.5) + 1.0)
             self.idf_cache[term] = idf
 
@@ -211,19 +213,24 @@ class BM25Ranker:
         score = 0.0
 
         for term in query_terms:
+            # This implementation treats the query as a plain list of terms.
+            # If the tokenizer returns duplicates, they will contribute multiple
+            # times (a lightweight proxy for query term frequency).
             if term not in self.inverted_index:
                 continue
 
             if doc_id not in self.inverted_index[term]:
                 continue
 
-            # Term frequency in document
+            # Term frequency in document: f(qi, D)
             tf = self.inverted_index[term][doc_id]
 
-            # IDF value
+            # Inverse document frequency: IDF(qi)
             idf = self.idf_cache.get(term, 0.0)
 
-            # BM25 formula
+            # BM25 term contribution:
+            #   IDF * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl/avgdl)) + delta)
+            # The denominator performs TF saturation and length normalization.
             numerator = tf * (self.k1 + 1)
             denominator = tf + self.k1 * (
                 1 - self.b + self.b * (doc_length / self.avg_doc_length)
@@ -257,7 +264,7 @@ class BM25Ranker:
             >>> result.doc_ids
             [5, 12, 3, 18, ...]
         """
-        # Tokenize query
+        # 1) Tokenize query (bag-of-words).
         query_terms = self.tokenizer(query)
 
         if not query_terms:
@@ -269,20 +276,21 @@ class BM25Ranker:
                 parameters={'k1': self.k1, 'b': self.b, 'delta': self.delta}
             )
 
-        # Get candidate documents (union of all docs containing query terms)
+        # 2) Candidate generation: union of postings for query terms.
+        # This avoids scoring documents that cannot match any term.
         candidate_docs = set()
         for term in query_terms:
             if term in self.inverted_index:
                 candidate_docs.update(self.inverted_index[term].keys())
 
-        # Score all candidate documents
+        # 3) Score each candidate document.
         doc_scores: List[Tuple[int, float]] = []
         for doc_id in candidate_docs:
             score = self.score_document(query_terms, doc_id)
             if score > 0:
                 doc_scores.append((doc_id, score))
 
-        # Sort by score (descending)
+        # 4) Rank by score and return top-k.
         doc_scores.sort(key=lambda x: x[1], reverse=True)
 
         # Get top-k

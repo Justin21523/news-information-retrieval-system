@@ -5,6 +5,17 @@ This module implements the vector space model for information retrieval.
 Documents and queries are represented as weighted term vectors, and
 similarity is computed using cosine similarity.
 
+How VSM Works (high level):
+    - Index time:
+        1) Tokenize documents and build an inverted index (term -> postings)
+        2) Compute global statistics (df/idf) from the index
+        3) Compute a weighted (TF-IDF) vector for each document
+    - Query time:
+        1) Tokenize the query and build a weighted query vector
+        2) Collect candidate documents that contain at least one query term
+        3) Compute cosine similarity(query, doc) for each candidate
+        4) Return top-k documents by similarity score
+
 Key Features:
     - TF-IDF document representation
     - Cosine similarity ranking
@@ -112,13 +123,13 @@ class VectorSpaceModel:
         """
         self.logger.info(f"Building VSM index for {len(documents)} documents...")
 
-        # Build inverted index
+        # 1) Build inverted index (term -> postings, plus doc lengths/metadata)
         self.inverted_index.build(documents, metadata)
 
-        # Build term weighting statistics
+        # 2) Build global weighting statistics (df/idf) from the index
         self.term_weighting.build_from_index(self.inverted_index)
 
-        # Pre-compute document vectors
+        # 3) Pre-compute document TF-IDF vectors to make queries faster
         self._compute_document_vectors()
 
         self.logger.info(
@@ -137,7 +148,8 @@ class VectorSpaceModel:
         self.doc_vectors = {}
 
         for doc_id in range(self.inverted_index.doc_count):
-            # Get term frequencies for document
+            # Build a sparse term-frequency map for this document, then apply
+            # a weighting scheme (default: ltc) to produce a sparse TF-IDF vector.
             doc_tf = self._get_document_tf(doc_id)
 
             # Vectorize with ltc scheme (typical for documents)
@@ -165,6 +177,10 @@ class VectorSpaceModel:
         Complexity:
             Time: O(V) where V is vocabulary size
         """
+        # NOTE: This implementation scans the full vocabulary and queries the
+        # inverted index for each term. This is simple but can be expensive for
+        # large vocabularies. A more efficient alternative is to iterate the
+        # postings lists (term -> docs) and accumulate tf for this doc.
         doc_tf = {}
 
         for term in self.inverted_index.vocabulary:
@@ -201,7 +217,7 @@ class VectorSpaceModel:
         """
         self.logger.debug(f"Searching: {query}")
 
-        # Tokenize query
+        # 1) Tokenize query and build a raw TF vector.
         query_tokens = self.inverted_index.tokenizer(query)
 
         if not query_tokens:
@@ -212,12 +228,13 @@ class VectorSpaceModel:
                 num_results=0
             )
 
-        # Build query term frequency vector
+        # Build query term frequency vector (bag-of-words).
         query_tf = defaultdict(int)
         for token in query_tokens:
             query_tf[token] += 1
 
-        # Vectorize query
+        # 2) Vectorize query with a SMART-style scheme.
+        # Default behavior is "lnc" for queries (log TF, no IDF, cosine norm).
         query_idf_scheme = 't' if use_idf_for_query else 'n'
         query_vector = self.term_weighting.vectorize(
             dict(query_tf),
@@ -226,7 +243,8 @@ class VectorSpaceModel:
             normalize=self.query_norm_scheme
         )
 
-        # Find candidate documents (docs containing at least one query term)
+        # 3) Candidate generation: only score documents that share at least one
+        # query term. This avoids scoring the entire collection.
         candidate_docs = set()
         for term in query_vector:
             candidate_docs.update(self.inverted_index.get_doc_ids(term))
@@ -239,7 +257,7 @@ class VectorSpaceModel:
                 num_results=0
             )
 
-        # Calculate scores for candidate documents
+        # 4) Score candidates by cosine similarity of sparse vectors.
         scores = {}
         for doc_id in candidate_docs:
             doc_vector = self.doc_vectors.get(doc_id, {})
@@ -249,7 +267,8 @@ class VectorSpaceModel:
             if similarity > 0:
                 scores[doc_id] = similarity
 
-        # Get top-k using heap (efficient for large result sets)
+        # 5) Select the top-k results. `heapq.nlargest` avoids sorting the full
+        # score list when the candidate set is large and k is small.
         if len(scores) <= topk:
             # All results fit
             ranked_docs = sorted(scores.items(),

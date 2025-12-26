@@ -88,3 +88,67 @@ class TestRanking:
 
 - 針對 `src/ir/` 核心演算法（Boolean/VSM/BM25/Rocchio/Query Parser 等）挑選「最常閱讀的路徑」補上更教學導向的英文註解（著重 *why*、複雜度、常見陷阱）。
 - 把需要額外套件/模型的測試加上 `skip` 條件與 marker（例如 `requires_data`、`slow`、`requires_optional_deps`），讓 `pytest -m "not slow"` 在基礎環境下可穩定全綠。
+
+---
+
+## 2025-12-26：核心檢索模組教學註解補強（第 2 批）
+
+### 目標
+
+- 針對你指定的核心主題補上更「教學導向」的英文註解與 docstring：  
+  Boolean 查詢解析、VSM/BM25 排序、Rocchio、Query Parser。
+- 在不改變行為的前提下，讓讀者能直接從程式碼理解：資料流、演算法直覺、複雜度、以及目前實作的限制。
+
+### 本次修改範圍
+
+- Boolean 查詢解析：`src/ir/retrieval/boolean.py`
+- VSM 排序：`src/ir/retrieval/vsm.py`
+- BM25 排序：`src/ir/retrieval/bm25.py`
+- Rocchio 查詢擴展：`src/ir/ranking/rocchio.py`
+- Query Parser：`src/ir/query/query_parser.py`
+
+### 片段程式碼（Boolean：由 Infix → Postfix → Stack Evaluation）
+
+```python
+# 1) Parse: extract quoted phrases -> placeholder tokens (__PHRASE_0__)
+# 2) Convert: infix tokens -> postfix (RPN) via Shunting Yard
+# 3) Evaluate: stack-based evaluation where operands are Set[int] doc_ids
+postfix = self._to_postfix(tokens)
+result = self._evaluate_postfix(postfix, phrases, optimize)
+```
+
+### 原理整理（重點）
+
+- **Boolean 查詢解析**：
+  - 先把 `"quoted phrase"` 替換成 `__PHRASE_N__`，避免 tokenizer 因空白而把 phrase 拆散。
+  - 用 **Shunting Yard** 將中序（infix）轉成 **RPN/postfix**，這樣 evaluation 只要用 stack 就能單趟完成。
+  - evaluation 以集合運算為主：`AND`＝交集、`OR`＝聯集、`NOT`＝全集差集。
+  - **NEAR/n 限制**：真正的 proximity 需要「原始詞項的位置信息」。目前 stack 主要存 `doc_id set`，因此多數情況會降級成 AND（已在程式內註記原因）。
+
+- **VSM（TF‑IDF + Cosine Similarity）**：
+  - 查詢向量與文件向量都是稀疏向量（dict）。
+  - 先用倒排索引做 candidate generation（至少包含一個 query term 的文件），再算 cosine similarity，最後用 heap 取 Top‑k。
+
+- **BM25**：
+  - 以 TF 飽和（saturation）避免 tf 線性爆炸，以文件長度正規化避免長文偏好。
+  - candidate generation 同樣先做 postings union，避免全庫掃描。
+
+- **Rocchio**：
+  - `αQ + β*centroid(D_r) - γ*centroid(D_nr)`：保留原始意圖、向 relevant centroid 靠近、遠離 non-relevant centroid。
+  - 增加 **query drift**（cosine distance）檢查：當漂移過大時，縮減 expansion terms 數量以降低主題偏移風險。
+
+- **Query Parser（Recursive Descent）**：
+  - 以遞迴下降對應 grammar：`OR → AND → NOT → TERM`，自然得到 precedence。
+  - 支援 **implicit AND**（兩個 term 相鄰視為 AND），符合一般搜尋引擎使用習慣。
+
+### 驗證方式
+
+- 已通過本次修改直接涵蓋的測試：  
+  `pytest tests/test_boolean.py tests/test_vsm.py tests/test_rocchio.py`
+
+### 下一步
+
+- 你若希望更「像教科書」的解釋，我可以在 `docs/PROGRESS.md` 補上：
+  - Boolean query 的 AST/RPN 圖示（含 precedence/associativity）
+  - VSM 與 BM25 的逐步手算例子（小型 corpus）
+  - Rocchio 的 drift 案例（何時會跑偏、如何調 α/β/γ）

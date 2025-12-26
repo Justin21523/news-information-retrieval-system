@@ -5,6 +5,13 @@ This module implements a Boolean query engine that supports AND, OR, NOT
 operations and phrase queries. It uses inverted and positional indices for
 efficient query processing.
 
+Implementation Overview:
+    1) Parse: extract quoted phrases, then tokenize operators/terms/fields
+    2) Convert: infix tokens -> postfix (RPN) via Shunting Yard algorithm
+    3) Evaluate: compute result sets using stack-based RPN evaluation
+    4) Expand (optional): wildcard -> matching vocabulary terms
+    5) Rank (optional): simple TF-based ranking over matching docs
+
 Key Features:
     - Boolean operators: AND, OR, NOT
     - Phrase queries: "exact phrase"
@@ -127,6 +134,14 @@ class BooleanQueryEngine:
         """
         Execute a Boolean query.
 
+        The execution pipeline is:
+            1) `_parse_query()` to extract phrases and produce a token stream
+            2) `_to_postfix()` to convert the token stream into RPN (postfix)
+            3) `_evaluate_postfix()` to compute a final set of matching doc IDs
+
+        `optimize` is kept for future enhancements such as reordering AND
+        operands by increasing document frequency to reduce intermediate sets.
+
         Args:
             query_str: Query string
             optimize: Whether to optimize query execution order
@@ -187,8 +202,13 @@ class BooleanQueryEngine:
             >>> _parse_query('author:"記者" OR source:中央社')
             {'tokens': ['author:__PHRASE_0__', 'OR', 'source:中央社'], ...}
         """
-        # Extract phrases first (preserve spaces in phrases)
-        # Handle both regular phrases and field phrases
+        # Extract phrases first so we can preserve whitespace inside quotes.
+        #
+        # We replace `"a b c"` with a placeholder token like `__PHRASE_0__`.
+        # This keeps the later tokenizer simple (it can just split on operators),
+        # while still allowing us to recover the original phrase text by index.
+        #
+        # Field phrases like `title:"a b"` become `title:__PHRASE_0__` here.
         phrases = []
         phrase_pattern = r'"([^"]+)"'
 
@@ -231,6 +251,10 @@ class BooleanQueryEngine:
         """
         Execute parsed query.
 
+        This method is intentionally small: it bridges the parsing step and the
+        evaluation step, and is useful as a single “hook” for future query
+        optimizations (e.g., reordering conjuncts, short-circuit evaluation).
+
         Args:
             parsed: Parsed query structure
             optimize: Whether to optimize
@@ -257,6 +281,17 @@ class BooleanQueryEngine:
         Convert infix notation to postfix (Reverse Polish Notation).
 
         Uses Shunting Yard algorithm.
+
+        Why postfix (RPN)?
+            - Infix needs parentheses and precedence rules to disambiguate.
+            - Postfix can be evaluated with a simple stack in a single pass.
+
+        Operator precedence in this implementation (high -> low):
+            NOT > AND/NEAR/n > OR
+
+        Notes:
+            - NOT is treated as a unary operator during evaluation.
+            - NEAR/n is treated as a binary operator with AND-like precedence.
 
         Args:
             tokens: List of tokens in infix notation
@@ -321,6 +356,17 @@ class BooleanQueryEngine:
         """
         Evaluate postfix expression.
 
+        Stack semantics:
+            - Operands are represented as `Set[int]` of document IDs.
+            - Operators consume one (NOT) or two (AND/OR/NEAR) operands and
+              push a new result set.
+
+        Important limitation (NEAR/n):
+            In classic proximity search, NEAR/n needs positional information for
+            the raw *terms* (or phrase components). In this implementation, the
+            stack stores already-evaluated doc ID sets, so NEAR/n cannot recover
+            term positions and will fall back to AND in most cases.
+
         Args:
             postfix: Postfix token list
             phrases: List of phrases
@@ -343,6 +389,8 @@ class BooleanQueryEngine:
                 distance = int(token_upper.split('/')[1])
 
                 # Get operands (these should be term strings, not result sets)
+                # NOTE: The current implementation pushes doc ID sets for operands,
+                # so NEAR/n typically ends up receiving sets and degrades to AND.
                 right_item = stack.pop()
                 left_item = stack.pop()
 
@@ -652,6 +700,10 @@ class BooleanQueryEngine:
 
         Returns:
             Dictionary mapping doc_id to score
+
+        Complexity:
+            Time: O(|D| × |Q|) where |D| is number of matching docs and |Q| is
+                  number of extracted query terms.
         """
         # Extract terms from query (ignore operators and phrases)
         terms = re.findall(r'\b(?!AND|OR|NOT\b)\w+', query_str, re.IGNORECASE)

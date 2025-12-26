@@ -83,6 +83,15 @@ class QueryParser:
     Parses query strings into Abstract Syntax Trees (AST) represented as QueryNode.
     Supports field queries, boolean operators, grouping, and range queries.
 
+    Parsing strategy:
+        - Tokenization via a single combined regex (`TOKEN_RE`)
+        - Recursive descent parsing that mirrors the grammar rules
+        - Precedence is handled by function layering:
+            _parse_or_expr -> _parse_and_expr -> _parse_not_expr -> _parse_term
+
+    Operator precedence (high -> low):
+        NOT > AND (explicit or implicit) > OR
+
     Complexity:
         Time: O(n) where n = query string length
         Space: O(d) where d = parse tree depth
@@ -147,7 +156,9 @@ class QueryParser:
         """
         self.logger.debug(f"Parsing query: {query_str}")
 
-        # Tokenize
+        # 1) Tokenize input into a stream like:
+        #    [('FIELD','title'), ('COLON',':'), ('VALUE','台灣'), ('AND','AND'), ...]
+        # 2) Parse the token stream into an AST (QueryNode tree).
         self.tokens = self._tokenize(query_str)
         self.pos = 0
 
@@ -192,8 +203,9 @@ class QueryParser:
             if token_type == 'WHITESPACE':
                 continue
 
-            # Fix: After COLON, treat FIELD tokens as VALUE
-            # This handles cases like "category:aipl" where "aipl" is tokenized as FIELD
+            # Fix: after "FIELD:" the next token is a *value*, even if it looks
+            # like a field name (e.g., "category:aipl"). Without this rule,
+            # the tokenizer would emit ('FIELD','aipl') which breaks parsing.
             if prev_token_type == 'COLON' and token_type == 'FIELD':
                 # Check if it's a keyword (AND, OR, NOT, TO) - keep as is
                 if token_value.upper() not in ('AND', 'OR', 'NOT', 'TO'):
@@ -271,7 +283,9 @@ class QueryParser:
         """
         left = self._parse_not_expr()
 
-        # Check for AND operator (explicit or implicit)
+        # AND has higher precedence than OR. We also support "implicit AND":
+        # two adjacent terms without an explicit operator are interpreted as
+        # conjunction (common in library/search-engine style queries).
         while True:
             current = self._current_token()
 
@@ -341,6 +355,7 @@ class QueryParser:
         # Parenthesized expression
         if token_type == 'LPAREN':
             self._consume_token('LPAREN')
+            # Parse a full sub-expression inside parentheses.
             node = self._parse_or_expr()
             self._consume_token('RPAREN')
             return node
@@ -380,6 +395,8 @@ class QueryParser:
             return self._parse_range_query(field_name)
 
         # Parenthesized multi-value: field:(value1 OR value2)
+        # This is syntactic sugar for:
+        #   (field:value1 OR field:value2 OR ...)
         if token_type == 'LPAREN':
             self._consume_token('LPAREN')
             # Parse as OR expression with field context

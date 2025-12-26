@@ -245,17 +245,21 @@ class RocchioExpander:
         # Initialize new query vector
         new_query = defaultdict(float)
 
-        # Step 1: α × Q (original query)
+        # Step 1: α × Q (preserve original user intent)
         for term, weight in query_vector.items():
             new_query[term] += self.alpha * weight
 
-        # Step 2: β × (1/|D_r|) × Σ D_r (relevant documents)
+        # Step 2: β × centroid(D_r) (move query toward relevant documents)
+        #
+        # Each document vector is assumed to live in the same term space as the
+        # query vector (commonly TF-IDF weighted). Rocchio uses the centroid of
+        # relevant docs to bias the query toward terms that characterize them.
         num_relevant = len(filtered_vectors)
         for doc_vec in filtered_vectors:
             for term, weight in doc_vec.items():
                 new_query[term] += (self.beta / num_relevant) * weight
 
-        # Step 3: γ × (1/|D_nr|) × Σ D_nr (non-relevant documents)
+        # Step 3: γ × centroid(D_nr) (push query away from non-relevant documents)
         num_nonrelevant = 0
         if nonrelevant_vectors:
             num_nonrelevant = len(nonrelevant_vectors)
@@ -263,11 +267,14 @@ class RocchioExpander:
                 for term, weight in doc_vec.items():
                     new_query[term] -= (self.gamma / num_nonrelevant) * weight
 
-        # Filter negative weights
+        # Rocchio can produce negative weights after subtracting non-relevant
+        # evidence; we clamp to 0 to keep a non-negative query vector.
         new_query = {term: max(0.0, weight)
                     for term, weight in new_query.items()}
 
-        # Calculate query drift BEFORE any limiting
+        # Calculate query drift BEFORE any limiting so we can detect topic shift.
+        # Drift is measured as cosine distance between the original and expanded
+        # query vectors (0 = same direction, 1 = orthogonal).
         query_drift = self.cosine_distance(query_vector, new_query)
         drift_warning = query_drift > self.max_query_drift
 
@@ -277,7 +284,8 @@ class RocchioExpander:
                 f"Limiting expansion to prevent topic shift."
             )
 
-        # Select expansion terms (terms not in original query)
+        # Select expansion candidates: terms not in the original query and that
+        # pass a minimum weight threshold to reduce noise.
         expansion_candidates = []
         for term, weight in new_query.items():
             if term not in original_terms and weight >= self.min_term_weight:
@@ -286,7 +294,9 @@ class RocchioExpander:
         # Sort by weight and select top-k
         expansion_candidates.sort(key=lambda x: x[1], reverse=True)
 
-        # If drift is too high, reduce expansion terms
+        # If drift is too high, reduce the number of expansion terms.
+        # This is a practical guard against "query drift" where expansion
+        # shifts the intent toward an unrelated topic.
         max_terms = self.max_expansion_terms
         if drift_warning:
             # Reduce expansion terms proportionally to drift severity

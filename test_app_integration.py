@@ -25,6 +25,7 @@ print("\n2. Testing FieldIndexer...")
 try:
     # Simple tokenizer for quick test
     def simple_tokenizer(text):
+        """A minimal tokenizer used by this integration smoke test."""
         return text.lower().split()
 
     field_indexer = FieldIndexer(tokenizer=simple_tokenizer)

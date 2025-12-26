@@ -15,11 +15,13 @@ from src.ir.summarize.dynamic import KWICGenerator, KWICMatch, KWICResult
 
 @pytest.fixture
 def static_summarizer():
+    """Return a default StaticSummarizer instance for unit tests."""
     return StaticSummarizer()
 
 
 @pytest.fixture
 def sample_text():
+    """Return a multi-sentence sample document for summarization tests."""
     return """
     First sentence is here with some extra words. Second sentence follows with additional content. Third sentence appears with more text.
     Fourth sentence continues with extra information. Fifth sentence ends the document with final words.
@@ -28,6 +30,7 @@ def sample_text():
 
 @pytest.fixture
 def multi_doc_texts():
+    """Return a small list of documents for multi-document summarization tests."""
     return [
         "Python is a programming language. It is easy to learn.",
         "Java is widely used. It is platform independent.",
@@ -37,6 +40,7 @@ def multi_doc_texts():
 
 @pytest.mark.unit
 class TestStaticSummarization:
+    """Unit tests for static summarization methods (Lead-k, TF-IDF key sentences)."""
     def test_sentence_segmentation(self, static_summarizer, sample_text):
         """Test sentence segmentation."""
         sentences = static_summarizer.segment_sentences(sample_text)
@@ -104,16 +108,19 @@ class TestStaticSummarization:
 
 @pytest.fixture
 def kwic_generator():
+    """Return a KWICGenerator with a fixed window for unit tests."""
     return KWICGenerator(window_size=30, window_type='fixed')
 
 
 @pytest.fixture
 def kwic_text():
+    """Return a short document that contains common KWIC test keywords."""
     return "Machine learning is a subset of artificial intelligence. Deep learning uses neural networks."
 
 
 @pytest.mark.unit
 class TestKWICGeneration:
+    """Unit tests for KWIC generation, matching, formatting, and caching."""
     def test_basic_kwic_generation(self, kwic_generator, kwic_text):
         """Test basic KWIC generation."""
         result = kwic_generator.generate(kwic_text, "machine learning")
@@ -250,6 +257,7 @@ class TestKWICGeneration:
 
 @pytest.mark.unit
 class TestEdgeCases:
+    """Unit tests for summarization and KWIC edge cases."""
     def test_single_word_document(self, static_summarizer):
         """Test single word document."""
         summary = static_summarizer.lead_k_summarization("Word", k=1)

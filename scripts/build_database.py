@@ -299,6 +299,7 @@ def generate_report(stats: Dict, output_path: Path):
 
 
 def main():
+    """CLI entry point for building a SQLite database from preprocessed articles."""
     parser = argparse.ArgumentParser(
         description='Build SQLite database from preprocessed news articles',
         formatter_class=argparse.RawDescriptionHelpFormatter,

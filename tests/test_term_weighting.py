@@ -11,6 +11,7 @@ from src.ir.index.inverted_index import InvertedIndex
 
 @pytest.fixture
 def sample_index():
+    """Build and return a small inverted index for term-weighting tests."""
     docs = ["hello world", "world peace", "hello peace world"]
     idx = InvertedIndex()
     idx.build(docs)
@@ -19,6 +20,7 @@ def sample_index():
 
 @pytest.fixture
 def tw(sample_index):
+    """Return a TermWeighting instance built from the sample index."""
     tw = TermWeighting()
     tw.build_from_index(sample_index)
     return tw
@@ -26,6 +28,7 @@ def tw(sample_index):
 
 @pytest.mark.unit
 class TestTFCalculation:
+    """Unit tests for TF calculation schemes."""
     def test_natural_tf(self, tw):
         doc = {"hello": 3, "world": 2}
         assert tw.tf("hello", doc, 'n') == 3.0
@@ -42,6 +45,7 @@ class TestTFCalculation:
 
 @pytest.mark.unit
 class TestIDFCalculation:
+    """Unit tests for IDF calculation schemes."""
     def test_standard_idf(self, tw):
         idf = tw.idf_value("hello", 't')
         assert idf > 0
@@ -52,6 +56,7 @@ class TestIDFCalculation:
 
 @pytest.mark.unit
 class TestVectorization:
+    """Unit tests for document vectorization (TF-IDF + normalization)."""
     def test_vectorize(self, tw):
         doc = {"hello": 2, "world": 3}
         vec = tw.vectorize(doc, 'l', 't', 'c')
@@ -61,6 +66,7 @@ class TestVectorization:
 
 @pytest.mark.unit
 class TestCosineSimilarity:
+    """Unit tests for cosine similarity behavior."""
     def test_identical_vectors(self, tw):
         v = {"hello": 0.6, "world": 0.8}
         assert tw.cosine_similarity(v, v) == pytest.approx(1.0)

@@ -17,6 +17,7 @@
 - **[實作指南](guides/IMPLEMENTATION.md)** - 各模組詳細實作說明
 - **[CSoundex 指南](guides/CSOUNDEX.md)** - 中文諧音編碼詳細文件
 - **[變更紀錄](CHANGELOG.md)** - 專案開發歷程記錄
+- **[實作進度紀錄](PROGRESS.md)** - 每次實作的進度、片段程式碼與原理整理
 
 ### 📝 考試準備
 

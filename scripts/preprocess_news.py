@@ -367,6 +367,7 @@ def generate_report(stats: ProcessingStats,
 
 
 def main():
+    """CLI entry point for running the news preprocessing pipeline."""
     parser = argparse.ArgumentParser(
         description='Preprocess news articles with NLP pipeline',
         formatter_class=argparse.RawDescriptionHelpFormatter,

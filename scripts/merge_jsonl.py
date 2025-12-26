@@ -191,6 +191,7 @@ def merge_jsonl_files(data_dir: Path, output_file: Path) -> Dict[str, int]:
 
 
 def main():
+    """CLI entry point for merging multiple JSONL sources into a unified dataset."""
     parser = argparse.ArgumentParser(description='Merge JSONL files for CNIRS')
     parser.add_argument(
         '--data-dir',

@@ -342,6 +342,7 @@ def build_indexes(input_file: Path, output_dir: Path, limit: int = None) -> Dict
 
 
 def main():
+    """CLI entry point for building index artifacts from a preprocessed JSONL file."""
     parser = argparse.ArgumentParser(
         description='Build indexes from preprocessed JSONL',
         formatter_class=argparse.RawDescriptionHelpFormatter

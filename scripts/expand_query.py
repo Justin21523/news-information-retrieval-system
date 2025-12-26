@@ -268,6 +268,7 @@ def expand_explicit_feedback(args, vsm: VectorSpaceModel, expander: RocchioExpan
 
 
 def main():
+    """CLI entry point for Rocchio query expansion experiments."""
     parser = argparse.ArgumentParser(
         description='Query Expansion using Rocchio Algorithm',
         formatter_class=argparse.RawDescriptionHelpFormatter,

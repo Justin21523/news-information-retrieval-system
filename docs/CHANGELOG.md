@@ -8,6 +8,15 @@
 ---
 
 ## [Unreleased]
+### [2025-12-26] 註解覆蓋率提升與進度紀錄
+
+#### 📝 文檔
+- 新增 `docs/PROGRESS.md`：以繁體中文記錄每次實作的進度、片段程式碼與原理整理。
+- 補齊 `src/**/__init__.py`、主要 `tests/test_*.py` 與多個 `scripts/*` CLI 入口的英文 docstring（提升可讀性與可維護性）。
+
+#### 🧪 測試
+- `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。
+
 ### [2025-11-18] 新聞爬蟲系統大規模擴充與測試框架建立
 
 #### ✅ 新增 - Phase 1: 擴充媒體來源

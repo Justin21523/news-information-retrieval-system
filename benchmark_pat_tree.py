@@ -25,6 +25,7 @@ class PerformanceBenchmark:
     """PAT-tree性能基準測試"""
 
     def __init__(self):
+        """Initialize the benchmark runner and capture the current process handle."""
         self.results = {}
         self.process = psutil.Process()
 

@@ -65,6 +65,7 @@ def search(query, index_file, topk):
 
 
 def main():
+    """CLI entry point for building/searching a VSM index."""
     parser = argparse.ArgumentParser(description='VSM Search')
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--search', type=str)

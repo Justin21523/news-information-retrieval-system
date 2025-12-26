@@ -10,11 +10,13 @@ from src.ir.ranking.rocchio import RocchioExpander, ExpandedQuery
 
 @pytest.fixture
 def expander():
+    """Return a RocchioExpander with deterministic, test-friendly parameters."""
     return RocchioExpander(alpha=1.0, beta=0.75, gamma=0.15)
 
 
 @pytest.fixture
 def query_vector():
+    """Return a small query vector used across Rocchio expansion tests."""
     return {
         "information": 0.8,
         "retrieval": 0.6
@@ -23,6 +25,7 @@ def query_vector():
 
 @pytest.fixture
 def relevant_vectors():
+    """Return a list of relevant document vectors for Rocchio tests."""
     return [
         {"information": 0.5, "retrieval": 0.7, "system": 0.3, "database": 0.2},
         {"information": 0.6, "search": 0.4, "engine": 0.3},
@@ -32,6 +35,7 @@ def relevant_vectors():
 
 @pytest.fixture
 def nonrelevant_vectors():
+    """Return a list of non-relevant document vectors for Rocchio tests."""
     return [
         {"unrelated": 0.8, "noise": 0.5},
         {"spam": 0.7, "junk": 0.4}
@@ -40,6 +44,7 @@ def nonrelevant_vectors():
 
 @pytest.mark.unit
 class TestBasicExpansion:
+    """Unit tests for basic Rocchio query expansion behavior."""
     def test_expand_query_with_relevant_docs(self, expander, query_vector, relevant_vectors):
         expanded = expander.expand_query(query_vector, relevant_vectors)
 
@@ -75,6 +80,7 @@ class TestBasicExpansion:
 
 @pytest.mark.unit
 class TestWithNonRelevantDocs:
+    """Unit tests for Rocchio expansion when non-relevant docs are provided."""
     def test_expand_with_nonrelevant_docs(self, expander, query_vector,
                                          relevant_vectors, nonrelevant_vectors):
         expanded = expander.expand_query(
@@ -105,6 +111,7 @@ class TestWithNonRelevantDocs:
 
 @pytest.mark.unit
 class TestPseudoRelevanceFeedback:
+    """Unit tests for pseudo relevance feedback expansion helpers."""
     def test_pseudo_feedback_basic(self, expander, query_vector, relevant_vectors):
         expanded = expander.expand_with_pseudo_feedback(
             query_vector, relevant_vectors, num_relevant=3
@@ -139,6 +146,7 @@ class TestPseudoRelevanceFeedback:
 
 @pytest.mark.unit
 class TestParameters:
+    """Unit tests for Rocchio parameter effects (alpha/beta/gamma)."""
     def test_alpha_weight(self):
         # High alpha emphasizes original query
         expander_high_alpha = RocchioExpander(alpha=2.0, beta=0.5, gamma=0.1)
@@ -186,6 +194,7 @@ class TestParameters:
 
 @pytest.mark.unit
 class TestExpansionControl:
+    """Unit tests for expansion controls (max terms, min weight)."""
     def test_max_expansion_terms(self):
         expander = RocchioExpander(max_expansion_terms=3)
 
@@ -226,6 +235,7 @@ class TestExpansionControl:
 
 @pytest.mark.unit
 class TestReweighting:
+    """Unit tests for reweighting the original query using an expanded query."""
     def test_reweight_query(self, expander, query_vector, relevant_vectors):
         expanded = expander.expand_query(query_vector, relevant_vectors)
         reweighted = expander.reweight_query(query_vector, expanded, normalize=False)
@@ -252,6 +262,7 @@ class TestReweighting:
 
 @pytest.mark.unit
 class TestTopExpansionTerms:
+    """Unit tests for selecting the top expansion terms from an expanded query."""
     def test_get_top_expansion_terms(self, expander, query_vector):
         rel_vecs = [
             {"term1": 0.9, "term2": 0.8, "term3": 0.7, "term4": 0.6, "term5": 0.5}
@@ -286,6 +297,7 @@ class TestTopExpansionTerms:
 
 @pytest.mark.unit
 class TestEdgeCases:
+    """Unit tests for Rocchio expansion edge cases."""
     def test_no_relevant_documents(self, expander, query_vector):
         expanded = expander.expand_query(query_vector, [])
 
@@ -332,6 +344,7 @@ class TestEdgeCases:
 
 @pytest.mark.unit
 class TestRocchioFormula:
+    """Unit tests that validate the Rocchio formula with controlled inputs."""
     def test_formula_with_all_components(self):
         """Test complete Rocchio formula: α*Q + β*R - γ*N"""
         expander = RocchioExpander(alpha=1.0, beta=1.0, gamma=1.0)
@@ -364,6 +377,7 @@ class TestRocchioFormula:
 
 @pytest.mark.unit
 class TestIntegration:
+    """Integration-style unit tests that exercise the end-to-end Rocchio workflow."""
     def test_full_workflow(self, expander):
         """Test complete workflow from query to expansion"""
         # Step 1: Original query

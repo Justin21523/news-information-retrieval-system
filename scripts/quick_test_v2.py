@@ -53,6 +53,7 @@ tests_passed = 0
 tests_failed = 0
 
 def test_result(name, passed, details=""):
+    """Record and print a single test outcome for the quick test suite."""
     global tests_passed, tests_failed
     if passed:
         tests_passed += 1

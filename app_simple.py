@@ -729,6 +729,7 @@ def api_advanced_search():
         if sort_by == 'date' and documents:
             # Sort by publication date
             def get_date_key(result):
+                """Return a sortable key based on a result's publication date."""
                 doc = documents[result.doc_id] if result.doc_id < len(documents) else {}
                 return doc.get('published_date', '')
 

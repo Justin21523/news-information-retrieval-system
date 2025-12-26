@@ -327,6 +327,7 @@ def generate_report(embeddings: np.ndarray,
 
 
 def main():
+    """CLI entry point for building Sentence-BERT embeddings (and optional FAISS index)."""
     parser = argparse.ArgumentParser(
         description='Build BERT embeddings for semantic search',
         formatter_class=argparse.RawDescriptionHelpFormatter,

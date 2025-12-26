@@ -61,6 +61,7 @@ def write_output(output: str, file_path: str = None):
 
 
 def main():
+    """CLI entry point for document summarization and KWIC generation."""
     parser = argparse.ArgumentParser(description='Document Summarization Tool')
 
     # Input options

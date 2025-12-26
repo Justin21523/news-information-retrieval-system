@@ -317,6 +317,7 @@ def generate_report(stats: Dict, output_path: Path):
 
 
 def main():
+    """CLI entry point for generating test queries and qrels for evaluation."""
     parser = argparse.ArgumentParser(
         description='Generate test queries and QRELS for evaluation',
         formatter_class=argparse.RawDescriptionHelpFormatter

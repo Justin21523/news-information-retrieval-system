@@ -101,6 +101,7 @@ def run_indexing():
     return True
 
 def main():
+    """Monitor preprocessing progress and trigger indexing when the target is reached."""
     print("=" * 60)
     print("CNIRS Preprocessing Monitor")
     print("=" * 60)

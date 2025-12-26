@@ -58,6 +58,7 @@ def setup_logging(verbose: bool = False, log_file: Optional[str] = None):
 
 
 def main():
+    """CLI entry point for incremental index building from JSONL corpora."""
     parser = argparse.ArgumentParser(
         description='Build incremental search index from news articles',
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -10,26 +10,31 @@ from src.ir.eval.metrics import Metrics, EvaluationResult
 
 @pytest.fixture
 def metrics():
+    """Return a Metrics instance for evaluation tests."""
     return Metrics()
 
 
 @pytest.fixture
 def sample_retrieved():
+    """Return a fixed retrieved list used across metric unit tests."""
     return [1, 2, 3, 4, 5]
 
 
 @pytest.fixture
 def sample_relevant():
+    """Return a fixed relevant set used across metric unit tests."""
     return {1, 3, 5}
 
 
 @pytest.fixture
 def sample_relevance_scores():
+    """Return a fixed graded relevance mapping for DCG/nDCG unit tests."""
     return {1: 3, 2: 0, 3: 2, 4: 0, 5: 3}
 
 
 @pytest.mark.unit
 class TestPrecisionRecall:
+    """Unit tests for precision and recall calculations."""
     def test_precision(self, metrics, sample_retrieved, sample_relevant):
         p = metrics.precision(sample_retrieved, sample_relevant)
         assert p == pytest.approx(0.6)  # 3/5
@@ -61,6 +66,7 @@ class TestPrecisionRecall:
 
 @pytest.mark.unit
 class TestFMeasure:
+    """Unit tests for F-measure variants (F1, F2, F0.5)."""
     def test_f1_score(self, metrics):
         f1 = metrics.f_measure(0.6, 1.0)
         assert f1 == pytest.approx(0.75)
@@ -80,6 +86,7 @@ class TestFMeasure:
 
 @pytest.mark.unit
 class TestPrecisionAtK:
+    """Unit tests for Precision@k behavior."""
     def test_precision_at_5(self, metrics):
         retrieved = [1, 2, 3, 4, 5, 6, 7]
         relevant = {1, 3, 5}
@@ -107,6 +114,7 @@ class TestPrecisionAtK:
 
 @pytest.mark.unit
 class TestRecallAtK:
+    """Unit tests for Recall@k behavior."""
     def test_recall_at_5(self, metrics):
         retrieved = [1, 2, 3, 4, 5, 6, 7]
         relevant = {1, 3, 5, 7, 9}
@@ -122,6 +130,7 @@ class TestRecallAtK:
 
 @pytest.mark.unit
 class TestAveragePrecision:
+    """Unit tests for Average Precision (AP)."""
     def test_ap_perfect_ranking(self, metrics):
         # All relevant docs at the beginning
         retrieved = [1, 3, 5, 2, 4]
@@ -164,6 +173,7 @@ class TestAveragePrecision:
 
 @pytest.mark.unit
 class TestMeanAveragePrecision:
+    """Unit tests for Mean Average Precision (MAP)."""
     def test_map_multiple_queries(self, metrics):
         results = {
             'q1': [1, 2, 3, 4],
@@ -192,6 +202,7 @@ class TestMeanAveragePrecision:
 
 @pytest.mark.unit
 class TestReciprocalRank:
+    """Unit tests for Reciprocal Rank (RR)."""
     def test_rr_first_position(self, metrics):
         retrieved = [1, 2, 3, 4]
         relevant = {1}
@@ -219,6 +230,7 @@ class TestReciprocalRank:
 
 @pytest.mark.unit
 class TestMeanReciprocalRank:
+    """Unit tests for Mean Reciprocal Rank (MRR)."""
     def test_mrr_multiple_queries(self, metrics):
         results = {
             'q1': [1, 2, 3],  # RR = 1.0
@@ -237,6 +249,7 @@ class TestMeanReciprocalRank:
 
 @pytest.mark.unit
 class TestDCG:
+    """Unit tests for Discounted Cumulative Gain (DCG)."""
     def test_dcg_at_k(self, metrics):
         retrieved = [1, 2, 3, 4, 5]
         relevance = {1: 3, 2: 2, 3: 3, 4: 0, 5: 1}
@@ -260,6 +273,7 @@ class TestDCG:
 
 @pytest.mark.unit
 class TestNDCG:
+    """Unit tests for normalized DCG (nDCG)."""
     def test_ndcg_perfect_ranking(self, metrics):
         # Perfect ranking: sorted by relevance
         retrieved = [1, 3, 2, 5, 4]
@@ -290,6 +304,7 @@ class TestNDCG:
 
 @pytest.mark.unit
 class TestEvaluateQuery:
+    """Unit tests for per-query evaluation helper."""
     def test_evaluate_query_basic(self, metrics):
         retrieved = [1, 2, 3, 4, 5]
         relevant = {1, 3, 5}
@@ -320,6 +335,7 @@ class TestEvaluateQuery:
 
 @pytest.mark.unit
 class TestEvaluateRun:
+    """Unit tests for multi-query run evaluation helper."""
     def test_evaluate_run_multiple_queries(self, metrics):
         results = {
             'q1': [1, 2, 3, 4],
@@ -365,6 +381,7 @@ class TestEvaluateRun:
 
 @pytest.mark.unit
 class TestEdgeCases:
+    """Unit tests for metric edge cases and degenerate inputs."""
     def test_empty_retrieved_list(self, metrics):
         p = metrics.precision([], {1, 2, 3})
         r = metrics.recall([], {1, 2, 3})

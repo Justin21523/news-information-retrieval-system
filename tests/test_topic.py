@@ -16,6 +16,22 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pytest
+
+# Topic modeling dependencies are optional and may not be installed in all environments.
+# Skip this module at collection time if any required dependency is missing or broken.
+try:
+    import gensim  # noqa: F401
+    import bertopic  # noqa: F401
+    from sentence_transformers import SentenceTransformer  # noqa: F401
+    from umap import UMAP  # noqa: F401
+    from hdbscan import HDBSCAN  # noqa: F401
+except Exception as e:
+    pytest.skip(
+        f"Optional topic modeling dependencies are not available: {e}",
+        allow_module_level=True,
+    )
+
 from src.ir.topic import BERTopicModel, LDAModel
 import numpy as np
 

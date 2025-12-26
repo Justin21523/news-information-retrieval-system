@@ -206,6 +206,7 @@ def interactive_search(engine: UnifiedSearchEngine):
 
 
 def main():
+    """CLI entry point for searching news articles with the IR system."""
     parser = argparse.ArgumentParser(
         description='Search news articles using Information Retrieval system',
         formatter_class=argparse.RawDescriptionHelpFormatter,

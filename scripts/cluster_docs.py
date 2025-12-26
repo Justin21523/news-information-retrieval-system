@@ -26,6 +26,7 @@ from src.ir.index.term_weighting import TermWeighting
 
 
 def main():
+    """CLI entry point for clustering documents using HAC or k-means."""
     parser = argparse.ArgumentParser(description='Document Clustering')
     parser.add_argument('--index', type=str, required=True,
                        help='Path to inverted index file')

@@ -331,6 +331,7 @@ class BatchPreprocessor:
 
 
 def main():
+    """CLI entry point for batch preprocessing JSONL files."""
     parser = argparse.ArgumentParser(description='Batch preprocess JSONL files')
     parser.add_argument(
         '--input',

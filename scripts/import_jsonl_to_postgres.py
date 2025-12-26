@@ -46,6 +46,7 @@ def setup_logging(verbose: bool = False):
 
 
 def main():
+    """CLI entry point for importing JSONL news articles into PostgreSQL."""
     parser = argparse.ArgumentParser(
         description='Import news articles from JSONL files into PostgreSQL',
         formatter_class=argparse.RawDescriptionHelpFormatter,

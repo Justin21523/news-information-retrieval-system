@@ -490,6 +490,7 @@ def demo():
 
     # Mock ranker results (simulating BM25 and BERT)
     class MockRanker:
+        """Minimal ranker stub used by demo() to simulate external rankers."""
         def __init__(self, name, results):
             self.name = name
             self.results = results

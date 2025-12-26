@@ -10,6 +10,7 @@ from src.ir.retrieval.vsm import VectorSpaceModel
 
 @pytest.fixture
 def sample_docs():
+    """Return a small document collection for VSM unit tests."""
     return [
         "information retrieval systems",
         "vector space model",
@@ -19,6 +20,7 @@ def sample_docs():
 
 @pytest.fixture
 def vsm(sample_docs):
+    """Build and return a VectorSpaceModel instance over the sample documents."""
     vsm = VectorSpaceModel()
     vsm.build_index(sample_docs)
     return vsm
@@ -26,6 +28,7 @@ def vsm(sample_docs):
 
 @pytest.mark.unit
 class TestVSMBasic:
+    """Unit tests for VSM index construction and basic query handling."""
     def test_build_index(self, sample_docs):
         vsm = VectorSpaceModel()
         vsm.build_index(sample_docs)
@@ -44,6 +47,7 @@ class TestVSMBasic:
 
 @pytest.mark.unit
 class TestRanking:
+    """Unit tests for ranked retrieval output from the VSM search API."""
     def test_ranked_results(self, vsm):
         result = vsm.search("information retrieval", topk=3)
         # Check scores are descending
@@ -57,6 +61,7 @@ class TestRanking:
 
 @pytest.mark.unit
 class TestDocumentSimilarity:
+    """Unit tests for document-document similarity computations."""
     def test_similarity(self, vsm):
         sim = vsm.similarity(0, 1)
         assert 0.0 <= sim <= 1.0

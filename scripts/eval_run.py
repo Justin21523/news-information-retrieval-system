@@ -356,6 +356,7 @@ def evaluate(args):
 
 
 def main():
+    """CLI entry point for evaluating retrieval runs against qrels."""
     parser = argparse.ArgumentParser(
         description='Evaluate IR system results',
         formatter_class=argparse.RawDescriptionHelpFormatter,

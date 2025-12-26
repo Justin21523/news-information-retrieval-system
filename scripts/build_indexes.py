@@ -375,6 +375,7 @@ class IndexBuilder:
 
 
 def main():
+    """CLI entry point for building multiple search index artifacts from a corpus."""
     parser = argparse.ArgumentParser(
         description='Build search indexes from preprocessed news articles',
         formatter_class=argparse.RawDescriptionHelpFormatter,

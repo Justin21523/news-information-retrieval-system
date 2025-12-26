@@ -12,11 +12,13 @@ from src.ir.cluster.term_cluster import TermClusterer, TermCluster
 # Document Clustering Tests
 @pytest.fixture
 def doc_clusterer():
+    """Return a DocumentClusterer instance for unit tests."""
     return DocumentClusterer()
 
 
 @pytest.fixture
 def sample_docs():
+    """Return a small, separable set of document vectors for clustering tests."""
     return {
         0: {"term1": 0.8, "term2": 0.6},
         1: {"term1": 0.7, "term2": 0.5},
@@ -27,6 +29,7 @@ def sample_docs():
 
 @pytest.mark.unit
 class TestDocumentClustering:
+    """Unit tests for document clustering algorithms and utilities."""
     def test_cosine_similarity(self, doc_clusterer):
         vec1 = {"term1": 1.0}
         vec2 = {"term1": 1.0}
@@ -47,11 +50,13 @@ class TestDocumentClustering:
 # Term Clustering Tests
 @pytest.fixture
 def term_clusterer():
+    """Return a TermClusterer instance for unit tests."""
     return TermClusterer()
 
 
 @pytest.mark.unit
 class TestTermClustering:
+    """Unit tests for term clustering algorithms (edit distance, star clustering)."""
     def test_edit_distance(self, term_clusterer):
         dist = term_clusterer.edit_distance("cat", "hat")
         assert dist == 1

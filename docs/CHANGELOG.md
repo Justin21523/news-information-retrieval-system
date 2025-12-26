@@ -22,6 +22,7 @@
 - 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。
 - 補強欄位查詢執行器教學向註解：`src/ir/query/query_executor.py`。
 - 補強 IR 評估指標（Metrics）教學向註解：`src/ir/eval/metrics.py`。
+- 補強分面搜尋（Faceted Search）教學向註解：`src/ir/facet/facet_engine.py`、`src/ir/facet/facet_filter.py`。
 - 補齊多個核心模組的英文 docstring（`__post_init__`、`__repr__/__str__`、`@property` 等）：`src/ir/search/unified_search.py`、`src/ir/summarize/static.py`、`src/ir/cluster/*`、`src/ir/facet/facet_engine.py`、`src/ir/index/pat_tree.py`、`src/ir/text/ner_extractor.py`。
 - 補齊 `src/ir/` 內剩餘缺漏函式 docstring（含 `keyextract/`、`patterns/`、`ranking/`、`recommendation/`、`syntax/`、`topic/` 等模組），使 `src/ir` 函式 docstring 覆蓋率達到 100%。
 - 補齊 `tests/` 與 `scripts/` 內剩餘缺漏函式 docstring，使全專案函式 docstring 缺口（AST 掃描）收斂到 0。

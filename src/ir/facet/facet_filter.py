@@ -75,13 +75,21 @@ class FilterCondition:
             Time: O(1) for most operators, O(n) for IN with n values
             Space: O(1)
         """
+        # A missing field cannot satisfy any concrete filter condition.
         if doc_value is None:
             return False
 
-        # Convert doc_value to string for comparison
+        # Normalize the document value for robust comparisons across types.
+        #
+        # Many IR pipelines store metadata as strings (JSON), but application code
+        # may also pass numbers or datetime objects. Casting to string makes the
+        # default behavior predictable, especially for:
+        # - categorical facets (source/category/author)
+        # - ISO date strings ("YYYY-MM-DD") where lexicographic order matches time
         doc_value_str = str(doc_value)
 
         if self.operator == FilterOperator.EQUALS:
+            # Exact match after string normalization.
             return doc_value_str == str(self.value)
 
         elif self.operator == FilterOperator.IN:
@@ -90,44 +98,63 @@ class FilterCondition:
 
             # If doc has multiple values (list), check if any match
             if isinstance(doc_value, list):
+                # Typical use-case: multi-valued fields such as "tags".
+                #
+                # Performance note:
+                # The list comprehensions allocate repeatedly. For large lists,
+                # precomputing a normalized set would be faster, but we keep the
+                # implementation straightforward for readability.
                 return any(str(v) in [str(fv) for fv in filter_values] for v in doc_value)
             else:
                 return doc_value_str in [str(v) for v in filter_values]
 
         elif self.operator == FilterOperator.RANGE:
+            # Range filters assume the caller passes a (min, max) tuple.
+            #
+            # For date facets, comparing ISO strings is correct:
+            #   "2024-11-01" <= "2024-11-15" <= "2024-11-30"
+            #
+            # For numeric ranges, prefer GREATER/LESS operators (float conversion)
+            # or ensure values are comparable after normalization.
             if not isinstance(self.value, tuple) or len(self.value) != 2:
                 return False
             min_val, max_val = self.value
             return str(min_val) <= doc_value_str <= str(max_val)
 
         elif self.operator == FilterOperator.GREATER_THAN:
+            # Prefer numeric comparison when possible; fall back to string order.
             try:
                 return float(doc_value) > float(self.value)
             except (ValueError, TypeError):
                 return doc_value_str > str(self.value)
 
         elif self.operator == FilterOperator.LESS_THAN:
+            # Prefer numeric comparison when possible; fall back to string order.
             try:
                 return float(doc_value) < float(self.value)
             except (ValueError, TypeError):
                 return doc_value_str < str(self.value)
 
         elif self.operator == FilterOperator.GREATER_EQUAL:
+            # Prefer numeric comparison when possible; fall back to string order.
             try:
                 return float(doc_value) >= float(self.value)
             except (ValueError, TypeError):
                 return doc_value_str >= str(self.value)
 
         elif self.operator == FilterOperator.LESS_EQUAL:
+            # Prefer numeric comparison when possible; fall back to string order.
             try:
                 return float(doc_value) <= float(self.value)
             except (ValueError, TypeError):
                 return doc_value_str <= str(self.value)
 
         elif self.operator == FilterOperator.CONTAINS:
+            # Substring match for free-text facets.
             return str(self.value) in doc_value_str
 
         elif self.operator == FilterOperator.STARTS_WITH:
+            # Prefix match, useful for auto-complete or hierarchical categories.
             return doc_value_str.startswith(str(self.value))
 
         return False
@@ -258,7 +285,14 @@ class FacetFilter:
 
     def __init__(self):
         """Initialize facet filter manager."""
-        # Group conditions by field for efficient filtering
+        # Store conditions in insertion order.
+        #
+        # We also maintain a secondary index grouped by field:
+        #   field -> [conditions...]
+        #
+        # This is useful for:
+        # - UI rendering (show active filters per facet)
+        # - future optimization where we evaluate "OR within a field" directly
         self.conditions: List[FilterCondition] = []
         self._conditions_by_field: dict = {}
 
@@ -275,7 +309,7 @@ class FacetFilter:
         """
         self.conditions.append(condition)
 
-        # Group by field for efficient lookup
+        # Group by field for efficient lookup and UI display.
         field = condition.field
         if field not in self._conditions_by_field:
             self._conditions_by_field[field] = []
@@ -293,13 +327,13 @@ class FacetFilter:
             Time: O(C) where C is total conditions
             Space: O(1)
         """
-        # Remove from main list
+        # Remove from the main list (order-preserving filter).
         self.conditions = [
             c for c in self.conditions
             if not (c.field == field and (operator is None or c.operator == operator))
         ]
 
-        # Rebuild field index
+        # Keep the secondary index consistent with the filtered list.
         self._rebuild_field_index()
 
     def clear(self) -> None:
@@ -349,18 +383,25 @@ class FacetFilter:
             2  # First two documents match
         """
         if not self.conditions:
+            # Fast path: no active filters means no-op.
             return documents
 
         filtered = []
 
         for doc in documents:
-            # Check if document matches ALL conditions (AND logic)
+            # Current semantics:
+            # - AND across all conditions
+            # - OR within a field should be expressed via a single IN condition
+            #
+            # Example:
+            #   source in {CNA, UDN} AND category == finance
             matches_all = True
 
             for condition in self.conditions:
                 doc_value = doc.get(condition.field)
 
                 if not condition.matches(doc_value):
+                    # Short-circuit: one failed condition is enough to reject the doc.
                     matches_all = False
                     break
 
@@ -461,6 +502,9 @@ def create_term_filter(field: str, values: Union[str, List[str]], label: Optiona
         >>> # Multi-select
         >>> f2 = create_term_filter("source", ["CNA", "UDN"], label="中央社 + 聯合")
     """
+    # Map user input to the correct operator:
+    # - a list of >1 values => IN (multi-select OR)
+    # - a single value => EQUALS
     if isinstance(values, list) and len(values) > 1:
         return FilterCondition(field, FilterOperator.IN, values, label)
     else:

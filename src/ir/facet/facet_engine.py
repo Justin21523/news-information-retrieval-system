@@ -123,9 +123,19 @@ class FacetEngine:
         self.logger = logging.getLogger(__name__)
 
         # Facet configuration: field_name -> config
+        #
+        # A facet config describes how to "bucket" values for a field:
+        # - term: treat raw values as discrete categories
+        # - date_range: parse dates and bucket by a strftime format (e.g., %Y-%m)
+        # - numeric_range: map numeric values into predefined buckets
         self.facet_configs: Dict[str, Dict[str, Any]] = {}
 
-        # Cache for facet results
+        # Cache for facet results (optional optimization).
+        #
+        # This module currently recomputes facets each call, but the cache is
+        # kept as a hook for future improvements such as:
+        # - caching facet distributions for repeated queries
+        # - incremental updates when filters change
         self._facet_cache: Dict[str, FacetResult] = {}
 
     def configure_facet(self,
@@ -155,6 +165,9 @@ class FacetEngine:
             'facet_type': facet_type,
             **kwargs
         }
+        # Note: configuring a facet may invalidate any previously computed facet
+        # distributions. If caching is enabled in the future, this is where we
+        # would clear or version the cache.
         self.logger.debug(f"Configured facet: {field_name} ({facet_type})")
 
     def build_facets(self,
@@ -189,6 +202,8 @@ class FacetEngine:
             return {}
 
         # Determine which fields to process
+        # - If a field_name is specified, only compute that facet (faster).
+        # - Otherwise compute all configured facets.
         fields_to_process = [field_name] if field_name else self.facet_configs.keys()
 
         results = {}
@@ -202,6 +217,8 @@ class FacetEngine:
             config = self.facet_configs[field]
             facet_type = config['facet_type']
 
+            # Dispatch by facet type. Each builder returns a FacetResult whose
+            # values are already sorted in a UI-friendly order.
             if facet_type == "term":
                 result = self._build_term_facet(field, documents, config)
             elif facet_type == "date_range":
@@ -212,6 +229,9 @@ class FacetEngine:
                 self.logger.error(f"Unknown facet type: {facet_type}")
                 continue
 
+            # total_docs is the size of the current result set (after retrieval),
+            # not the corpus size. Facet UIs often show counts relative to the
+            # current hit list.
             result.total_docs = total_docs
             results[field] = result
 
@@ -236,7 +256,11 @@ class FacetEngine:
             Time: O(N) where N is document count
             Space: O(U) where U is unique values
         """
-        # Count occurrences of each value
+        # Count occurrences of each value.
+        #
+        # Note:
+        # This counts documents, not unique doc_ids per value. If a document
+        # contains a list field (e.g., tags), we count one hit per tag value.
         value_counts: Dict[str, int] = defaultdict(int)
 
         for doc in documents:
@@ -245,22 +269,24 @@ class FacetEngine:
                 # Handle both single values and lists
                 if isinstance(value, list):
                     for v in value:
+                        # Normalize to string to avoid mixed types ("1" vs 1).
                         value_counts[str(v)] += 1
                 else:
                     value_counts[str(value)] += 1
 
-        # Sort by count (descending), then by value (ascending)
+        # Sort by count (descending) so the most common values appear first.
+        # Use value (ascending) as a deterministic tie-breaker.
         sorted_values = sorted(
             value_counts.items(),
             key=lambda x: (-x[1], x[0])
         )
 
-        # Apply max_values limit if configured
+        # Apply max_values limit if configured to prevent an oversized facet UI.
         max_values = config.get('max_values', None)
         if max_values:
             sorted_values = sorted_values[:max_values]
 
-        # Create FacetValue objects
+        # Convert (value, count) pairs into FacetValue objects.
         facet_values = [
             FacetValue(value=value, count=count)
             for value, count in sorted_values
@@ -305,7 +331,12 @@ class FacetEngine:
         bucket_counts: Dict[str, int] = defaultdict(int)
         unknown_count = 0
 
-        # Extended date format support for various sources
+        # Extended date format support for various sources.
+        #
+        # In real-world news corpora, publication timestamps may come in
+        # multiple formats depending on crawler/source.
+        #
+        # We try a list of common formats and accept the first that parses.
         date_formats = [
             '%Y-%m-%d',              # ISO: 2024-11-20
             '%Y-%m-%dT%H:%M:%S',     # ISO datetime: 2024-11-20T10:30:00
@@ -332,7 +363,10 @@ class FacetEngine:
                 if isinstance(date_value, str):
                     date_value = date_value.strip()
 
-                    # Handle ISO format with timezone offset (remove +HH:MM suffix)
+                    # Normalize common ISO variants:
+                    # - Some sources include timezone offset suffix (+08:00). We remove it
+                    #   because datetime.strptime() with %z is strict about formats.
+                    # - Some sources use a trailing "Z" for UTC; we strip it and parse.
                     if '+' in date_value and 'T' in date_value:
                         date_value = date_value.split('+')[0]
                     elif date_value.endswith('Z'):
@@ -342,6 +376,7 @@ class FacetEngine:
                     for fmt in date_formats:
                         try:
                             dt = datetime.strptime(date_value, fmt)
+                            # Bucket the parsed datetime using the configured strftime format.
                             bucket = dt.strftime(date_format)
                             bucket_counts[bucket] += 1
                             parsed = True
@@ -350,6 +385,7 @@ class FacetEngine:
                             continue
 
                 elif isinstance(date_value, datetime):
+                    # If upstream already provides datetime objects, we can bucket directly.
                     bucket = date_value.strftime(date_format)
                     bucket_counts[bucket] += 1
                     parsed = True
@@ -361,7 +397,8 @@ class FacetEngine:
             if not parsed:
                 unknown_count += 1
 
-        # Sort by bucket (descending - most recent first)
+        # Sort buckets by key (descending) so newer buckets appear first.
+        # This works when bucket keys are ISO-like strings such as "YYYY-MM".
         sorted_buckets = sorted(
             bucket_counts.items(),
             key=lambda x: x[0],
@@ -373,7 +410,7 @@ class FacetEngine:
             for bucket, count in sorted_buckets
         ]
 
-        # Add unknown bucket at the end if there are documents with missing dates
+        # Add an "unknown" bucket at the end to keep missing/unparseable dates visible.
         if unknown_count > 0:
             facet_values.append(
                 FacetValue(value="unknown", count=unknown_count, label="日期未知")
@@ -434,6 +471,8 @@ class FacetEngine:
 
                 # Find matching bucket
                 for min_val, max_val, label in range_buckets:
+                    # Bucket rule: inclusive lower bound, exclusive upper bound.
+                    # This prevents overlap between adjacent buckets.
                     if min_val <= numeric_value < max_val:
                         bucket_counts[label] += 1
                         break
@@ -441,13 +480,13 @@ class FacetEngine:
                 self.logger.warning(f"Failed to parse numeric value '{value}': {e}")
                 continue
 
-        # Preserve bucket order
+        # Preserve bucket order as configured (UI often expects stable ordering).
         facet_values = [
             FacetValue(value=label, count=bucket_counts.get(label, 0))
             for _, _, label in range_buckets
         ]
 
-        # Remove empty buckets
+        # Remove empty buckets to keep the facet panel compact.
         facet_values = [fv for fv in facet_values if fv.count > 0]
 
         return FacetResult(
@@ -485,6 +524,7 @@ class FacetEngine:
             >>> filtered = engine.filter_documents(docs, filters)
         """
         if not filters:
+            # No active filters means no-op.
             return documents
 
         filtered = []
@@ -516,6 +556,8 @@ class FacetEngine:
                     # Range filter: doc value must be within range
                     min_val, max_val = filter_value
                     try:
+                        # This comparison is string-based. It works correctly for
+                        # ISO date strings and other lexicographically sortable encodings.
                         if not (min_val <= str(doc_value) <= max_val):
                             match = False
                             break

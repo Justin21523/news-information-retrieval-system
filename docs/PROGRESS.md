@@ -822,3 +822,62 @@ return 0.0 if idcg == 0 else dcg / idcg
 
 - 靜態語法檢查：`python -m py_compile src/ir/eval/metrics.py`
 - 單元測試：`pytest tests/test_metrics.py`
+
+---
+
+## 2025-12-26：Faceted Search（FacetEngine / FacetFilter）教科書式行內註解（第 16 批）
+
+### 目標
+
+- 針對 faceted search 兩個模組補上更「教科書式」的逐步註解，讓你能對照理解：
+  - FacetEngine：如何由「檢索結果 documents」計算各欄位的 facet 值與 count（term/date/numeric）
+  - FacetFilter：如何把 UI 選取條件轉成可評估的 filter conditions（EQUALS/IN/RANGE…）並套用到結果集
+  - AND/OR 的語意：不同欄位 AND；同欄位多選通常用 IN 表示 OR
+
+### 本次修改範圍
+
+- `src/ir/facet/facet_engine.py`
+  - 補強 facet_configs 的「bucket」概念（term/date_range/numeric_range）與 builder dispatch 的流程註解。
+  - 補強 term facet / date facet / numeric facet 的計數、排序與上限（max_values）意義。
+  - 補強 date parsing：多種來源格式、ISO timezone/Z 正規化、unknown bucket 的處理。
+  - 補強 filter_documents 的行為假設（multi-select / range / single value）與字串比較的適用情境（ISO date）。
+- `src/ir/facet/facet_filter.py`
+  - 補強 FilterCondition.matches 的核心行為（string normalization、IN 的多值欄位、RANGE 的 ISO date 假設）。
+  - 補強 FacetFilter 的資料結構（conditions + by-field index）與 AND/OR 語意註解。
+  - 補強 create_term_filter：list → IN、single → EQUALS 的 operator mapping。
+
+### 片段程式碼（FacetEngine：term facet 計數與排序）
+
+term facet 的核心就是「計次 + 排序」：count 由大到小，並以 value 做 deterministic tie-break：
+
+```python
+sorted_values = sorted(value_counts.items(), key=lambda x: (-x[1], x[0]))
+facet_values = [FacetValue(value=v, count=c) for v, c in sorted_values]
+```
+
+### 片段程式碼（FacetFilter：AND across conditions + early break）
+
+對每篇文件逐一檢查所有 condition；一旦遇到不符合就提前 break（短路）：
+
+```python
+for condition in self.conditions:
+    if not condition.matches(doc.get(condition.field)):
+        matches_all = False
+        break
+```
+
+### 原理整理（重點）
+
+- **FacetEngine**
+  - Facet 是「對目前 hit list 的分佈統計」，不是整個 corpus 的全域統計；因此 `total_docs` 代表「目前結果集大小」。
+  - date facet 常見做法是先 parse 成 datetime 再用 strftime bucket；若無法 parse，歸類到 unknown 讓資料品質透明。
+  - numeric range facet 使用 bucket 的區間規則（min inclusive / max exclusive）避免相鄰 bucket 重疊。
+
+- **FacetFilter**
+  - filter condition 的比較先做 string normalization，可讓 JSON/DB/程式中不同型別輸入有一致行為。
+  - RANGE 用字串比較的前提是「字串的字典序等於你想要的順序」（ISO date 是典型例子）。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/facet/facet_engine.py src/ir/facet/facet_filter.py`
+- 單元測試：`pytest tests/test_facet.py`

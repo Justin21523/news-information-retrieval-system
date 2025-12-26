@@ -17,12 +17,15 @@
 - 補強索引/加權教學向註解：`src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`。
 - 補強查詢最佳化/整合式搜尋教學向註解：`src/ir/retrieval/query_optimization.py`、`src/ir/search/unified_search.py`。
 - 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。
+- 補強欄位查詢執行器教學向註解：`src/ir/query/query_executor.py`。
 
 #### 🔧 修復
 - `src/ir/search/unified_search.py`：統一 BM25/VSM score 形狀（list vs dict），修正簡單查詢與 hybrid 融合流程中的取分/normalize 邏輯，並支援 content boolean 與 field boolean 的分流執行。
+- `src/ir/query/query_executor.py`：支援 `date:[start TO end]` 以 alias 對應 `published_date`，並將 AND 交集改為先交集小集合以降低運算量。
 
 #### 🧪 測試
 - `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。
+- 新增 `tests/test_query_executor.py`：覆蓋 QueryExecutor 的 AND/OR/NOT 與 date range alias。
 
 ### [2025-11-18] 新聞爬蟲系統大規模擴充與測試框架建立
 

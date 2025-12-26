@@ -16,7 +16,7 @@ Date: 2025-11-17
 """
 
 import logging
-from typing import Set, List, Dict, Any, Optional, Tuple
+from typing import Set, List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from .query_parser import QueryNode, Operator
@@ -39,7 +39,8 @@ class SearchResult:
     matched_fields: List[str] = None
     snippet: str = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Ensure optional list fields are initialized safely."""
         if self.matched_fields is None:
             self.matched_fields = []
 
@@ -51,11 +52,27 @@ class QueryExecutor:
     This class takes QueryNode trees from QueryParser and executes them
     against FieldIndexer to retrieve matching documents.
 
+    Implementation Overview:
+        - Evaluate the parsed query tree recursively:
+            - FIELD: lookup postings via FieldIndexer.search_field()
+            - RANGE: date range lookup via FieldIndexer.search_date_range()
+            - AND/OR/NOT: combine intermediate sets using set operations
+        - Convert matched doc_ids into SearchResult objects.
+        - Optionally derive matched_fields for UI/debugging (can be expensive).
+
     Complexity:
         Time: O(N) for simple queries, O(N log N) for complex boolean queries
               where N = number of matching documents
         Space: O(N) for result sets
     """
+
+    # Public query strings and docs often use a short "date" field name while
+    # the underlying metadata/index uses "published_date". Normalize aliases at
+    # execution time so both forms work consistently.
+    _DATE_FIELD_ALIASES = {
+        "date": "published_date",
+        "published_at": "published_date",
+    }
 
     def __init__(self, field_indexer: FieldIndexer, documents: List[Dict[str, Any]] = None):
         """
@@ -82,7 +99,8 @@ class QueryExecutor:
             top_k: Maximum number of results to return (None = all)
 
         Returns:
-            List of SearchResult objects sorted by relevance
+            List of SearchResult objects in a deterministic order.
+            (Currently sorted by doc_id; boolean queries assign a uniform score.)
 
         Complexity:
             Time: O(N log N) where N = number of matches (for sorting)
@@ -111,7 +129,8 @@ class QueryExecutor:
             for doc_id in doc_ids
         ]
 
-        # Sort by doc_id for now (can be enhanced with ranking)
+        # Sort by doc_id for now so the output order is stable across runs.
+        # If you later add ranking, sort by score (desc) then doc_id (asc).
         results.sort(key=lambda r: r.doc_id)
 
         # Apply top_k limit
@@ -148,9 +167,16 @@ class QueryExecutor:
             if not node.children:
                 return set()
 
-            result = self._execute_node(node.children[0])
-            for child in node.children[1:]:
-                result &= self._execute_node(child)
+            # Evaluate all children and intersect from smallest to largest.
+            # This reduces work because set intersection is proportional to the
+            # smaller operand and also enables early-exit when the result is empty.
+            child_sets = [self._execute_node(child) for child in node.children]
+            child_sets.sort(key=len)
+            result = child_sets[0]
+            for child_set in child_sets[1:]:
+                result &= child_set
+                if not result:
+                    break
 
             return result
 
@@ -170,6 +196,8 @@ class QueryExecutor:
             if not node.children:
                 return set()
 
+            # Universe assumption: doc_ids are 0..doc_count-1 (contiguous).
+            # This matches FieldIndexer.build() which assigns doc_id by position.
             all_docs = set(range(self.field_indexer.doc_count))
             not_docs = self._execute_node(node.children[0])
 
@@ -199,6 +227,7 @@ class QueryExecutor:
             return set()
 
         # Use FieldIndexer to search
+        # FieldIndexer handles field-specific tokenization/normalization rules.
         result = self.field_indexer.search_field(field, value)
 
         self.logger.debug(f"Field query {field}:{value} returned {len(result)} docs")
@@ -224,9 +253,11 @@ class QueryExecutor:
         if not field or not start or not end:
             return set()
 
+        field_for_lookup = self._DATE_FIELD_ALIASES.get(field, field)
+
         # Use FieldIndexer's date range search
-        if field in self.field_indexer.date_indexes:
-            result = self.field_indexer.search_date_range(field, start, end)
+        if field_for_lookup in self.field_indexer.date_indexes:
+            result = self.field_indexer.search_date_range(field_for_lookup, start, end)
             self.logger.debug(f"Range query {field}:[{start} TO {end}] returned {len(result)} docs")
             return result
 
@@ -253,6 +284,10 @@ class QueryExecutor:
             """Recursively collect matched fields."""
             if node.operator == Operator.FIELD:
                 # Check if this field matches the document
+                # NOTE: search_field() returns a copy of the postings set to keep
+                # the index encapsulated. For large result sets this per-doc,
+                # per-field lookup can dominate runtime; consider caching or a
+                # membership-only API if you need to optimize.
                 if doc_id in self.field_indexer.search_field(node.field, node.value):
                     matched.add(node.field)
 
@@ -342,6 +377,10 @@ class QueryExecutor:
             - equals: Field exactly equals value
             - starts_with: Field starts with value
             - between: Field value between [start, end] (for dates)
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
         """
         field = condition.get('field')
         operator = condition.get('operator', 'contains')
@@ -389,6 +428,10 @@ def execute_query(
 
     Returns:
         List of SearchResult objects
+
+    Complexity:
+        Time: dominated by QueryExecutor.execute()
+        Space: dominated by QueryExecutor.execute()
 
     Example:
         >>> results = execute_query(

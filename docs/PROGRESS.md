@@ -296,3 +296,59 @@ field_index.add_term(doc_id, term)
 ### 驗證方式
 
 - 靜態語法檢查：`python -m py_compile src/ir/index/field_indexer.py`
+
+---
+
+## 2025-12-26：欄位查詢執行器（QueryExecutor）註解補強與日期欄位別名修正（第 6 批）
+
+### 目標
+
+- 讓 `QueryExecutor` 的「AST → set algebra」執行流程更容易讀懂（AND/OR/NOT 的集合運算、以及 matched_fields 的取得方式）。
+- 修正文件/範例常用的 `date:[start TO end]` 與底層索引實際使用的 `published_date` 命名不一致問題（增加 alias 正規化）。
+
+### 本次修改範圍
+
+- `src/ir/query/query_executor.py`
+- `tests/test_query_executor.py`
+
+### 片段程式碼（AND：先交集小集合 + early-exit）
+
+AND 的結果集合只會愈來愈小，因此先交集最小集合可以減少運算量，並在結果變空時提早停止：
+
+```python
+child_sets = [self._execute_node(child) for child in node.children]
+child_sets.sort(key=len)
+result = child_sets[0]
+for child_set in child_sets[1:]:
+    result &= child_set
+    if not result:
+        break
+```
+
+### 片段程式碼（Range：date → published_date alias）
+
+文件中常用 `date:[...]`，但 metadata 索引實際是 `published_date`。在 executor 端做一次 alias 正規化即可相容：
+
+```python
+field_for_lookup = self._DATE_FIELD_ALIASES.get(field, field)
+result = self.field_indexer.search_date_range(field_for_lookup, start, end)
+```
+
+### 原理整理（重點）
+
+- **QueryExecutor = 把 QueryNode tree 轉成集合運算**：
+  - leaf（FIELD/RANGE）回傳 `Set[int] doc_ids`
+  - internal node（AND/OR/NOT）只做集合交集/聯集/差集
+  - 這種設計非常直覺，且容易把「資料結構」（索引）與「邏輯結合」（query semantics）分層。
+
+- **NOT 的 universe 假設**：
+  - 目前以 `set(range(doc_count))` 當作全集，前提是 doc_id 是連續的 0..N-1（符合 `FieldIndexer.build()` 以 list position 指派 doc_id 的做法）。
+
+- **matched_fields 的成本**：
+  - `matched_fields` 目前採「事後回查」：對每個 doc、對每個 field leaf 重新查一次索引再做 membership。
+  - 這對 UI/除錯很方便，但在 large result sets 可能變成主要瓶頸；程式內已補上註解說明可用 caching 或 membership-only API 優化。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/query/query_executor.py`
+- 新增單元測試：`pytest tests/test_query_executor.py`

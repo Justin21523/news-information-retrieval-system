@@ -352,3 +352,37 @@ result = self.field_indexer.search_date_range(field_for_lookup, start, end)
 
 - 靜態語法檢查：`python -m py_compile src/ir/query/query_executor.py`
 - 新增單元測試：`pytest tests/test_query_executor.py`
+
+---
+
+## 2025-12-26：UnifiedSearch 欄位前綴偵測修正（第 7 批）
+
+### 目標
+
+- 修正 `UnifiedSearchEngine` 對「欄位查詢」的偵測規則，避免 `tags:`、`published_date:` 等欄位查詢被誤判成 content boolean 而走錯檢索模型。
+
+### 本次修改範圍
+
+- `src/ir/search/unified_search.py`
+
+### 片段程式碼（從 FieldIndexer.supported_fields 動態取得欄位前綴）
+
+以前用 hard-coded list 容易漏掉欄位；改為從 `FieldIndexer.supported_fields` 派生，再補上少數 alias：
+
+```python
+prefixes = [f"{field}:" for field in self.field_indexer.supported_fields]
+prefixes.extend(["date:", "published_at:"])
+```
+
+### 原理整理（重點）
+
+- `UnifiedSearch` 需要先決定「這個 query 要走哪條管線」：
+  - **FIELD/field boolean**：`QueryParser` → `QueryExecutor`（FieldIndexer）
+  - **content boolean**：`BooleanRetrieval`
+  - **simple ranked**：BM25/VSM/HYBRID
+- 先前的欄位前綴清單不完整時，像 `tags:(AI OR 人工智慧)` 這種 query 會被誤判，導致 parser/執行器沒被使用（功能上等同壞掉）。
+- 以 `supported_fields` 動態派生前綴，可讓新增/調整欄位時不必同步修改多處 hard-coded list。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/search/unified_search.py`

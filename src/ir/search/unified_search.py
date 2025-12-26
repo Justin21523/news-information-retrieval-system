@@ -512,10 +512,8 @@ class UnifiedSearchEngine:
             # If the query contains known field prefixes, treat it as a field query
             # so we can return matched_fields.
             query_lower = query.lower()
-            has_known_field = any(
-                prefix in query_lower
-                for prefix in ['title:', 'category:', 'source:', 'author:', 'content:', 'date:']
-            )
+            field_prefixes = self._get_field_prefixes()
+            has_known_field = any(prefix in query_lower for prefix in field_prefixes)
             if has_known_field:
                 return self._execute_field_query(query, top_k)
             return self._execute_boolean_query(query, top_k)
@@ -541,10 +539,10 @@ class UnifiedSearchEngine:
             - Otherwise -> SIMPLE
         """
         query_upper = query.upper()
+        query_lower = query.lower()
 
         # Check for field queries (field:value)
-        if ':' in query and any(field in query.lower() for field in
-                               ['title:', 'category:', 'source:', 'author:', 'content:', 'date:']):
+        if ':' in query and any(prefix in query_lower for prefix in self._get_field_prefixes()):
             return QueryMode.FIELD
 
         # Check for boolean operators
@@ -553,6 +551,26 @@ class UnifiedSearchEngine:
 
         # Default to simple query
         return QueryMode.SIMPLE
+
+    def _get_field_prefixes(self) -> List[str]:
+        """
+        Return recognized field prefixes for query mode detection.
+
+        UnifiedSearch needs a lightweight way to distinguish:
+            - field-based queries (parsed/executed by QueryParser/QueryExecutor)
+            - content boolean queries (executed by BooleanRetrieval)
+
+        Rather than hard-coding a partial list, we derive prefixes from
+        FieldIndexer.supported_fields and add a small set of user-facing aliases.
+
+        Complexity:
+            Time: O(F) where F = number of supported fields
+            Space: O(F)
+        """
+        prefixes = [f"{field}:" for field in self.field_indexer.supported_fields]
+        # User-facing aliases used in docs and the UI.
+        prefixes.extend(["date:", "published_at:"])
+        return prefixes
 
     def _execute_field_query(self, query: str, top_k: int) -> List[UnifiedSearchResult]:
         """

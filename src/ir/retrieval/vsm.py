@@ -97,6 +97,10 @@ class VectorSpaceModel:
         self.doc_vectors: Dict[int, Dict[str, float]] = {}
 
         # Weighting schemes
+        # We use SMART notation: [tf][idf][norm]
+        # - Documents commonly use ltc (log tf, idf, cosine norm)
+        # - Queries often use lnc (log tf, no idf, cosine norm) to avoid
+        #   overweighting rare terms in short queries (a classic heuristic).
         self.doc_tf_scheme = 'l'     # log TF for documents
         self.doc_idf_scheme = 't'    # standard IDF
         self.doc_norm_scheme = 'c'   # cosine normalization
@@ -324,7 +328,8 @@ class VectorSpaceModel:
         self.query_idf_scheme = query_scheme[1]
         self.query_norm_scheme = query_scheme[2]
 
-        # Re-compute document vectors if index exists
+        # Changing weighting schemes invalidates cached document vectors, so we
+        # recompute them if an index is already present.
         if self.inverted_index.doc_count > 0:
             self._compute_document_vectors()
 

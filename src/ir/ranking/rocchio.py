@@ -151,16 +151,17 @@ class RocchioExpander:
             Time: O(|vec1| + |vec2|)
             Space: O(1)
         """
-        # Find common terms
+        # For sparse vectors, we only need overlapping dimensions to compute
+        # the dot product. This keeps computation proportional to overlap size.
         common_terms = set(vec1.keys()) & set(vec2.keys())
 
         if not common_terms:
             return 1.0  # Orthogonal if no overlap
 
-        # Calculate dot product
+        # Dot product over overlapping terms.
         dot_product = sum(vec1[t] * vec2[t] for t in common_terms)
 
-        # Calculate magnitudes
+        # L2 magnitudes (norms) of each vector.
         mag1 = math.sqrt(sum(w ** 2 for w in vec1.values()))
         mag2 = math.sqrt(sum(w ** 2 for w in vec2.values()))
 
@@ -225,7 +226,8 @@ class RocchioExpander:
         if original_terms is None:
             original_terms = set(query_vector.keys())
 
-        # Apply relevance threshold filtering if scores provided
+        # Optional: filter the "relevant" set by a score threshold to reduce
+        # noise in pseudo feedback (e.g., drop low-scoring top-k documents).
         filtered_vectors = relevant_vectors
         if doc_scores and self.relevance_threshold > 0:
             max_score = max(doc_scores) if doc_scores else 1.0
@@ -242,7 +244,7 @@ class RocchioExpander:
                 f"(threshold={threshold:.4f})"
             )
 
-        # Initialize new query vector
+        # Accumulate the Rocchio formula into a new sparse query vector.
         new_query = defaultdict(float)
 
         # Step 1: α × Q (preserve original user intent)
@@ -376,7 +378,9 @@ class RocchioExpander:
                 term_weights=query_vector.copy()
             )
 
-        # Split into relevant and non-relevant sets
+        # Split the ranked list into:
+        # - "relevant": top R docs (assumed relevant)
+        # - "nonrelevant": next N docs (optional negative evidence)
         relevant_docs = top_documents[:num_relevant]
         nonrelevant_docs = None
 
@@ -385,7 +389,7 @@ class RocchioExpander:
             end_idx = num_relevant + num_nonrelevant
             nonrelevant_docs = top_documents[start_idx:end_idx]
 
-        # Apply standard Rocchio
+        # Apply standard Rocchio on the chosen subsets.
         return self.expand_query(
             query_vector,
             relevant_docs,
@@ -412,10 +416,12 @@ class RocchioExpander:
             Time: O(|query|)
             Space: O(|query|)
         """
-        # Use weights from expanded query
+        # In this implementation, the expanded query already contains weights
+        # for both original and expanded terms. We simply return that vector.
         reweighted = expanded_query.term_weights.copy()
 
-        # Normalize if requested
+        # Optional L1 normalization makes weights sum to 1.0, which can be
+        # convenient if downstream components interpret weights as proportions.
         if normalize:
             total = sum(reweighted.values())
             if total > 0:

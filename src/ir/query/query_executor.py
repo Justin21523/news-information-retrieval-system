@@ -116,10 +116,13 @@ class QueryExecutor:
         """
         self.logger.debug(f"Executing query: {query_node}")
 
-        # Execute query to get document IDs
+        # 1) Evaluate the AST to get a set of matching doc_ids.
+        # The returned set is an *unordered* collection.
         doc_ids = self._execute_node(query_node)
 
-        # Convert to SearchResult objects
+        # 2) Materialize doc_ids into SearchResult records.
+        # For boolean-style execution we use a uniform score (1.0). If you want
+        # ranking, integrate a scoring model and then sort by score.
         results = [
             SearchResult(
                 doc_id=doc_id,
@@ -154,22 +157,28 @@ class QueryExecutor:
             Time: O(N) for simple queries, O(N * M) for complex queries
                   where N = matches, M = number of operations
         """
+        # Base case 1: FIELD constraint (e.g., title:台灣).
+        # Lookup is delegated to FieldIndexer (which owns normalization rules).
         if node.operator == Operator.FIELD:
             # Simple field query
             return self._execute_field_query(node)
 
+        # Base case 2: RANGE constraint (e.g., date:[start TO end]).
         elif node.operator == Operator.RANGE:
             # Range query
             return self._execute_range_query(node)
 
+        # Composite case: AND = set intersection of all children.
+        # Intersecting from small-to-large reduces work and enables early-exit.
         elif node.operator == Operator.AND:
             # AND: Intersection of children
             if not node.children:
                 return set()
 
-            # Evaluate all children and intersect from smallest to largest.
-            # This reduces work because set intersection is proportional to the
-            # smaller operand and also enables early-exit when the result is empty.
+            # Evaluate all children first (each yields a set of doc_ids).
+            # Then intersect from smallest to largest:
+            # - In Python, `A & B` costs roughly O(min(|A|, |B|)).
+            # - If intermediate result becomes empty, we can stop early.
             child_sets = [self._execute_node(child) for child in node.children]
             child_sets.sort(key=len)
             result = child_sets[0]
@@ -180,24 +189,28 @@ class QueryExecutor:
 
             return result
 
+        # Composite case: OR = set union of all children.
         elif node.operator == Operator.OR:
             # OR: Union of children
             if not node.children:
                 return set()
 
+            # Union is naturally accumulative: start empty and add matches.
             result = set()
             for child in node.children:
                 result |= self._execute_node(child)
 
             return result
 
+        # Composite case: NOT = complement of the child set.
         elif node.operator == Operator.NOT:
             # NOT: All documents minus child results
             if not node.children:
                 return set()
 
-            # Universe assumption: doc_ids are 0..doc_count-1 (contiguous).
-            # This matches FieldIndexer.build() which assigns doc_id by position.
+            # Universe assumption:
+            # Define the corpus as {0..doc_count-1}. This assumes FieldIndexer
+            # assigns doc_ids densely from 0 (contiguous universe).
             all_docs = set(range(self.field_indexer.doc_count))
             not_docs = self._execute_node(node.children[0])
 

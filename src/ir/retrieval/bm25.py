@@ -140,19 +140,28 @@ class BM25Ranker:
         """
         self.logger.info(f"Building BM25 index for {len(documents)} documents...")
 
+        # ------------------------------------------------------------------
+        # Index construction (training time)
+        # ------------------------------------------------------------------
+        # We build:
+        #   - doc_lengths[doc_id] = |D|
+        #   - inverted_index[term][doc_id] = f(term, D)
+        #   - avg_doc_length = avg(|D|)
+        #   - idf_cache[term] = IDF(term)
         self.doc_count = len(documents)
         total_length = 0
 
         # Build a postings-style inverted index:
         #   term -> {doc_id: tf_in_doc}
         for doc_id, doc_text in enumerate(documents):
+            # Tokenize the document into a bag of words. BM25 ignores order.
             tokens = self.tokenizer(doc_text)
             doc_length = len(tokens)
 
             self.doc_lengths[doc_id] = doc_length
             total_length += doc_length
 
-            # Count term frequencies within this document (bag-of-words).
+            # Count term frequencies within this document (bag-of-words TF).
             term_freqs = defaultdict(int)
             for token in tokens:
                 term_freqs[token] += 1
@@ -184,6 +193,8 @@ class BM25Ranker:
         Complexity:
             Time: O(V) where V = vocabulary size
         """
+        # We precompute IDF for every vocabulary term so query-time scoring
+        # can be fast (constant-time IDF lookup per term).
         for term, postings in self.inverted_index.items():
             df = len(postings)  # Document frequency
 
@@ -212,6 +223,8 @@ class BM25Ranker:
         doc_length = self.doc_lengths[doc_id]
         score = 0.0
 
+        # BM25 is additive across query terms:
+        #   score(D, Q) = Σ_t in Q contribution(t, D)
         for term in query_terms:
             # This implementation treats the query as a plain list of terms.
             # If the tokenizer returns duplicates, they will contribute multiple
@@ -264,6 +277,9 @@ class BM25Ranker:
             >>> result.doc_ids
             [5, 12, 3, 18, ...]
         """
+        # ------------------------------------------------------------------
+        # Query-time ranking
+        # ------------------------------------------------------------------
         # 1) Tokenize query (bag-of-words).
         query_terms = self.tokenizer(query)
 
@@ -283,7 +299,7 @@ class BM25Ranker:
             if term in self.inverted_index:
                 candidate_docs.update(self.inverted_index[term].keys())
 
-        # 3) Score each candidate document.
+        # 3) Score each candidate document with BM25 (sparse scoring).
         doc_scores: List[Tuple[int, float]] = []
         for doc_id in candidate_docs:
             score = self.score_document(query_terms, doc_id)

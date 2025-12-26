@@ -14,6 +14,7 @@
 - 新增 `docs/PROGRESS.md`：以繁體中文記錄每次實作的進度、片段程式碼與原理整理。
 - 補齊 `src/**/__init__.py`、主要 `tests/test_*.py` 與多個 `scripts/*` CLI 入口的英文 docstring（提升可讀性與可維護性）。
 - 補強核心模組教學向註解：`src/ir/retrieval/boolean.py`、`src/ir/retrieval/vsm.py`、`src/ir/retrieval/bm25.py`、`src/ir/ranking/rocchio.py`、`src/ir/query/query_parser.py`。
+- 補強上述核心模組的「教科書式行內註解」（逐步拆解 parse → execute → rank / score 流程），便於逐行閱讀理解 IR 原理。
 - 補強索引/加權教學向註解：`src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`。
 - 補強查詢最佳化/整合式搜尋教學向註解：`src/ir/retrieval/query_optimization.py`、`src/ir/search/unified_search.py`。
 - 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。

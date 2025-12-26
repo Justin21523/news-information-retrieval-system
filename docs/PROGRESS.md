@@ -595,3 +595,56 @@ def crawl():
 
 - 靜態語法檢查：`python -m py_compile tests/test_metrics.py tests/test_rocchio.py tests/test_term_weighting.py tests/test_vsm.py tests/test_clustering.py scripts/build_indexes_from_preprocessed.py scripts/unified_retrieval.py scripts/run_crawlers.py scripts/preprocess_news.py scripts/data/analyze_dataset.py scripts/comprehensive_test.py scripts/crawlers/cna_spider_simple.py scripts/crawlers/cti_spider.py scripts/crawlers/ftv_spider.py scripts/crawlers/nextapple_spider.py`
 - 測試子集：`pytest tests/test_metrics.py tests/test_rocchio.py tests/test_term_weighting.py tests/test_vsm.py tests/test_clustering.py`
+
+---
+
+## 2025-12-26：核心檢索模組「教科書式」行內註解（第 12 批）
+
+### 目標
+
+- 你要的是「程式碼逐行註解」，讓閱讀起來像教科書：每個關鍵步驟都能直接在程式碼旁理解其 **IR 原理 / 資料結構 / 演算法流程**。
+- 依專案規範：**程式碼內註解與 docstring 以英文為主**；本檔案仍以繁體中文整理脈絡與重點。
+- 本批只做「註解/可讀性」提升，不改變行為（no behavior change）。
+
+### 本次修改範圍（核心模組）
+
+- Boolean 查詢解析與執行：`src/ir/retrieval/boolean.py`
+  - 補強 parse → postfix(RPN) → stack evaluate 的逐步註解
+  - 清楚標註 wildcard / field / date range / phrase / NOT universe 的假設與限制（例如 NEAR 的 positional 限制）
+- Query Parser / Executor：`src/ir/query/query_parser.py`、`src/ir/query/query_executor.py`
+  - Tokenization 的歧義處理（`FIELD:` 後的 token 強制視為 `VALUE`）
+  - Recursive descent precedence（NOT > AND > OR）與 implicit AND 的教學式註解
+  - AND 交集先小集合、NOT universe 的假設（doc_id contiguous）
+- 排序模型：`src/ir/retrieval/vsm.py`、`src/ir/retrieval/bm25.py`
+  - SMART weighting（ltc/lnc）與候選集合（candidate generation）流程註解
+  - BM25 的 index-time / query-time 步驟註解（tf saturation + length normalization）
+- Rocchio 擴展：`src/ir/ranking/rocchio.py`
+  - Rocchio 三段式公式（αQ + βDr - γDnr）逐步註解
+  - pseudo feedback 的切分方式與 normalize 的意義
+
+### 片段程式碼（Boolean：pipeline 的逐步註解）
+
+以下示意「查詢字串」如何依序被拆解與執行（實際程式碼已在模組內加上更細的行內註解）：
+
+```python
+# 1) Parse query string -> token stream (+ phrase table)
+parsed = self._parse_query(query_str)
+
+# 2) Execute boolean logic -> set(doc_id)
+doc_ids = self._execute_query(parsed, optimize)
+
+# 3) Optional: rank results (boolean set retrieval has no native ranking)
+if rank_results:
+    scores = self._rank_results(query_str, doc_ids)
+```
+
+### 下一步建議（你若同意我就繼續做）
+
+- 第 13 批：索引與整合式搜尋的「教科書式行內註解」
+  - `src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`
+  - `src/ir/index/field_indexer.py`、`src/ir/search/unified_search.py`、`src/ir/index/incremental_builder.py`
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/retrieval/boolean.py src/ir/query/query_parser.py src/ir/query/query_executor.py src/ir/retrieval/vsm.py src/ir/retrieval/bm25.py src/ir/ranking/rocchio.py`
+- 測試子集：`pytest tests/test_boolean.py tests/test_query_executor.py tests/test_rocchio.py tests/test_vsm.py`

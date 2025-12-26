@@ -99,16 +99,22 @@ class QueryParser:
 
     # Token patterns
     TOKEN_PATTERNS = [
+        # Parentheses/brackets delimit grouping and range queries.
         ('LPAREN', r'\('),
         ('RPAREN', r'\)'),
         ('LBRACKET', r'\['),
         ('RBRACKET', r'\]'),
         ('COLON', r':'),
+        # Boolean keywords are matched as whole words to avoid partial matches
+        # inside values (e.g., "android" should not produce an "AND" token).
         ('AND', r'\bAND\b'),
         ('OR', r'\bOR\b'),
         ('NOT', r'\bNOT\b'),
         ('TO', r'\bTO\b'),
+        # Fields are ASCII identifiers (we keep them strict to reduce ambiguity).
         ('FIELD', r'[a-zA-Z_][a-zA-Z0-9_]*'),  # Field names
+        # Values accept Chinese characters, alphanumerics, underscore, dash, and dot.
+        # This covers category codes, dates, and common metadata values.
         ('VALUE', r'[\u4e00-\u9fff\w\-\.]+'),  # Values (Chinese, alphanumeric, dash, dot)
         ('WHITESPACE', r'\s+'),
     ]
@@ -192,6 +198,8 @@ class QueryParser:
         Complexity:
             Time: O(n) where n = query string length
         """
+        # We emit a flat token stream of (type, lexeme) pairs.
+        # The recursive-descent parser consumes this stream left-to-right.
         tokens = []
         prev_token_type = None
 
@@ -203,9 +211,14 @@ class QueryParser:
             if token_type == 'WHITESPACE':
                 continue
 
-            # Fix: after "FIELD:" the next token is a *value*, even if it looks
-            # like a field name (e.g., "category:aipl"). Without this rule,
-            # the tokenizer would emit ('FIELD','aipl') which breaks parsing.
+            # Disambiguation rule:
+            # After "FIELD:" the next token is a *value*, even if it looks like a
+            # field name. For example, in "category:aipl" the substring "aipl"
+            # matches the FIELD regex, but semantically it is a value.
+            #
+            # Without this rule, the parser would see:
+            #   FIELD(category) COLON FIELD(aipl)
+            # and fail because a field query expects FIELD COLON VALUE.
             if prev_token_type == 'COLON' and token_type == 'FIELD':
                 # Check if it's a keyword (AND, OR, NOT, TO) - keep as is
                 if token_value.upper() not in ('AND', 'OR', 'NOT', 'TO'):
@@ -259,6 +272,8 @@ class QueryParser:
         Returns:
             QueryNode for OR expression
         """
+        # OR is the lowest-precedence operator, so we parse a full AND expression
+        # first and then fold additional OR clauses left-associatively.
         left = self._parse_and_expr()
 
         # Check for OR operator
@@ -281,6 +296,8 @@ class QueryParser:
         Returns:
             QueryNode for AND expression
         """
+        # AND binds tighter than OR. We parse a NOT expression first and then
+        # fold subsequent AND/implicit-AND terms left-associatively.
         left = self._parse_not_expr()
 
         # AND has higher precedence than OR. We also support "implicit AND":
@@ -299,6 +316,7 @@ class QueryParser:
                 self._consume_token('AND')
                 right = self._parse_not_expr()
 
+                # Build a binary AND node.
                 left = QueryNode(
                     operator=Operator.AND,
                     children=[left, right]
@@ -306,6 +324,8 @@ class QueryParser:
 
             # Implicit AND (two terms without operator)
             elif token_type in ('FIELD', 'LPAREN', 'NOT'):
+                # We treat adjacency as AND to support common "library search"
+                # style queries like: title:台灣 category:政治
                 right = self._parse_not_expr()
 
                 left = QueryNode(
@@ -327,6 +347,8 @@ class QueryParser:
         """
         current = self._current_token()
 
+        # NOT is unary and has the highest precedence. We parse it recursively
+        # so that "NOT NOT x" works (right-associative behavior).
         if current and current[0] == 'NOT':
             self._consume_token('NOT')
             child = self._parse_not_expr()
@@ -352,7 +374,8 @@ class QueryParser:
 
         token_type, _ = current
 
-        # Parenthesized expression
+        # Parenthesized expression: recurse back to the lowest-precedence rule.
+        # This is how "(A OR B) AND C" overrides the default precedence.
         if token_type == 'LPAREN':
             self._consume_token('LPAREN')
             # Parse a full sub-expression inside parentheses.
@@ -377,7 +400,7 @@ class QueryParser:
             title:台灣 -> FIELD(title:台灣)
             date:[2025-11-01 TO 2025-11-13] -> RANGE(date:[...])
         """
-        # Consume field name
+        # A field query starts with a FIELD token (e.g., "title"), followed by ":".
         _, field_name = self._consume_token('FIELD')
 
         # Consume colon

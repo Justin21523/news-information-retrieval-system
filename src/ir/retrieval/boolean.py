@@ -156,13 +156,26 @@ class BooleanQueryEngine:
         """
         self.logger.debug(f"Executing query: {query_str}")
 
-        # Parse query
+        # ------------------------------------------------------------------
+        # 1) Parse query string -> token stream (+ phrase table)
+        # ------------------------------------------------------------------
+        # The parser is intentionally lightweight:
+        # - It extracts quoted phrases first and replaces them with placeholders.
+        # - Then it tokenizes operators/parentheses/terms/field-terms.
         parsed = self._parse_query(query_str)
 
-        # Execute query
+        # ------------------------------------------------------------------
+        # 2) Execute boolean logic -> set(doc_id)
+        # ------------------------------------------------------------------
+        # We convert infix tokens to postfix (RPN) and then evaluate with a
+        # stack. This keeps precedence/parentheses handling out of evaluation.
         doc_ids = self._execute_query(parsed, optimize)
 
-        # Rank if requested
+        # ------------------------------------------------------------------
+        # 3) Optional: rank results
+        # ------------------------------------------------------------------
+        # Boolean retrieval is traditionally "set retrieval" (no ranking).
+        # For convenience, we provide a simple TF-based score as a demo.
         scores = None
         if rank_results and doc_ids:
             scores = self._rank_results(query_str, doc_ids)
@@ -210,6 +223,8 @@ class BooleanQueryEngine:
         #
         # Field phrases like `title:"a b"` become `title:__PHRASE_0__` here.
         phrases = []
+        # We treat anything inside double quotes as an atomic phrase. The regex
+        # captures the phrase text without quotes: "a b" -> a b
         phrase_pattern = r'"([^"]+)"'
 
         def replace_phrase(match):
@@ -219,9 +234,17 @@ class BooleanQueryEngine:
             phrases.append(phrase)
             return placeholder
 
+        # Replace phrases first so later tokenization can split on whitespace
+        # without losing phrase boundaries.
         query_processed = re.sub(phrase_pattern, replace_phrase, query_str)
 
         # Tokenize (split on whitespace and operators)
+        #
+        # We use a single regex with alternation (A|B|C|...) and let `re.findall`
+        # return the matched token strings in-order.
+        #
+        # Important detail: alternation order matters. More specific patterns
+        # must appear before more general ones, otherwise they'll never match.
         # Pattern explanation:
         # - \(|\) : parentheses
         # - AND|OR|NOT : boolean operators
@@ -309,7 +332,9 @@ class BooleanQueryEngine:
             '(': 0
         }
 
+        # Output queue holds the final RPN stream.
         output = []
+        # Operator stack holds pending operators and '(' markers.
         operator_stack = []
 
         for token in tokens:
@@ -376,6 +401,9 @@ class BooleanQueryEngine:
         Returns:
             Set of matching doc IDs
         """
+        # Evaluation stack:
+        # - Operands push sets of doc_ids.
+        # - Operators pop one/two sets and push a new set.
         stack = []
 
         for token in postfix:
@@ -389,9 +417,12 @@ class BooleanQueryEngine:
                 # Extract distance
                 distance = int(token_upper.split('/')[1])
 
-                # Get operands (these should be term strings, not result sets)
-                # NOTE: The current implementation pushes doc ID sets for operands,
-                # so NEAR/n typically ends up receiving sets and degrades to AND.
+                # Get operands. Ideally NEAR/n would operate on raw *terms* and
+                # consult positional index postings to check distances.
+                #
+                # In this implementation operands are already-evaluated sets,
+                # so NEAR/n often cannot access term positions and will fall
+                # back to AND-like behavior in `_process_near_query`.
                 right_item = stack.pop()
                 left_item = stack.pop()
 
@@ -402,6 +433,7 @@ class BooleanQueryEngine:
             elif token_upper == 'AND':
                 if len(stack) < 2:
                     continue
+                # AND = set intersection.
                 right = stack.pop()
                 left = stack.pop()
                 result = left & right
@@ -410,6 +442,7 @@ class BooleanQueryEngine:
             elif token_upper == 'OR':
                 if len(stack) < 2:
                     continue
+                # OR = set union.
                 right = stack.pop()
                 left = stack.pop()
                 result = left | right
@@ -419,7 +452,8 @@ class BooleanQueryEngine:
                 if len(stack) < 1:
                     continue
                 operand = stack.pop()
-                # NOT: all documents except those in operand
+                # NOT = complement within the corpus universe.
+                # Universe assumption: doc_ids are 0..doc_count-1.
                 all_docs = set(range(self.inverted_index.doc_count))
                 result = all_docs - operand
                 stack.append(result)
@@ -436,6 +470,8 @@ class BooleanQueryEngine:
                     # For field phrases, search each term in the field
                     # (Full positional field search would require FieldIndexer extension)
                     if self.field_indexer:
+                        # Decompose the phrase into tokens and require all tokens
+                        # to appear in the selected field (AND semantics).
                         phrase_terms = phrase.lower().split()
                         doc_ids = self.field_indexer.search_multi_terms(
                             field_name, phrase_terms, operator='AND'
@@ -448,10 +484,13 @@ class BooleanQueryEngine:
                 elif token.startswith('__PHRASE_'):
                     phrase_idx = int(re.search(r'\d+', token).group())
                     phrase = phrases[phrase_idx]
+                    # Use positional index when available; otherwise degrade to
+                    # "all terms present" intersection.
                     doc_ids = self._process_phrase(phrase)
 
                 # Regular term or field query
                 else:
+                    # Regular term or field:value token.
                     doc_ids = self._process_term(token)
 
                 stack.append(doc_ids)
@@ -493,6 +532,15 @@ class BooleanQueryEngine:
         Complexity:
             Time: O(1) average for lookup, O(V) for wildcard, O(N) for date range
         """
+        # Parsing order matters:
+        # 1) Range query (field:[start TO end]) has the highest syntactic
+        #    specificity and should be checked first.
+        # 2) Field query (field:value) next.
+        # 3) Wildcard query next.
+        # 4) Fallback: plain term lookup in inverted index.
+        #
+        # This keeps "published_date:[...]" from being split as a generic field
+        # query and ensures wildcard markers (*, ?) are handled correctly.
         # Check if this is a date range query
         range_match = re.match(r'(\w+):\[([\w\s-]+)\sTO\s([\w\s-]+)\]', term)
         if range_match:
@@ -501,14 +549,14 @@ class BooleanQueryEngine:
             end_date = range_match.group(3)
             return self._process_date_range(field_name, start_date, end_date)
 
-        # Check if this is a field query
+        # Check if this is a field query like "title:台灣".
         if ':' in term:
             field_name, field_value = term.split(':', 1)
             return self._process_field_query(field_name, field_value)
 
         term_lower = term.lower()
 
-        # Check for wildcard pattern
+        # Check for wildcard pattern (glob-like syntax).
         if self.wildcard_expander.has_wildcard(term_lower):
             return self._process_wildcard(term_lower)
 
@@ -532,7 +580,10 @@ class BooleanQueryEngine:
             >>> _process_wildcard("info*")
             {0, 1, 3, 5}  # Union of all docs containing info, inform, information, etc.
         """
-        # Expand wildcard to matching terms
+        # Expand wildcard to matching vocabulary terms first, then union all
+        # postings. This is effectively:
+        #   (t1 OR t2 OR ... OR tE)
+        # where each ti is a concrete term matched by the wildcard.
         vocabulary = self.inverted_index.vocabulary
         expanded_terms = self.wildcard_expander.expand(pattern, vocabulary)
 
@@ -542,7 +593,7 @@ class BooleanQueryEngine:
 
         self.logger.debug(f"Wildcard '{pattern}' expanded to {len(expanded_terms)} terms")
 
-        # Union of all matching documents (OR operation)
+        # Union of all matching documents (OR operation over expanded terms).
         result = set()
         for term in expanded_terms:
             result |= self.inverted_index.get_doc_ids(term)
@@ -570,6 +621,9 @@ class BooleanQueryEngine:
 
         # Field search using FieldIndexer
         value_lower = value.lower()
+        # FieldIndexer encapsulates normalization/tokenization for each field.
+        # For example, "category" may be exact-match while "title/content" may
+        # be tokenized, depending on how the index was built.
         return self.field_indexer.search_field(field, value_lower)
 
     def _process_date_range(self, field: str, start_date: str, end_date: str) -> Set[int]:
@@ -623,7 +677,10 @@ class BooleanQueryEngine:
             else:
                 return set()
 
-        # Handle different operand types
+        # Handle different operand types.
+        #
+        # Only the "term vs term" case can use positional index properly.
+        # Other combinations are approximated by AND intersection.
         # Case 1: Both are terms (strings)
         if isinstance(left_item, str) and isinstance(right_item, str):
             left_term = left_item.lower()
@@ -680,6 +737,8 @@ class BooleanQueryEngine:
             if not terms:
                 return set()
 
+            # Approximation: phrase match => all phrase terms exist in the doc.
+            # This is necessary when we have no positional postings.
             result = self.inverted_index.get_doc_ids(terms[0])
             for term in terms[1:]:
                 result &= self.inverted_index.get_doc_ids(term)
@@ -706,7 +765,14 @@ class BooleanQueryEngine:
             Time: O(|D| × |Q|) where |D| is number of matching docs and |Q| is
                   number of extracted query terms.
         """
-        # Extract terms from query (ignore operators and phrases)
+        # Extract terms from query (ignore operators and phrases).
+        #
+        # This is a deliberately simple baseline:
+        # - It does not weight terms (no IDF).
+        # - It does not handle phrases specially.
+        # - It does not normalize by document length.
+        # The goal is to provide an intuitive "more matches => higher score"
+        # behavior for demos.
         terms = re.findall(r'\b(?!AND|OR|NOT\b)\w+', query_str, re.IGNORECASE)
         terms = [t.lower() for t in terms]
 

@@ -44,6 +44,15 @@ class FieldIndexer:
     Maintains separate inverted indexes for each metadata field,
     enabling precise field-specific queries in library-style IR systems.
 
+    Implementation Overview:
+        - For each supported field, build an independent index:
+            field -> term -> set(doc_id)
+        - For date fields, store a normalized YYYY-MM-DD string per document:
+            field -> doc_id -> "YYYY-MM-DD"
+        - Query-time operations are set-based (AND/OR/NOT at a higher layer):
+            - Single-term lookup: O(1) average
+            - Multi-term: union/intersection across sets
+
     Attributes:
         field_indexes: Dict mapping field_name -> InvertedIndex
         tokenizer: Function for tokenizing text fields
@@ -223,7 +232,8 @@ class FieldIndexer:
 
     def _index_date_field(self, doc_id: int, field: str, date_value: str) -> None:
         """Index a date field for range queries."""
-        # Store date string in YYYY-MM-DD format
+        # Store date string in YYYY-MM-DD format so lexicographic ordering
+        # matches chronological ordering (e.g., "2025-11-09" < "2025-11-10").
         try:
             # Normalize date format
             if isinstance(date_value, datetime):
@@ -261,7 +271,8 @@ class FieldIndexer:
             self.logger.warning(f"Field '{field}' not indexed")
             return set()
 
-        # Normalize term
+        # Normalize term. For exact fields, we use lowercase to match the
+        # case-insensitive storage performed at index time.
         if field in self.EXACT_FIELDS:
             term = term.lower()
         else:

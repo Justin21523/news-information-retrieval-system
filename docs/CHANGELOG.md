@@ -16,6 +16,7 @@
 - 補強核心模組教學向註解：`src/ir/retrieval/boolean.py`、`src/ir/retrieval/vsm.py`、`src/ir/retrieval/bm25.py`、`src/ir/ranking/rocchio.py`、`src/ir/query/query_parser.py`。
 - 補強索引/加權教學向註解：`src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`。
 - 補強查詢最佳化/整合式搜尋教學向註解：`src/ir/retrieval/query_optimization.py`、`src/ir/search/unified_search.py`。
+- 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。
 
 #### 🔧 修復
 - `src/ir/search/unified_search.py`：統一 BM25/VSM score 形狀（list vs dict），修正簡單查詢與 hybrid 融合流程中的取分/normalize 邏輯，並支援 content boolean 與 field boolean 的分流執行。

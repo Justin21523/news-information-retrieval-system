@@ -258,3 +258,41 @@ if isinstance(scores, list) and isinstance(doc_ids, list):
 
 - 靜態語法檢查：`python -m py_compile src/ir/retrieval/query_optimization.py src/ir/search/unified_search.py`
 - 回歸測試（確保既有檢索核心不受影響）：`pytest tests/test_boolean.py tests/test_vsm.py`
+
+---
+
+## 2025-12-26：欄位索引（FieldIndexer）教學註解補強（第 5 批）
+
+### 目標
+
+- 讓「欄位/metadata 索引」更容易理解：每個欄位獨立的倒排索引、日期欄位的正規化策略，以及查詢端需要的 term normalization 規則。
+
+### 本次修改範圍
+
+- `src/ir/index/field_indexer.py`
+
+### 片段程式碼（概念：每個欄位一份索引，集合運算在上層完成）
+
+`FieldIndexer` 的核心想法是為每個欄位維護獨立的 `term -> set(doc_id)`，而 AND/OR/NOT 的集合運算通常交給上層（例如 `QueryExecutor`）：
+
+```python
+# field -> term -> set(doc_id)
+field_index.add_term(doc_id, term)
+```
+
+### 原理整理（重點）
+
+- **為什麼要「每個欄位一份索引」**：
+  - 這類設計常見於「圖書館式檢索」（library-style IR）：title/author/tags/date 等欄位語意不同，不應混在同一個內容索引中打分或做 boolean。
+  - 因為 postings 集合彼此獨立，查詢時可以很自然地做欄位限制（例如 `title:deep AND author:smith`）。
+
+- **日期欄位正規化（lexicographic == chronological）**：
+  - 將日期統一存成 `YYYY-MM-DD` 字串後，字典序會與時間先後一致，讓 range query 可以安全地用字串比較完成（已在程式內補上對應註解）。
+
+- **term normalization（EXACT_FIELDS vs text fields）**：
+  - `EXACT_FIELDS` 走「大小寫不敏感」的 exact match（index-time 已 lowercase），因此 query-time 必須同步 lowercase。
+  - 其餘欄位走 tokenizer（可能拆詞、正規化），因此 query-time 也要以 tokenizer 對齊。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/index/field_indexer.py`

@@ -49,6 +49,10 @@ class NewsDocument:
         Args:
             **kwargs: Document fields (title, content, url, etc.)
         """
+        # `doc_id` is treated as the cross-module primary key.
+        # It may be:
+        # - None when first loaded from raw sources (JSONL / DB)
+        # - assigned later by an indexer (e.g., InvertedIndex.add_document)
         self.doc_id: Optional[int] = kwargs.get('doc_id')
         self.title: str = kwargs.get('title', '')
         self.content: str = kwargs.get('content', '')
@@ -59,7 +63,8 @@ class NewsDocument:
         self.author: Optional[str] = kwargs.get('author')
         self.metadata: dict = kwargs.get('metadata', {})
 
-        # Calculate content hash for deduplication
+        # Precompute a content hash used by the deduplication module.
+        # This is a convenience field; it is not a cryptographic guarantee.
         self.content_hash = self._calculate_hash()
 
     def _calculate_hash(self) -> str:
@@ -74,6 +79,14 @@ class NewsDocument:
         Complexity:
             Time: O(n) where n is content length
         """
+        # Use a stable, deterministic representation of the document content.
+        #
+        # We include both title and content so that:
+        # - title-only duplicates can be detected
+        # - short content with different titles is less likely to collide
+        #
+        # NOTE:
+        # MD5 is used purely as a fast checksum for deduplication, not for security.
         text = f"{self.title}\n{self.content}"
         return hashlib.md5(text.encode('utf-8')).hexdigest()
 
@@ -84,6 +97,8 @@ class NewsDocument:
         Returns:
             Combined text string
         """
+        # Newline is a simple separator that preserves a weak boundary between
+        # title and body. Most tokenizers treat it as whitespace.
         return f"{self.title}\n{self.content}"
 
     def to_dict(self) -> dict:
@@ -171,10 +186,13 @@ class DocumentReader:
                     continue
 
                 try:
-                    # Parse JSON
+                    # JSONL format: one JSON object per line.
+                    # We parse each line independently so a single corrupt line
+                    # does not block the whole file.
                     data = json.loads(line)
 
-                    # Create NewsDocument
+                    # Convert raw dict to a structured object to keep downstream
+                    # indexing code simple and uniform.
                     doc = NewsDocument(**data)
 
                     # Skip documents without content
@@ -193,6 +211,9 @@ class DocumentReader:
                     )
                     continue
                 except Exception as e:
+                    # Defensive programming:
+                    # Crawlers may emit heterogeneous schemas, missing fields,
+                    # or unexpected types; treat them as per-line errors.
                     self.logger.warning(
                         f"Line {line_no}: Error creating document - {e}"
                     )
@@ -231,7 +252,8 @@ class DocumentReader:
             self.logger.error(f"Directory not found: {directory}")
             return
 
-        # Find all matching files
+        # Find and sort matching files so iteration is deterministic.
+        # Determinism is helpful for debugging and for reproducible indexing.
         files = sorted(directory.glob(pattern))
 
         if not files:
@@ -252,6 +274,9 @@ class DocumentReader:
                 break
 
             # Calculate remaining limit
+            # We enforce limits at two levels:
+            # - per file (limit_per_file)
+            # - total across all files (total_limit)
             remaining = None
             if total_limit:
                 remaining = total_limit - total_count
@@ -311,6 +336,8 @@ class DocumentReader:
         if not filepath.exists():
             return {'error': 'File not found'}
 
+        # We compute basic descriptive stats in a single pass to avoid loading
+        # large files into memory.
         total_docs = 0
         sources = set()
         categories = set()
@@ -335,6 +362,7 @@ class DocumentReader:
                         date_range.append(data['published_at'])
 
                 except:
+                    # Count parse errors but keep going; stats is best-effort.
                     errors += 1
 
         # Sort dates to get range
@@ -389,7 +417,9 @@ class DocumentReader:
         """
         self.logger.info(f"Reading from PostgreSQL (source={source}, limit={limit})")
 
-        # Build query
+        # Build query incrementally to keep the API flexible.
+        # Parameters are bound via `%s` placeholders to avoid SQL injection
+        # and to let the DB driver handle proper escaping.
         query = "SELECT * FROM news_articles WHERE 1=1"
         params = []
 
@@ -408,21 +438,25 @@ class DocumentReader:
 
         try:
             with db_manager.get_connection() as conn:
-                # Use server-side cursor for large result sets
+                # Use a server-side cursor to stream results in batches.
+                # This avoids pulling the entire result set into memory.
                 cursor_name = f"doc_cursor_{id(self)}"
                 with conn.cursor(name=cursor_name) as cursor:
                     cursor.execute(query, params)
 
                     count = 0
                     while True:
-                        # Fetch in batches
+                        # Fetch in batches to balance network/IO overhead and memory use.
                         rows = cursor.fetchmany(batch_size)
                         if not rows:
                             break
 
                         for row in rows:
-                            # Convert database row to dict
-                            # (Assuming psycopg2.extras.RealDictCursor or manual conversion)
+                            # Convert database rows to a dict compatible with NewsDocument.
+                            #
+                            # Depending on cursor configuration, a row can be:
+                            # - dict-like (RealDictCursor)
+                            # - tuple-like (default cursor)
                             if isinstance(row, dict):
                                 doc_data = row
                             else:
@@ -483,7 +517,7 @@ class DocumentReader:
             with db_manager.get_connection() as conn:
                 with conn.cursor() as cursor:
                     if doc_ids:
-                        # Fetch by IDs
+                        # Fetch by IDs via PostgreSQL's ANY(array) operator.
                         query = """
                         SELECT * FROM news_articles
                         WHERE doc_id = ANY(%s)
@@ -492,7 +526,7 @@ class DocumentReader:
                         cursor.execute(query, (doc_ids,))
 
                     elif content_hashes:
-                        # Fetch by content hashes
+                        # Fetch by content hashes (useful for deduplication pipelines).
                         query = """
                         SELECT * FROM news_articles
                         WHERE content_hash = ANY(%s)

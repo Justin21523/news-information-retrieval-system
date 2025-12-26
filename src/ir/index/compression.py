@@ -124,13 +124,25 @@ class VByteEncoder:
             if num < 0:
                 raise ValueError(f"VByte encoding requires non-negative integers, got {num}")
 
-            # Encode one number
+            # Encode one integer using base-128 (7-bit) chunks.
+            #
+            # Key idea:
+            # - Each output byte stores 7 payload bits.
+            # - The MSB is the continuation bit:
+            #     1 => more bytes follow for the current integer
+            #     0 => this is the last byte for the current integer
+            #
+            # Implementation detail:
+            # We emit the least-significant 7-bit chunk first ("little-endian" base-128),
+            # which enables streaming decode with a simple multiplier (1, 128, 128^2, ...).
             bytes_list = []
             while num >= 128:
-                bytes_list.append((num % 128) | 0x80)  # Set continuation bit
+                # Take the next 7 bits and set the continuation bit.
+                bytes_list.append((num % 128) | 0x80)
                 num //= 128
 
-            bytes_list.append(num)  # Last byte (no continuation bit)
+            # Emit the final chunk without continuation bit.
+            bytes_list.append(num)
             result.extend(bytes_list)
 
         return bytes(result)
@@ -158,10 +170,14 @@ class VByteEncoder:
         multiplier = 1
 
         for byte in data:
-            if byte & 0x80:  # Continuation bit set
+            # Continuation bit (MSB) indicates whether we should keep reading bytes
+            # for the current integer.
+            if byte & 0x80:
+                # Strip MSB and add payload at the current base-128 "place value".
                 current += (byte & 0x7F) * multiplier
                 multiplier *= 128
-            else:  # Last byte
+            else:
+                # Last byte: finalize the current integer and reset state.
                 current += byte * multiplier
                 result.append(current)
                 current = 0
@@ -190,7 +206,10 @@ class VByteEncoder:
         if not doc_ids:
             return b''
 
-        # Compute gaps
+        # Gap encoding turns a sorted postings list into (usually) smaller integers:
+        #   [d1, d2, d3, ...] -> [d1, d2-d1, d3-d2, ...]
+        #
+        # This improves compression because gaps tend to be small for common terms.
         gaps = [doc_ids[0]]
         for i in range(1, len(doc_ids)):
             gap = doc_ids[i] - doc_ids[i - 1]
@@ -225,7 +244,10 @@ class VByteEncoder:
                 f"Expected {length} values, got {len(gaps)}"
             )
 
-        # Reconstruct doc IDs from gaps
+        # Invert the prefix-difference transformation by cumulative summation:
+        #   d1 = g1
+        #   d2 = g1 + g2
+        #   d3 = g1 + g2 + g3
         doc_ids = []
         current_id = 0
         for gap in gaps:
@@ -240,10 +262,17 @@ class GammaEncoder:
     Gamma (Elias Gamma) encoding.
 
     Gamma encoding represents an integer n ≥ 1 as:
-    1. Unary encoding of ⌊log2(n)⌋ (length)
-    2. Binary encoding of n - 2^⌊log2(n)⌋ (offset)
+        gamma(n) = 0^L || binary(n)
 
-    Format: [unary(length)] [binary(offset)]
+    where:
+        - L = ⌊log2(n)⌋ (i.e., bit_length(n) - 1)
+        - binary(n) is the standard binary representation of n, which always starts with 1.
+
+    This is the most common definition in IR textbooks because it is easy to decode:
+        - count leading zeros -> L
+        - then read the next L+1 bits -> binary(n)
+
+    Format: [L zeros] [L+1 bits of binary(n)]
 
     Complexity:
         - Encoding: O(n * log(max_value))
@@ -251,7 +280,7 @@ class GammaEncoder:
 
     Examples:
         >>> encode_gamma(1)
-        '0'  # length=0, offset=0
+        '1'  # L=0, binary(1)='1'
 
         >>> encode_gamma(5)
         '00101'  # length=2 (00), offset=1 (01)
@@ -284,18 +313,14 @@ class GammaEncoder:
         if num < 1:
             raise ValueError(f"Gamma encoding requires positive integers, got {num}")
 
-        # Calculate length (⌊log2(n)⌋)
-        length = num.bit_length() - 1
-
-        # Unary encoding of length (length zeros followed by 1)
-        # We store it as 'length' zeros (the '1' is implicit)
-        unary = '0' * length
-
-        # Binary encoding of offset (n - 2^length)
-        offset = num - (1 << length)
-        binary = bin(offset)[2:].zfill(length)  # Remove '0b' prefix
-
-        return unary + binary
+        # gamma(n) = 0^L || binary(n), where L is the number of remaining bits
+        # after removing the leading 1.
+        #
+        # Example:
+        #   n = 13 -> binary(n) = '1101' (L = 3) -> gamma(n) = '000' + '1101'
+        binary = bin(num)[2:]  # e.g., 13 -> "1101"
+        length = len(binary) - 1
+        return ('0' * length) + binary
 
     def decode_single(self, bits: str, offset: int = 0) -> Tuple[int, int]:
         """
@@ -315,28 +340,27 @@ class GammaEncoder:
             >>> encoder.decode_single('00101', 0)
             (5, 5)
         """
-        # Count leading zeros (length)
+        # Count leading zeros to recover L = floor(log2(n)).
+        #
+        # After the run of L zeros, the next bit must be '1' and is the first
+        # bit of binary(n). We then read exactly (L + 1) bits to reconstruct n.
         length = 0
         pos = offset
         while pos < len(bits) and bits[pos] == '0':
             length += 1
             pos += 1
 
-        if length == 0:
-            # Special case: n = 1
-            return (1, offset)
-
-        # Read 'length' bits for offset
-        if pos + length > len(bits):
+        if pos >= len(bits):
             raise ValueError("Insufficient bits for Gamma decoding")
 
-        offset_bits = bits[pos:pos + length]
-        offset_value = int(offset_bits, 2) if offset_bits else 0
+        # Read the full binary representation (L+1 bits) starting at the first '1'.
+        end = pos + length + 1
+        if end > len(bits):
+            raise ValueError("Insufficient bits for Gamma decoding")
 
-        # Reconstruct number
-        num = (1 << length) + offset_value
-
-        return (num, pos + length)
+        binary_bits = bits[pos:end]
+        num = int(binary_bits, 2)
+        return (num, end)
 
     def encode(self, numbers: List[int]) -> str:
         """
@@ -451,13 +475,13 @@ class DeltaEncoder:
 
     Examples:
         >>> encode_delta(1)
-        '0'  # gamma(1)
+        '1'  # gamma(1)
 
         >>> encode_delta(5)
-        '01001'  # gamma(3)=010, offset=1 (01)
+        '01101'  # gamma(3)=011, offset bits='01'
 
         >>> encode_delta(13)
-        '0100101'  # gamma(4)=00100, offset=5 (101)
+        '00100101'  # gamma(4)=00100, offset bits='101'
     """
 
     def __init__(self):
@@ -485,13 +509,14 @@ class DeltaEncoder:
         if num < 1:
             raise ValueError(f"Delta encoding requires positive integers, got {num}")
 
-        # Calculate length (⌊log2(n)⌋)
+        # Calculate length (⌊log2(n)⌋), i.e. number of bits after the leading 1.
         length = num.bit_length() - 1
 
-        # Gamma encode length + 1
+        # Delta uses Gamma to encode the bit-length of n (which is length + 1).
         gamma_length = self.gamma_encoder.encode_single(length + 1)
 
-        # Binary encoding of offset (n - 2^length)
+        # Append the remaining lower bits of n (i.e., binary(n) without its leading 1).
+        # For length == 0 (n == 1), there are no remaining bits.
         offset = num - (1 << length)
         binary_offset = bin(offset)[2:].zfill(length) if length > 0 else ''
 
@@ -511,7 +536,7 @@ class DeltaEncoder:
         Complexity:
             Time: O(log(value))
         """
-        # Decode gamma-encoded length
+        # Delta first decodes the gamma-coded bit-length of n (length + 1).
         length_plus_1, pos = self.gamma_encoder.decode_single(bits, offset)
         length = length_plus_1 - 1
 
@@ -519,7 +544,8 @@ class DeltaEncoder:
             # Special case: n = 1
             return (1, pos)
 
-        # Read 'length' bits for offset
+        # Read the remaining lower bits and reconstruct:
+        #   n = 1<<length + offset_bits
         if pos + length > len(bits):
             raise ValueError("Insufficient bits for Delta decoding")
 

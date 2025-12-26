@@ -109,7 +109,26 @@ class DuplicationDetector:
             >>> detector.simhash("hello world")
             12345678901234567890
         """
-        # Initialize bit vector
+        # SimHash builds a weighted "bit vote" vector v[0..hash_bits-1].
+        #
+        # For each token:
+        #   - hash(token) produces a pseudo-random bit pattern
+        #   - for each bit i:
+        #       if hash(token)[i] == 1: v[i] += weight
+        #       else:                  v[i] -= weight
+        #
+        # The final fingerprint sets bit i to 1 if v[i] > 0.
+        #
+        # Intuition:
+        # This acts like a random-hyperplane projection of the token multiset.
+        # Similar documents tend to produce fingerprints with small Hamming distance.
+        #
+        # NOTE:
+        # - This implementation uses a very simple tokenizer (whitespace split).
+        #   For Chinese corpora, you typically want a word segmenter (CKIP/Jieba)
+        #   so "台灣選舉" is not treated as one long token.
+        # - All tokens are given equal weight; production systems often weight
+        #   tokens by tf-idf to emphasize discriminative terms.
         v = [0] * hash_bits
 
         # Tokenize (simple whitespace split)
@@ -119,10 +138,20 @@ class DuplicationDetector:
             return 0
 
         for token in tokens:
-            # Hash token to integer
+            # Hash each token to a large integer. We use MD5 because it is:
+            # - deterministic (stable across runs)
+            # - readily available in the standard library
+            #
+            # Cryptographic security is not required here; we only need a
+            # reasonably uniform bit distribution.
             token_hash = int(hashlib.md5(token.encode('utf-8')).hexdigest(), 16)
 
-            # Update bit vector
+            # Update bit votes for every bit position.
+            #
+            # Complexity note:
+            # This loop is O(hash_bits) per token. For large corpora, a common
+            # optimization is to precompute hashes and/or use bit tricks to
+            # update multiple positions at once.
             for i in range(hash_bits):
                 bit_mask = 1 << i
                 if token_hash & bit_mask:
@@ -134,6 +163,7 @@ class DuplicationDetector:
         fingerprint = 0
         for i in range(hash_bits):
             if v[i] > 0:
+                # Positive vote means "more evidence for 1 than 0" at bit i.
                 fingerprint |= (1 << i)
 
         return fingerprint
@@ -158,10 +188,12 @@ class DuplicationDetector:
             >>> detector.hamming_distance(0b1010, 0b1100)
             2  # Two bits differ
         """
-        # XOR gives 1 where bits differ
+        # XOR gives 1 where the two fingerprints differ.
         xor = hash1 ^ hash2
 
-        # Count number of 1s (differing bits)
+        # Count number of 1s using Brian Kernighan's trick:
+        #   x &= x - 1 removes the lowest set bit each iteration.
+        # This runs in O(#set_bits) rather than O(hash_bits).
         distance = 0
         while xor:
             distance += 1
@@ -203,7 +235,17 @@ class DuplicationDetector:
         Complexity:
             Time: O(n) where n is number of existing hashes
         """
-        # Check against existing hashes
+        # Naive fuzzy matching scans all existing fingerprints and checks
+        # Hamming distance <= threshold.
+        #
+        # This is O(M) per insertion (M = number of indexed docs), which is fine
+        # for small corpora but can become a bottleneck at scale.
+        #
+        # Common accelerations:
+        # - Multi-index hashing / banding: split the fingerprint into chunks and
+        #   only compare within candidate buckets.
+        # - BK-tree over fingerprints with Hamming distance metric.
+        # - LSH buckets with bit sampling.
         for existing_hash, existing_id in self.fuzzy_hashes.items():
             distance = self.hamming_distance(simhash, existing_hash)
             if distance <= self.fuzzy_threshold:
@@ -317,7 +359,12 @@ class DuplicationDetector:
             >>> is_unique
             False
         """
-        # Check exact duplicate
+        # Two-stage deduplication pipeline:
+        # 1) Exact duplicate check (cheap): MD5 over full text -> O(n)
+        # 2) Near-duplicate check (more expensive): SimHash + Hamming scan -> O(n * hash_bits + M)
+        #
+        # We run exact check first to short-circuit identical documents and avoid
+        # populating the fuzzy index with duplicates that bring no new information.
         if use_exact:
             content_hash = self.md5_hash(text)
             if not self.add_exact(content_hash):

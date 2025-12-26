@@ -690,3 +690,69 @@ if self.smoothing == 'absolute':
 
 - 靜態語法檢查：`python -m py_compile src/ir/text/chinese_tokenizer.py src/ir/text/ckip_tokenizer.py src/ir/text/ckip_tokenizer_optimized.py src/ir/text/stopwords.py src/ir/retrieval/wildcard.py src/ir/retrieval/fuzzy.py src/ir/retrieval/language_model_retrieval.py src/ir/retrieval/bim.py`
 - 測試子集（確保 wildcard 整合沒壞）：`pytest tests/test_boolean.py`
+
+---
+
+## 2025-12-26：索引工具模組教科書式行內註解（Compression / Dedup / Reader）（第 14 批）
+
+### 目標
+
+- 補強索引管線中「常被忽略但很關鍵」的三個工具模組，讓你能逐行對照理解：
+  - Index compression：為什麼 postings list 先 gap encoding、再用可變長度碼（VByte/Gamma/Delta）能大幅省空間
+  - Deduplication：MD5（exact）vs SimHash（near-duplicate）的原理與複雜度取捨
+  - Document reader：JSONL / PostgreSQL 兩種資料來源的讀取策略與「可容錯」的資料正規化
+
+### 本次修改範圍
+
+- `src/ir/index/compression.py`
+  - 補強 VByte 的 base-128 chunk/continuation bit 解碼心智模型（multiplier 的意義）
+  - **修正** Elias Gamma 的 bitstream 格式與 decode pointer 前進邏輯，讓 encode/decode 可正確 round-trip
+  - 更新 Delta 範例與註解，使其符合標準定義（先 gamma 編碼 bit-length，再附上去掉 leading 1 的 offset bits）
+- `src/ir/index/deduplication.py`
+  - 補強 SimHash 的「bit vote 向量」直覺（為什麼相似文本會有小 Hamming distance）
+  - 補強 fuzzy 去重的複雜度與常見加速方向（banding/BK-tree/LSH buckets）
+- `src/ir/index/doc_reader.py`
+  - 補強 NewsDocument 欄位/主鍵（doc_id）對齊觀念
+  - 補強 JSONL 容錯讀取（per-line error isolation）
+  - 補強 PostgreSQL server-side cursor + `fetchmany()` 的批次讀取意義（記憶體/IO 取捨）
+
+### 片段程式碼（Gamma：標準表示法 `0^L || binary(n)`）
+
+Gamma 編碼最常見的教科書定義是：前置 L 個 0，再接上 n 的 binary（含 leading 1）。這樣 decode 才能靠「數 0 的數量」知道要再讀多少 bits：
+
+```python
+binary = bin(num)[2:]           # e.g., 13 -> "1101"
+length = len(binary) - 1        # L = floor(log2(n))
+return ("0" * length) + binary  # "0001101"
+```
+
+### 片段程式碼（SimHash：bit vote）
+
+SimHash 的核心是把每個 token hash 轉成 bit pattern，對每個 bit 做「+1 / -1 投票」，最後看正負號決定指紋：
+
+```python
+if token_hash & (1 << i):
+    v[i] += 1
+else:
+    v[i] -= 1
+```
+
+### 原理整理（重點）
+
+- **Compression（壓縮）**
+  - postings list 是遞增 doc_id；先做 **gap encoding** 會把大數字轉成小 gap（更容易被可變長度碼壓縮）。
+  - VByte 的 decode 用 `multiplier = 1, 128, 128^2...` 逐步重建整數，是理解 base-128 little-endian 的關鍵。
+  - Gamma/Delta 這類 bit-level 編碼要特別注意：**bitstream 的自描述性**（self-delimiting）必須成立，decode pointer 才能前進。
+
+- **Deduplication（去重）**
+  - Exact：MD5 像 checksum，快且 O(1) lookup；但無法抓「文字稍微改過」的近似重複。
+  - Fuzzy：SimHash 用 Hamming distance 衡量「指紋差多少 bit」；但 naive 比對是 O(M)（M=已收錄文件數），大規模時需加速（banding/LSH）。
+
+- **Document reader（資料讀取）**
+  - JSONL 讀取採逐行 parse + try/except：單行壞資料不會讓整個檔案失敗。
+  - PostgreSQL 用 server-side cursor + `fetchmany(batch_size)`：避免一次把全部結果拉進記憶體。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/index/compression.py src/ir/index/deduplication.py src/ir/index/doc_reader.py`
+- 建議快速 sanity（手動）：在 Python REPL 內做 `GammaEncoder().decode(GammaEncoder().encode([1, 5, 13]))` 應回到原序列

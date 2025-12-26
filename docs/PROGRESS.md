@@ -881,3 +881,64 @@ for condition in self.conditions:
 
 - 靜態語法檢查：`python -m py_compile src/ir/facet/facet_engine.py src/ir/facet/facet_filter.py`
 - 單元測試：`pytest tests/test_facet.py`
+
+---
+
+## 2025-12-26：CSoundex（中文諧音編碼）教科書式行內註解（第 17 批）
+
+### 目標
+
+- 把 `src/ir/text/csoundex.py` 補成更容易逐行學習的版本，讓你能理解：
+  - CSoundex 與傳統 Soundex 的對應關係（first letter + bucket codes）
+  - Pinyin 的拆解：initial / final / tone
+  - 為什麼要用「分群」把相近音映射到同一個 code（提高 recall）
+  - 何時要忽略 tone（避免過度嚴格造成漏匹配）
+  - 快取（LRU cache）在批次處理/大量比對時如何加速
+
+### 本次修改範圍
+
+- `src/ir/text/csoundex.py`
+  - 補強 pypinyin optional dependency 的 fallback 行為註解（沒有 pypinyin 時仍可用 TSV lexicon）。
+  - 補強初始化流程註解（讀 YAML config → 建 reverse mapping → 載入 lexicon → 設定 options）。
+  - 補強 normalize / split initial-final 的規則註解（longest-first、y/w 特例、yu→v）。
+  - 補強 encode_character 的行為註解（混合文本處理、未知 phoneme 的 0 bucket、tone 參數的意義）。
+  - 補強 similarity / find_similar 的計算假設註解（位置對齊、weighted decay、brute-force scan）。
+  - 同步修正文檔示例，使 `encode()` 範例輸出與實際 config 一致（避免「看註解卻跑不出來」）。
+
+### 片段程式碼（核心：tone digit 拆出來）
+
+CSoundex 採用（TONE3）尾端數字作 tone；沒有 tone 就視為中性調 0：
+
+```python
+tone_match = re.search(r'(\\d)$', py)
+tone = tone_match.group(1) if tone_match else "0"
+py = py[:-1] if tone_match else py
+```
+
+### 片段程式碼（核心：把 initial / final 映射到 bucket）
+
+把 phoneme 映射到 coarse bucket（0..9），可以把「相近音」聚在一起（同音/近音匹配）：
+
+```python
+initial_code = self.initial_to_code.get(initial, 0)
+final_code = self.final_to_code.get(final, 0)
+code = f\"{first_letter}{initial_code}{final_code}\"
+```
+
+### 原理整理（重點）
+
+- **分群（bucketing）是 recall/precision 的取捨**
+  - bucket 越粗（分得越少）→ 越容易把不同字編到同一碼（recall ↑、precision ↓）
+  - bucket 越細（分得越多）→ 越不容易誤合（precision ↑、recall ↓）
+
+- **為什麼通常不把 tone 當必要條件**
+  - 人名、外來語、口語文本的 tone 變異很常見；把 tone 當 hard constraint 會大幅降低 recall。
+  - 所以 similarity 預設用 tone-free codes，比較實用。
+
+- **LRU cache 的價值**
+  - 大量查詢/比對時，同一個漢字會重複出現很多次；LRU cache 能把「pinyin 查詢 + 拆解 + 映射」的成本攤平。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/text/csoundex.py`
+- 單元測試：`pytest tests/test_csoundex.py`

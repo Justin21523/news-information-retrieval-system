@@ -29,6 +29,9 @@ try:
     PYPINYIN_AVAILABLE = True
 except ImportError:
     PYPINYIN_AVAILABLE = False
+    # CSoundex can still work using the on-disk lexicon (TSV) only.
+    # This keeps the module usable in minimal environments, at the cost of
+    # reduced coverage (characters not in lexicon cannot be encoded).
     logging.warning("pypinyin not available. CSoundex will use dictionary-only mode.")
 
 
@@ -40,8 +43,9 @@ class CSoundex:
     their Pinyin romanization, grouping similar sounds together.
 
     Encoding Format:
-        Standard (4-char): [First_Letter][Initial_Code][Final_Code][Tone_Code]
-        Example: 張 (zhang1) → Z811
+        Without tone (3-char): [First_Letter][Initial_Code][Final_Code]
+        With tone (4-char):    [First_Letter][Initial_Code][Final_Code][Tone_Code]
+        Example: 張 (zhang1) → Z89 (or Z891 when include_tone=True)
 
     Complexity:
         - encode(): O(n) where n is character count (with LRU cache: O(1) amortized)
@@ -68,25 +72,38 @@ class CSoundex:
         """
         self.logger = logging.getLogger(__name__)
 
-        # Load configuration
+        # Load configuration from YAML.
+        #
+        # The config defines:
+        # - how to group initials/finals into coarse phonetic buckets (0..9)
+        # - where to find the optional on-disk lexicon (character -> pinyin)
+        # - runtime options (use pypinyin fallback, cache, default tone behavior)
         if config_path is None:
             config_path = self._get_default_config_path()
         self.config = self._load_config(config_path)
 
-        # Extract grouping rules
+        # Extract grouping rules (bucket definitions).
+        # These are IR-specific design choices: fewer buckets => more aggressive
+        # "sounds-like" matching but higher false positives.
         self.initial_groups = self.config['initial_groups']
         self.final_groups = self.config['final_groups']
 
         # Build reverse mapping: pinyin initial/final -> group code
+        # e.g., 'zh' -> 8, 'ang' -> 9.
         self.initial_to_code = self._build_reverse_mapping(self.initial_groups)
         self.final_to_code = self._build_reverse_mapping(self.final_groups)
 
-        # Load lexicon
+        # Load lexicon for deterministic pinyin lookup.
+        # This is preferred over pypinyin for:
+        # - reproducibility
+        # - custom overrides (variant characters, domain-specific names)
         if lexicon_path is None:
             lexicon_path = self.config.get('lexicon_path', None)
         self.lexicon = self._load_lexicon(lexicon_path) if lexicon_path else {}
 
-        # Configuration options
+        # Runtime options (see configs/csoundex.yaml).
+        # NOTE: encode_character() is decorated with lru_cache unconditionally.
+        # `cache_enabled` is currently informational / reserved for future use.
         self.use_pypinyin_fallback = self.config.get('use_pypinyin_fallback', True)
         self.pypinyin_style = getattr(Style, self.config.get('pypinyin_style', 'TONE3'))
         self.default_include_tone = self.config.get('default_include_tone', False)
@@ -96,7 +113,8 @@ class CSoundex:
 
     def _get_default_config_path(self) -> str:
         """Get default config file path."""
-        # Assume we're in src/ir/text/, config is in configs/
+        # Assume we're in src/ir/text/, config is in configs/.
+        # Using a relative path keeps the module portable inside the repo.
         base_dir = Path(__file__).parent.parent.parent.parent
         return str(base_dir / 'configs' / 'csoundex.yaml')
 
@@ -137,6 +155,8 @@ class CSoundex:
         mapping = {}
         for code, phonemes in groups.items():
             for phoneme in phonemes:
+                # Later entries override earlier ones if duplicates exist.
+                # In a well-formed config, each phoneme should map to exactly one bucket.
                 mapping[phoneme] = code
         return mapping
 
@@ -165,6 +185,10 @@ class CSoundex:
                 if not line or line.startswith('#'):
                     continue
 
+                # Expected TSV columns:
+                #   char<TAB>pinyin
+                # Example:
+                #   張    zhang1
                 parts = line.split('\t')
                 if len(parts) >= 2:
                     char, py = parts[0], parts[1]
@@ -190,12 +214,15 @@ class CSoundex:
         Returns:
             Pinyin string (e.g., "zhang1") or None
         """
-        # Try lexicon first
+        # Try lexicon first (deterministic + fast).
         if char in self.lexicon:
             return self.lexicon[char]
 
-        # Fallback to pypinyin
+        # Fallback to pypinyin (wider coverage, may vary across library versions).
         if self.use_pypinyin_fallback and PYPINYIN_AVAILABLE:
+            # pypinyin returns a nested list structure:
+            #   [["zhang1"]] for a single character.
+            # errors='ignore' drops characters it cannot convert.
             result = pinyin(char, style=self.pypinyin_style, errors='ignore')
             if result and result[0]:
                 return result[0][0]
@@ -223,10 +250,11 @@ class CSoundex:
             >>> normalize_pinyin("a1")
             ("", "a", "1")
         """
-        # Lowercase
+        # Normalize casing/whitespace first so downstream rules are stable.
         py = py.lower().strip()
 
-        # Extract tone (last digit if present)
+        # Extract tone (the last digit) when using TONE3 style (e.g., "zhang1").
+        # If tone is missing, we treat it as neutral tone "0".
         tone_match = re.search(r'(\d)$', py)
         if tone_match:
             tone = tone_match.group(1)
@@ -234,7 +262,7 @@ class CSoundex:
         else:
             tone = "0"  # Neutral tone / no tone
 
-        # Split into initial and final
+        # Split the remaining syllable into initial consonant and final.
         initial, final = self._split_initial_final(py)
 
         return initial, final, tone
@@ -249,14 +277,20 @@ class CSoundex:
         Returns:
             Tuple of (initial, final)
         """
-        # Initials ordered by length (longest first to match correctly)
+        # Initials ordered by length (longest first) so "zh" matches before "z".
+        #
+        # This is a common parsing trick: without it, "zhang" would be split as
+        # initial="z" and final="hang", which is incorrect.
         initials = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l',
                     'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'y', 'w']
 
         for init in initials:
             if py.startswith(init):
                 final = py[len(init):]
-                # Handle special cases: yi -> i, wu -> u, yu -> v
+                # Handle pinyin special cases (approximate):
+                # - "yi"/"y" is treated as vowel-only "i"
+                # - "wu"/"w" is treated as vowel-only "u"
+                # - "yu" is often represented as "v" in some romanization schemes
                 if init == 'y' and final in ['i', '']:
                     return '', 'i'
                 elif init == 'w' and final in ['u', '']:
@@ -278,7 +312,7 @@ class CSoundex:
             include_tone: Whether to include tone in encoding. If None, uses default.
 
         Returns:
-            CSoundex code (e.g., "Z811" for 張)
+            CSoundex code (e.g., "Z89" for 張, or "Z891" when tone is included)
             - Format: [First_Letter][Initial_Code][Final_Code][Tone_Code]
             - Non-Chinese returns uppercase first letter
 
@@ -289,30 +323,37 @@ class CSoundex:
         if include_tone is None:
             include_tone = self.default_include_tone
 
-        # Handle non-Chinese characters
+        # Handle non-Chinese characters.
+        #
+        # IR systems often contain mixed text:
+        # - English tokens are kept as uppercase letters so "Google" can still be compared.
+        # - Punctuation and digits are ignored (empty code).
         if not self._is_chinese(char):
             if char.isalpha():
                 return char.upper()
             else:
                 return ''  # Ignore punctuation/numbers
 
-        # Get pinyin
+        # Convert the character to pinyin (zhang1, li3, ...).
         py = self.get_pinyin(char)
         if not py:
             self.logger.debug(f"No pinyin found for: {char}")
             return char  # Return original if can't encode
 
-        # Normalize and extract components
+        # Normalize and extract components: initial, final, and tone digit.
         initial, final, tone = self.normalize_pinyin(py)
 
-        # Get first letter (uppercase)
+        # Use the first letter of the pinyin as a coarse anchor (Soundex-style).
         first_letter = py[0].upper()
 
-        # Get group codes
+        # Map initial/final to bucket codes (0..9).
+        # Unknown phonemes map to 0, which increases recall but may increase noise.
         initial_code = self.initial_to_code.get(initial, 0)
         final_code = self.final_to_code.get(final, 0)
 
-        # Build code
+        # Build the final code:
+        # - Without tone:  Letter + initial_code + final_code
+        # - With tone:     append the tone digit (1..4 or 0 for neutral)
         if include_tone:
             code = f"{first_letter}{initial_code}{final_code}{tone}"
         else:
@@ -333,17 +374,20 @@ class CSoundex:
 
         Examples:
             >>> csoundex.encode("張三")
-            "Z811 S900"
+            "Z89 S99"
             >>> csoundex.encode("三聚氰胺")
-            "S900 J760 Q700 A300"
+            "S99 J75 Q79 A09"
             >>> csoundex.encode("hello 世界")
-            "H E L L O S840 J740"
+            "H E L L O S84 J73"
 
         Complexity:
             Time: O(n) where n is character count
             Space: O(n) for output string
         """
         codes = []
+        # The encoder is character-based: it emits one code per input character,
+        # skipping punctuation/numbers. This makes it easy to align codes with
+        # original text positions for debugging.
         for char in text:
             code = self.encode_character(char, include_tone)
             if code:  # Skip empty codes (punctuation)
@@ -365,6 +409,7 @@ class CSoundex:
         Complexity:
             Time: O(n*m) where n is number of texts, m is average length
         """
+        # Batch mode reuses the per-character cache heavily when texts share characters.
         return [self.encode(text, include_tone) for text in texts]
 
     def similarity(self, text1: str, text2: str, mode: str = 'fuzzy') -> float:
@@ -392,6 +437,8 @@ class CSoundex:
             Time: O(min(n, m)) where n, m are text lengths
             Space: O(n + m)
         """
+        # Compare using tone-free codes by default.
+        # Tone often varies in names/loanwords and can reduce recall.
         code1 = self.encode(text1, include_tone=False)
         code2 = self.encode(text2, include_tone=False)
 
@@ -399,21 +446,26 @@ class CSoundex:
             return 1.0 if code1 == code2 else 0.0
 
         elif mode == 'fuzzy':
-            # Character-level similarity
+            # Character-level similarity:
+            # compare codes position-by-position and normalize by the longer length.
+            #
+            # This is a simple measure; it does not account for insertions/deletions.
+            # If you need edit-distance behavior, consider Levenshtein over code tokens.
             codes1 = code1.split()
             codes2 = code2.split()
 
             if not codes1 or not codes2:
                 return 0.0
 
-            # Count matching positions
+            # Count matching positions (zip truncates to the shorter list).
             matches = sum(1 for c1, c2 in zip(codes1, codes2) if c1 == c2)
             max_len = max(len(codes1), len(codes2))
 
             return matches / max_len if max_len > 0 else 0.0
 
         elif mode == 'weighted':
-            # Position-weighted (earlier positions more important)
+            # Position-weighted similarity (earlier positions more important).
+            # Weight(i) = 1 / (i+1) makes the first character dominate.
             codes1 = code1.split()
             codes2 = code2.split()
 
@@ -430,6 +482,7 @@ class CSoundex:
                     matched_weight += weight
 
             # Add remaining positions to total weight
+            # This penalizes extra trailing characters in the longer string.
             longer = max(len(codes1), len(codes2))
             for i in range(len(codes1), longer):
                 total_weight += 1.0 / (i + 1)
@@ -465,6 +518,7 @@ class CSoundex:
         results = []
 
         for candidate in candidates:
+            # Brute-force scan: compute similarity to every candidate.
             sim = self.similarity(query, candidate, mode='fuzzy')
             if sim >= threshold:
                 results.append((candidate, sim))
@@ -491,6 +545,8 @@ class CSoundex:
         if len(char) != 1:
             return False
 
+        # Unicode ranges for Chinese characters. This is a pragmatic heuristic
+        # used by many NLP systems; it is not a full "language detector".
         code = ord(char)
         return (
             0x4E00 <= code <= 0x9FFF or   # CJK Unified Ideographs

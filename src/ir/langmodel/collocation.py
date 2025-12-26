@@ -29,6 +29,7 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
+# Standard library imports (math/logging, typing, frequency counters).
 import math
 import logging
 from typing import List, Dict, Tuple, Set, Optional, Callable
@@ -92,10 +93,19 @@ class CollocationExtractor:
         Complexity:
             Time: O(1)
         """
+        # Logger helps trace corpus statistics and measure selection.
         self.logger = logging.getLogger(__name__)
 
+        # Tokenizer can be injected (e.g., whitespace tokenizer for English,
+        # jieba/CKIP for Chinese). Default is a simple regex-based tokenizer.
         self.tokenizer = tokenizer or self._default_tokenizer
+
+        # Minimum frequency threshold prunes very rare bigrams which tend to have
+        # unstable association statistics (PMI especially).
         self.min_freq = min_freq
+
+        # Window size is kept for API extensibility; the current implementation
+        # focuses on adjacent bigrams (window_size=2).
         self.window_size = window_size
 
         # Frequency counts
@@ -119,6 +129,8 @@ class CollocationExtractor:
 
     def _default_tokenizer(self, text: str) -> List[str]:
         """Default tokenizer."""
+        # Baseline tokenizer that extracts CJK runs and alphanumeric runs.
+        # For serious collocation work, plug in a real segmenter.
         import re
         return re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z0-9]+', text.lower())
 
@@ -135,24 +147,24 @@ class CollocationExtractor:
         """
         self.logger.info(f"Training collocation extractor on {len(documents)} documents...")
 
-        # Collect all tokens
-        all_tokens = []
+        # Iterate through the corpus and update unigram/bigram frequency tables.
         for doc in documents:
+            # Tokenize each document using the configured tokenizer.
             tokens = self.tokenizer(doc)
-            all_tokens.extend(tokens)
 
-            # Count unigrams
+            # Count unigrams (token frequencies).
             for token in tokens:
                 self.unigram_freq[token] += 1
                 self.total_unigrams += 1
 
-            # Count bigrams
+            # Count adjacent bigrams (w_i, w_{i+1}).
+            # NOTE: We do not currently use `window_size` for skip-bigrams.
             for i in range(len(tokens) - 1):
                 bigram = (tokens[i], tokens[i + 1])
                 self.bigram_freq[bigram] += 1
                 self.total_bigrams += 1
 
-        # Build contingency tables for statistical tests
+        # Build contingency tables for statistical hypothesis tests (LLR/χ²).
         self._build_contingency_tables()
 
         vocab_size = len(self.unigram_freq)
@@ -178,14 +190,22 @@ class CollocationExtractor:
             Time: O(B) where B = unique bigrams
         """
         for (w1, w2), n11 in self.bigram_freq.items():
+            # Marginal counts (approximated from unigram frequencies).
+            # In a strict bigram contingency table you would use position-specific
+            # marginals (left/right), but unigram frequency is a practical proxy.
             c1 = self.unigram_freq[w1]  # count(w1)
             c2 = self.unigram_freq[w2]  # count(w2)
 
-            # Contingency table
+            # Contingency table entries:
+            # - n11: observed co-occurrence count (w1 followed by w2)
+            # - n12: w1 occurs without w2 as its pair
+            # - n21: w2 occurs without w1 as its pair
+            # - n22: neither occurs in the co-occurrence event space
             n12 = c1 - n11  # w1 appears, w2 doesn't
             n21 = c2 - n11  # w2 appears, w1 doesn't
             n22 = self.total_bigrams - c1 - c2 + n11  # neither appears
 
+            # Clamp at 0 to avoid negative counts caused by marginal approximations.
             self.contingency_tables[(w1, w2)] = {
                 'n11': n11,
                 'n12': max(0, n12),
@@ -220,20 +240,23 @@ class CollocationExtractor:
         """
         bigram = (w1, w2)
 
+        # If the bigram never appears, PMI is undefined; return -inf as a sentinel.
         if bigram not in self.bigram_freq:
             return float('-inf')
 
-        # P(w1, w2)
+        # Joint probability P(w1, w2) estimated from bigram frequency.
         p_bigram = self.bigram_freq[bigram] / self.total_bigrams
 
-        # P(w1) * P(w2)
+        # Independent probability P(w1)P(w2) estimated from unigram frequencies.
         p_w1 = self.unigram_freq[w1] / self.total_unigrams
         p_w2 = self.unigram_freq[w2] / self.total_unigrams
         p_independent = p_w1 * p_w2
 
+        # Guard against division by zero for OOV tokens.
         if p_independent == 0:
             return float('-inf')
 
+        # Positive PMI indicates co-occurrence more than chance; negative indicates less.
         return math.log2(p_bigram / p_independent)
 
     def llr(self, w1: str, w2: str) -> float:
@@ -259,13 +282,15 @@ class CollocationExtractor:
         """
         bigram = (w1, w2)
 
+        # LLR is defined via a contingency table; missing entries yield 0.
         if bigram not in self.contingency_tables:
             return 0.0
 
+        # Unpack the 2x2 table counts.
         table = self.contingency_tables[bigram]
         n11, n12, n21, n22 = table['n11'], table['n12'], table['n21'], table['n22']
 
-        # Row and column totals
+        # Row/column totals (marginals) for expected frequencies.
         r1 = n11 + n12  # count(w1)
         r2 = n21 + n22  # count(¬w1)
         c1 = n11 + n21  # count(w2)
@@ -275,18 +300,21 @@ class CollocationExtractor:
         if n == 0:
             return 0.0
 
-        # Expected frequencies
+        # Expected frequencies under the independence assumption:
+        # E_ij = (row_total_i * col_total_j) / n
         e11 = r1 * c1 / n
         e12 = r1 * c2 / n
         e21 = r2 * c1 / n
         e22 = r2 * c2 / n
 
-        # LLR calculation
+        # LLR calculation: 2 * Σ O_ij * log(O_ij / E_ij).
+        # We skip cells with O=0 to avoid log(0).
         llr_score = 0.0
         for o, e in [(n11, e11), (n12, e12), (n21, e21), (n22, e22)]:
             if o > 0 and e > 0:
                 llr_score += o * math.log(o / e)
 
+        # Multiply by 2 to match the chi-square distribution asymptotics.
         return 2 * llr_score
 
     def chi_square(self, w1: str, w2: str) -> float:
@@ -311,13 +339,14 @@ class CollocationExtractor:
         """
         bigram = (w1, w2)
 
+        # χ² also relies on a contingency table; missing entries yield 0.
         if bigram not in self.contingency_tables:
             return 0.0
 
         table = self.contingency_tables[bigram]
         n11, n12, n21, n22 = table['n11'], table['n12'], table['n21'], table['n22']
 
-        # Row and column totals
+        # Row/column totals for expectation under independence.
         r1 = n11 + n12
         r2 = n21 + n22
         c1 = n11 + n21
@@ -327,13 +356,13 @@ class CollocationExtractor:
         if n == 0:
             return 0.0
 
-        # Expected frequencies
+        # Expected frequencies E_ij = (row_total_i * col_total_j) / n.
         e11 = r1 * c1 / n
         e12 = r1 * c2 / n
         e21 = r2 * c1 / n
         e22 = r2 * c2 / n
 
-        # Chi-square calculation
+        # χ² = Σ (O - E)^2 / E (skip cells where E=0).
         chi2 = 0.0
         for o, e in [(n11, e11), (n12, e12), (n21, e21), (n22, e22)]:
             if e > 0:
@@ -361,16 +390,18 @@ class CollocationExtractor:
         """
         bigram = (w1, w2)
 
+        # T-score is defined for observed bigrams only in this implementation.
         if bigram not in self.bigram_freq:
             return 0.0
 
-        # Probabilities
+        # Convert counts into probabilities.
         p_bigram = self.bigram_freq[bigram] / self.total_bigrams
         p_w1 = self.unigram_freq[w1] / self.total_unigrams
         p_w2 = self.unigram_freq[w2] / self.total_unigrams
 
-        # T-score formula
+        # Numerator measures how much joint probability exceeds independence.
         numerator = p_bigram - (p_w1 * p_w2)
+        # Denominator scales by sqrt(P(x,y)/N), which maps to sqrt(O) in counts.
         denominator = math.sqrt(p_bigram / self.total_bigrams)
 
         if denominator == 0:
@@ -398,9 +429,11 @@ class CollocationExtractor:
         """
         bigram = (w1, w2)
 
+        # Dice coefficient is 0 if the bigram never occurs.
         if bigram not in self.bigram_freq:
             return 0.0
 
+        # Use raw counts (not probabilities) for the Dice coefficient.
         f_bigram = self.bigram_freq[bigram]
         f_w1 = self.unigram_freq[w1]
         f_w2 = self.unigram_freq[w2]
@@ -410,6 +443,7 @@ class CollocationExtractor:
         if denominator == 0:
             return 0.0
 
+        # Dice = 2 * f(x,y) / (f(x) + f(y)).
         return (2 * f_bigram) / denominator
 
     def extract_collocations(self,
@@ -437,17 +471,19 @@ class CollocationExtractor:
             ('United', 'States'): PMI=7.92
             ...
         """
-        # Filter by minimum frequency
+        # Filter candidates by minimum frequency to reduce noise.
         candidates = [
             bigram for bigram, freq in self.bigram_freq.items()
             if freq >= self.min_freq
         ]
 
-        # Score all candidates
+        # Score each candidate with all measures so callers can compare metrics.
         scores = []
         for bigram in candidates:
+            # Unpack the word pair.
             w1, w2 = bigram
 
+            # Compute all association measures in one pass.
             score = CollocationScore(
                 bigram=bigram,
                 freq=self.bigram_freq[bigram],
@@ -459,7 +495,7 @@ class CollocationExtractor:
             )
             scores.append(score)
 
-        # Sort by chosen measure
+        # Select the scoring key based on the caller's requested measure.
         measure_map = {
             'pmi': lambda s: s.pmi,
             'llr': lambda s: s.llr,
@@ -473,12 +509,15 @@ class CollocationExtractor:
             self.logger.warning(f"Unknown measure '{measure}', using PMI")
             measure = 'pmi'
 
+        # Sort in descending order (higher score => stronger collocation).
         scores.sort(key=measure_map[measure], reverse=True)
 
+        # Return only the top-k candidates.
         return scores[:topk]
 
     def get_stats(self) -> Dict:
         """Get collocation extractor statistics."""
+        # Small summary for logging / dashboards (pure primitives for JSON export).
         return {
             'total_unigrams': self.total_unigrams,
             'total_bigrams': self.total_bigrams,
@@ -491,6 +530,7 @@ class CollocationExtractor:
 
 def demo():
     """Demonstration of CollocationExtractor."""
+    # Demo uses a tiny corpus and prints top collocations by different measures.
     print("=" * 60)
     print("Collocation Extraction Demo")
     print("=" * 60)
@@ -506,7 +546,7 @@ def demo():
         "Information systems and retrieval methods"
     ]
 
-    # Extract collocations
+    # Train the extractor (build frequency tables + contingency tables).
     extractor = CollocationExtractor(min_freq=2)
     extractor.train(documents)
 

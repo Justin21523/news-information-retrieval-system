@@ -988,3 +988,94 @@ dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
 
 - 靜態語法檢查：`python -m py_compile src/ir/cluster/doc_cluster.py src/ir/cluster/term_cluster.py`
 - 單元測試：`pytest tests/test_clustering.py`
+
+---
+
+## 2025-12-26：NER / Keyphrase 評估 / Language Model / Hybrid Ranking 教科書式行內註解（第 19 批）
+
+### 目標
+
+- 針對你指定的 4 組模組補上更「教科書式」的逐步英文行內註解，讓你能逐行對照理解：
+  - NER（命名實體識別）資料流與 offset 語意
+  - keyword/keyphrase extraction 的常見評估指標（P@K/R@K/F1/MAP/MRR/nDCG）
+  - N-gram language model 的訓練、smoothing 與 perplexity
+  - collocation（搭配詞）統計量與 2×2 contingency table
+  - hybrid ranking 的 score normalization 與 fusion 方法差異（linear/RRF/CombSUM/CombMNZ）
+
+### 本次修改範圍
+
+- `src/ir/text/ner_extractor.py`
+  - 強化 `extract/extract_batch/extract_cached` 的資料流註解（tuple 結構、filter 時機、include_source 的記憶體取捨）。
+  - 釐清 `start_pos/end_pos` 為 **character offsets**（[start, end)）而非 token index，避免誤解。
+  - 補強 LRU cache 的 key/value 設計原因（hashable、per-instance cache）。
+- `src/ir/keyextract/evaluator.py`
+  - 補強 supervised metrics 的計算流程註解（top‑k prefix、set membership、AP/MRR/nDCG）。
+  - 補強 unsupervised diversity/coverage 的限制註解（whitespace tokenization 對中文不理想）。
+  - 更正 `aggregate_results()` 的敘述為 **macro-average**（逐文件平均）。
+- `src/ir/langmodel/ngram.py`
+  - 補強兩段式訓練（vocab/collection probs → n-gram counts）與 smoothing 直覺註解（Laplace/JM/Dirichlet）。
+  - 修正 unigram 計數使用方式，讓 `n=1` 與公式一致（教學一致性）。
+  - 補強 log-space、sentence probability、perplexity 與 generation 的限制註解。
+- `src/ir/langmodel/collocation.py`
+  - 補強 2×2 contingency table（n11/n12/n21/n22）與 LLR/χ² 的計算步驟註解。
+  - 補強 PMI/T-score/Dice 的直覺、min_freq 的穩定性影響註解。
+- `src/ir/ranking/hybrid.py`
+  - 補強 normalization（minmax/zscore/none）在融合中的角色與陷阱註解（score scale mismatch）。
+  - 補強 fusion 策略（linear/RRF/CombSUM/CombMNZ）的資料流註解（doc_id 對齊、累加器、不變量）。
+
+### 片段程式碼（NER：為什麼 cache 回傳 tuple-of-tuples）
+
+`lru_cache` 的回傳值必須是可 hash 的結構；所以用 tuple 包住結果，並保持 immutable 以利重複利用：
+
+```python
+@lru_cache(maxsize=10000)
+def extract_cached(self, text: str) -> Tuple[Tuple[str, str, int, int], ...]:
+    ...
+    return tuple(filtered)
+```
+
+### 片段程式碼（N-gram：unigram 計數 + Laplace smoothing）
+
+unigram 的 key 是 `(word,)`（tuple），Laplace smoothing 用 add‑1 避免 0 機率：
+
+```python
+count = self.ngram_counts.get((word,), 0)
+return (count + 1) / (self.total_ngrams + vocab_size)
+```
+
+### 片段程式碼（Hybrid：linear fusion 先 normalize 再加權相加）
+
+這是最常見也最直觀的 score fusion：先把各 ranker 的分數映射到可比尺度，再用權重做加總：
+
+```python
+normalized_scores = self._normalize_scores(scores)
+fused_scores[doc_id] += weight * score
+```
+
+### 原理整理（重點）
+
+- **NER（Named Entity Recognition）**
+  - `start_pos/end_pos` 是 **char span**（`[start, end)`），等同於 Python slicing 的 index 語意；這對 highlight/annotation 很直觀。
+  - `include_source=True` 便於 debug/trace，但會讓每個 entity list 內含原文（長文本時記憶體會放大）。
+  - `extract_cached()` 的 cache 是 **per-instance**（key 含 `self`），避免不同設定（不同 entity_types）互相污染。
+
+- **Keyphrase 評估（Supervised / Unsupervised）**
+  - P@K/R@K/F1@K 都只看排名前 K；MAP/MRR/nDCG 會更敏感於「相關項目出現在越前面越好」。
+  - nDCG 這裡採 **binary relevance**（rel ∈ {0,1}），適合沒有 graded relevance 的 ground truth。
+  - diversity/coverage 目前用 `split()` 當 baseline；中文若無空白，建議改用 tokenizer 或字元 n-gram 才會有意義。
+
+- **N-gram Language Model（LM）**
+  - 先建 `P(w|C)`（collection model）再做 n-gram counts，可讓 JM/Dirichlet smoothing 在任何 context 都有回退分佈。
+  - `log_probability()` 是為了避免乘一串小數造成 underflow；perplexity 用平均 log prob 再反推回來。
+
+- **Collocation（搭配詞）**
+  - LLR/χ² 都是以 2×2 contingency table 做「獨立性檢定」；PMI 則偏向關聯強度但會偏好低頻。
+  - `min_freq` 是穩定性門檻：越低越容易被偶然共現的低頻 pair 汙染排名。
+
+- **Hybrid Ranking（融合排序）**
+  - 不同 ranker 的 score 尺度差很大時，**先 normalization** 幾乎是必要步驟，不然 CombSUM/linear 會被大尺度模型主導。
+  - RRF 對尺度差異更 robust（只看 rank），但會忽略「分數差距」的資訊。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/text/ner_extractor.py src/ir/keyextract/evaluator.py src/ir/langmodel/ngram.py src/ir/langmodel/collocation.py src/ir/ranking/hybrid.py`

@@ -46,12 +46,16 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
+# Standard library imports (typing, lightweight data containers, counters, caching).
 from typing import List, Tuple, Dict, Optional, Set
 from dataclasses import dataclass
 from collections import Counter, defaultdict
 from functools import lru_cache
 import logging
 
+# Local dependency: `ChineseTokenizer` wraps the CKIP Transformer drivers and
+# exposes a stable API for tokenization/POS/NER. Keeping NER calls inside the
+# tokenizer centralizes optional heavy dependencies and lazy-loading behavior.
 from .chinese_tokenizer import ChineseTokenizer
 
 
@@ -63,8 +67,8 @@ class Entity:
     Attributes:
         text: Entity text (e.g., "台灣大學")
         type: Entity type (e.g., "ORG")
-        start_pos: Start position in token list
-        end_pos: End position in token list
+        start_pos: Start character offset in the source text (0-based, inclusive)
+        end_pos: End character offset in the source text (0-based, exclusive)
         source_text: Original text (optional)
     """
     text: str
@@ -158,13 +162,21 @@ class NERExtractor:
             Time: O(1)
             Space: O(1)
         """
+        # Logger is used to surface model initialization and runtime statistics.
         self.logger = logging.getLogger(__name__)
+
+        # Keep a set of allowed entity labels so membership checks are O(1).
         self.entity_types = entity_types or self.ALL_ENTITY_TYPES
+
+        # Device is forwarded to CKIP drivers (CPU=-1, GPU>=0).
         self.device = device
 
-        # Initialize tokenizer with CKIP engine
+        # Initialize tokenizer with CKIP engine (NER depends on this engine).
+        # `ChineseTokenizer` will lazily load the underlying CKIP NER model
+        # only when `extract_entities*()` is called.
         self.tokenizer = ChineseTokenizer(engine='ckip', device=device)
 
+        # Log the configuration to make debugging GPU/CPU routing easier.
         self.logger.info(
             f"NERExtractor initialized: device={device}, "
             f"entity_types={len(self.entity_types)}"
@@ -192,25 +204,33 @@ class NERExtractor:
             [Entity(text='張三', type='PERSON', pos=0-2),
              Entity(text='台大', type='ORG', pos=3-5)]
         """
+        # Treat empty/whitespace-only input as a no-op (common in pipelines).
         if not text or not text.strip():
             return []
 
-        # Extract entities using ChineseTokenizer
+        # Delegate extraction to `ChineseTokenizer` which wraps CKIP NER.
+        # The returned offsets are character indices on the original text:
+        #   (entity_text, entity_type, start_char, end_char)
         raw_entities = self.tokenizer.extract_entities(text)
 
-        # Convert to Entity objects and filter by type
+        # Convert the low-level tuples into `Entity` objects and filter by type.
+        # Filtering here avoids creating many objects that will be thrown away.
         entities = []
         for entity_text, entity_type, start_pos, end_pos in raw_entities:
+            # Only keep types that the caller is interested in.
             if entity_type in self.entity_types:
                 entity = Entity(
-                    text=entity_text,
-                    type=entity_type,
-                    start_pos=start_pos,
-                    end_pos=end_pos,
-                    source_text=text if include_source else None
+                    text=entity_text,  # Surface form produced by CKIP NER.
+                    type=entity_type,  # Label from OntoNotes-like tag set.
+                    start_pos=start_pos,  # Inclusive char offset in `text`.
+                    end_pos=end_pos,  # Exclusive char offset in `text`.
+                    # Keeping the full source text is convenient for debugging,
+                    # but it increases memory (O(len(text)) per entity list).
+                    source_text=text if include_source else None,
                 )
                 entities.append(entity)
 
+        # Debug-level logs help spot unexpected entity counts per document.
         self.logger.debug(f"Extracted {len(entities)} entities from text")
         return entities
 
@@ -242,32 +262,37 @@ class NERExtractor:
             >>> print(len(results))
             2
         """
+        # Fast-path: empty input list yields empty output list.
         if not texts:
             return []
 
-        # Batch extract using ChineseTokenizer
+        # Batch extraction is typically faster than repeated single calls
+        # because the underlying model can amortize overhead (especially on GPU).
         batch_raw_entities = self.tokenizer.extract_entities_batch(
             texts,
             batch_size=batch_size,
             show_progress=show_progress
         )
 
-        # Convert to Entity objects
+        # Convert each per-text result into a list of `Entity` objects.
+        # We iterate with `zip()` to preserve the input order.
         batch_entities = []
         for text, raw_entities in zip(texts, batch_raw_entities):
             entities = []
             for entity_text, entity_type, start_pos, end_pos in raw_entities:
+                # Apply the same type filter as `extract()`.
                 if entity_type in self.entity_types:
                     entity = Entity(
                         text=entity_text,
                         type=entity_type,
                         start_pos=start_pos,
                         end_pos=end_pos,
-                        source_text=text if include_source else None
+                        source_text=text if include_source else None,
                     )
                     entities.append(entity)
             batch_entities.append(entities)
 
+        # Info-level log summarizes throughput without spamming per-text details.
         self.logger.info(f"Batch extracted from {len(texts)} texts")
         return batch_entities
 
@@ -295,20 +320,27 @@ class NERExtractor:
             >>> entities2 = extractor.extract_cached("張三在台大")  # Cache hit
             >>> assert entities1 is entities2  # Same object
         """
-        # Extract entities using regular method
+        # IMPORTANT: `lru_cache` requires the return value to be hashable.
+        # We return a tuple-of-tuples instead of a list-of-tuples so the cached
+        # object is immutable and can be safely shared across callers.
+        #
+        # Note: The cache key is (self, text). The cache is per-extractor
+        # instance, so different `entity_types` configurations do not collide.
         raw_entities = self.tokenizer.extract_entities(text)
 
-        # Filter by type and convert to tuple of tuples
+        # Filter by type and keep only primitive fields to minimize cache memory.
         filtered = [
             (entity_text, entity_type, start_pos, end_pos)
             for entity_text, entity_type, start_pos, end_pos in raw_entities
             if entity_type in self.entity_types
         ]
 
+        # Tuple conversion makes the result hashable and enables cache hits.
         return tuple(filtered)
 
     def clear_cache(self):
         """Clear the NER extraction cache."""
+        # Useful when processing long-running jobs where memory needs to be reset.
         self.extract_cached.cache_clear()
         self.logger.info("NER extraction cache cleared")
 
@@ -327,12 +359,14 @@ class NERExtractor:
             >>> print(info['hit_rate'])
             0.5
         """
+        # `functools.lru_cache` exposes counters for monitoring cache behavior.
         info = self.extract_cached.cache_info()
         return {
             'hits': info.hits,
             'misses': info.misses,
             'size': info.currsize,
             'maxsize': info.maxsize,
+            # Guard against division-by-zero for a never-used cache.
             'hit_rate': info.hits / (info.hits + info.misses) if (info.hits + info.misses) > 0 else 0.0
         }
 
@@ -367,7 +401,9 @@ class NERExtractor:
             >>> print(len(persons))
             1
         """
+        # Converting to a set makes membership tests O(1) rather than O(t).
         types_set = set(types)
+        # List comprehension keeps the original entity ordering stable.
         return [e for e in entities if e.type in types_set]
 
     def filter_by_text(self,
@@ -399,13 +435,17 @@ class NERExtractor:
             >>> print(len(result))
             1
         """
+        # Exact matching is used here to keep the evaluator deterministic and fast.
+        # Callers can pre-normalize patterns (e.g., regex) if they need fuzziness.
         if not case_sensitive:
+            # Lowercasing both sides implements case-insensitive membership.
             patterns = [p.lower() for p in patterns]
             return [
                 e for e in entities
                 if e.text.lower() in patterns
             ]
         else:
+            # Set membership is faster than scanning `patterns` for each entity.
             pattern_set = set(patterns)
             return [e for e in entities if e.text in pattern_set]
 
@@ -445,6 +485,7 @@ class NERExtractor:
             >>> print(stats['unique_entities'])
             2
         """
+        # Empty input yields a fully-shaped, JSON-serializable result.
         if not entities:
             return {
                 'total': 0,
@@ -454,19 +495,20 @@ class NERExtractor:
                 'type_distribution': {}
             }
 
-        # Count by type
+        # Count entity labels (e.g., PERSON/ORG) for distribution analysis.
         type_counts = Counter(e.type for e in entities)
 
-        # Count by text
+        # Count surface forms for frequency analysis (e.g., most common names).
         text_counts = Counter(e.text for e in entities)
 
-        # Type distribution (percentage)
+        # Type distribution in percentage is convenient for dashboards/UI.
         total = len(entities)
         type_distribution = {
             etype: (count / total) * 100
             for etype, count in type_counts.items()
         }
 
+        # Keep results simple (dict of primitives) for easy JSON export.
         return {
             'total': total,
             'by_type': dict(type_counts),
@@ -505,10 +547,13 @@ class NERExtractor:
             >>> print(common)
             [('張三', 2), ('台大', 1)]
         """
+        # Optional filter to compute "most common" within a single entity label.
         if by_type:
             entities = self.filter_by_type(entities, [by_type])
 
+        # Counter implements an efficient frequency table for hashable keys.
         text_counts = Counter(e.text for e in entities)
+        # `most_common(k)` runs in O(u log k) where u is #unique keys.
         return text_counts.most_common(top_k)
 
     # ========================================================================
@@ -535,6 +580,7 @@ class NERExtractor:
             >>> print(types)
             {'PERSON', 'ORG'}
         """
+        # Extract entities and project only their labels.
         entities = self.extract(text)
         return set(e.type for e in entities)
 
@@ -563,9 +609,12 @@ class NERExtractor:
             >>> print(len(grouped['PERSON']))
             2
         """
+        # Use defaultdict to avoid repeated key existence checks.
         grouped = defaultdict(list)
         for entity in entities:
+            # Preserve the original entity ordering within each type bucket.
             grouped[entity.type].append(entity)
+        # Cast to a normal dict to keep the return type JSON-friendly.
         return dict(grouped)
 
     @staticmethod
@@ -584,6 +633,7 @@ class NERExtractor:
             >>> print(desc)
             人名
         """
+        # Return the mapped Chinese description, falling back to the raw label.
         return NERExtractor.ENTITY_TYPE_DESCRIPTIONS.get(
             entity_type,
             entity_type
@@ -609,14 +659,17 @@ class NERExtractor:
               PERSON (人名): 張三
               ORG (組織): 台大
         """
+        # Printing is mainly for demos / notebooks; callers can build their own UI.
         if not entities:
             print("No entities found")
             return
 
         print(f"Found {len(entities)} entities:")
         for entity in entities:
+            # Translate the tag into a Chinese label for readability.
             desc = NERExtractor.get_entity_type_description(entity.type)
             if show_positions:
+                # Positions are [start, end) character spans, consistent with slicing.
                 print(f"  {entity.type} ({desc}): {entity.text} [pos={entity.start_pos}-{entity.end_pos}]")
             else:
                 print(f"  {entity.type} ({desc}): {entity.text}")
@@ -624,14 +677,16 @@ class NERExtractor:
 
 def demo():
     """Demonstration of NERExtractor capabilities."""
+    # This demo intentionally uses small hard-coded examples so it can serve as
+    # a quick sanity check in environments where CKIP is available.
     print("=" * 70)
     print("NER Extractor Demo (Traditional Chinese)")
     print("=" * 70)
 
-    # Initialize extractor
+    # Initialize extractor with default "all entity types" configuration.
     extractor = NERExtractor()
 
-    # Sample texts
+    # Sample texts cover people/organizations/dates/numbers to trigger many tags.
     texts = [
         "張三在國立臺灣大學圖書資訊學系讀書",
         "2025年一月台北將舉辦國際研討會",
@@ -639,7 +694,7 @@ def demo():
         "這本書定價500元，打八折後是400元"
     ]
 
-    # Example 1: Single text extraction
+    # Example 1: Single text extraction (simplest API).
     print("\n[1] Single Text Extraction:")
     print("-" * 70)
     text = texts[0]
@@ -647,7 +702,7 @@ def demo():
     print(f"Text: {text}")
     extractor.print_entity_summary(entities, show_positions=True)
 
-    # Example 2: Batch extraction
+    # Example 2: Batch extraction (preferred for large corpora).
     print("\n[2] Batch Extraction:")
     print("-" * 70)
     batch_entities = extractor.extract_batch(texts)
@@ -658,7 +713,7 @@ def demo():
             desc = NERExtractor.get_entity_type_description(entity.type)
             print(f"  - {entity.text} ({entity.type}/{desc})")
 
-    # Example 3: Filter by type
+    # Example 3: Filter by type across the whole batch.
     print("\n[3] Filter by Type:")
     print("-" * 70)
     all_entities = [e for entities in batch_entities for e in entities]
@@ -667,7 +722,7 @@ def demo():
     print(f"PERSON entities: {[e.text for e in persons]}")
     print(f"ORG entities: {[e.text for e in orgs]}")
 
-    # Example 4: Statistics
+    # Example 4: Basic descriptive statistics.
     print("\n[4] Entity Statistics:")
     print("-" * 70)
     stats = extractor.entity_statistics(all_entities)
@@ -679,14 +734,14 @@ def demo():
         pct = stats['type_distribution'][etype]
         print(f"  {etype:12s} ({desc:10s}): {count:2d} ({pct:.1f}%)")
 
-    # Example 5: Most common entities
+    # Example 5: Frequency analysis (top-k surface forms).
     print("\n[5] Most Common Entities:")
     print("-" * 70)
     common = extractor.most_common_entities(all_entities, top_k=5)
     for i, (text, count) in enumerate(common, 1):
         print(f"{i}. {text}: {count} occurrences")
 
-    # Example 6: Group by type
+    # Example 6: Group-by useful for UI display and downstream processing.
     print("\n[6] Group by Type:")
     print("-" * 70)
     grouped = extractor.group_by_type(all_entities)

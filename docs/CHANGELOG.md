@@ -25,6 +25,7 @@
 - 補強分面搜尋（Faceted Search）教學向註解：`src/ir/facet/facet_engine.py`、`src/ir/facet/facet_filter.py`。
 - 補強 CSoundex（中文諧音編碼）教學向註解：`src/ir/text/csoundex.py`。
 - 補強 clustering（文件/詞項分群）教學向註解：`src/ir/cluster/doc_cluster.py`、`src/ir/cluster/term_cluster.py`。
+- 補強 NER / keyextract evaluator / langmodel（ngram+collocation）/ hybrid ranking 的教科書式行內註解：`src/ir/text/ner_extractor.py`、`src/ir/keyextract/evaluator.py`、`src/ir/langmodel/ngram.py`、`src/ir/langmodel/collocation.py`、`src/ir/ranking/hybrid.py`。
 - 補齊多個核心模組的英文 docstring（`__post_init__`、`__repr__/__str__`、`@property` 等）：`src/ir/search/unified_search.py`、`src/ir/summarize/static.py`、`src/ir/cluster/*`、`src/ir/facet/facet_engine.py`、`src/ir/index/pat_tree.py`、`src/ir/text/ner_extractor.py`。
 - 補齊 `src/ir/` 內剩餘缺漏函式 docstring（含 `keyextract/`、`patterns/`、`ranking/`、`recommendation/`、`syntax/`、`topic/` 等模組），使 `src/ir` 函式 docstring 覆蓋率達到 100%。
 - 補齊 `tests/` 與 `scripts/` 內剩餘缺漏函式 docstring，使全專案函式 docstring 缺口（AST 掃描）收斂到 0。
@@ -36,6 +37,7 @@
 - `src/ir/index/incremental_builder.py` / `src/ir/search/unified_search.py` / `src/ir/index/field_indexer.py`：修正 batch indexing 下 doc_id 對齊（results 順序對齊輸入 docs、以實際 doc.doc_id 更新 metadata、FieldIndexer 支援顯式 doc_id）。
 - `src/ir/index/compression.py`：修正 Elias Gamma 編碼/解碼的 bitstream 格式與 decode pointer 前進邏輯，並同步修正 Delta 範例，讓 encode/decode 可正確 round-trip（更符合教科書定義）。
 - `src/ir/retrieval/language_model_retrieval.py`：修正 absolute discounting smoothing 使用未定義 `doc_id` 導致 `NameError`（補上 doc_id 參數並在 term_probability 分流傳入）。
+- `src/ir/langmodel/ngram.py`：修正 unigram 機率計數使用方式（`n=1` 時改用 `ngram_counts[(word,)]`），讓機率計算與公式一致。
 
 #### 🧪 測試
 - `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。

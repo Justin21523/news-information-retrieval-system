@@ -25,13 +25,15 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
+# Standard library imports (typing, logging, lightweight containers, math).
 from typing import List, Set, Dict, Optional, Tuple
 import logging
 from dataclasses import dataclass
 from collections import defaultdict
 import math
 
-# Import numpy for numerical computations
+# Optional dependency: NumPy can speed up vectorized metric aggregation.
+# This module remains functional without NumPy (pure-Python fallbacks).
 try:
     import numpy as np
     NUMPY_AVAILABLE = True
@@ -118,11 +120,20 @@ class KeywordEvaluator:
             case_sensitive: Perform case-sensitive comparison
 
         """
+        # Logger is helpful for batch evaluation pipelines and experiments.
         self.logger = logging.getLogger(__name__)
+
+        # Sort cutoffs so we can evaluate in increasing order and skip large k.
         self.k_values = sorted(k_values)
+
+        # `strict_match` is kept for API compatibility; this evaluator currently
+        # implements exact string matching (after optional normalization).
         self.strict_match = strict_match
+
+        # Case sensitivity affects normalization of both extracted/ground-truth.
         self.case_sensitive = case_sensitive
 
+        # Log configuration to make experiments reproducible.
         self.logger.info(
             f"KeywordEvaluator initialized: k_values={k_values}, "
             f"strict_match={strict_match}, case_sensitive={case_sensitive}"
@@ -148,8 +159,8 @@ class KeywordEvaluator:
             EvaluationResult with all metrics
 
         Complexity:
-            Time: O(k×g) where k=extracted, g=ground_truth
-            Space: O(k)
+            Time: O(n + m + Σk) where n=len(extracted), m=len(ground_truth)
+            Space: O(n + m)
 
         Examples:
             >>> evaluator = KeywordEvaluator()
@@ -157,48 +168,58 @@ class KeywordEvaluator:
             >>> ground_truth = ['keyword1', 'keyword3', 'keyword4']
             >>> result = evaluator.evaluate(extracted, ground_truth)
         """
-        # Normalize keywords
+        # Normalize keywords to make string comparison consistent.
+        # Common normalizations include lowercasing and whitespace cleanup.
         extracted_norm = self._normalize_keywords(extracted)
         ground_truth_norm = self._normalize_keywords(ground_truth)
+
+        # Convert ground truth to a set so membership checks are O(1) average.
         ground_truth_set = set(ground_truth_norm)
 
-        # Calculate Precision@K, Recall@K, F1@K
+        # Compute rank-aware metrics at multiple cutoffs (k values).
         precision_at_k = {}
         recall_at_k = {}
         f1_at_k = {}
 
         for k in self.k_values:
+            # If the extracted list is shorter than k, we skip that cutoff.
+            # This avoids dividing by k with missing ranks.
             if k > len(extracted_norm):
                 continue
 
+            # Precision/Recall at k operate on the top-k prefix of the ranking.
             p_k = self._precision_at_k(extracted_norm, ground_truth_set, k)
             r_k = self._recall_at_k(extracted_norm, ground_truth_set, k)
             f1_k = self._f1_score(p_k, r_k)
 
+            # Store per-cutoff values (dict allows sparse k coverage).
             precision_at_k[k] = p_k
             recall_at_k[k] = r_k
             f1_at_k[k] = f1_k
 
-        # Calculate MAP
+        # MAP considers the entire ranking (not just top-k).
         map_score = self._mean_average_precision(extracted_norm, ground_truth_set)
 
-        # Calculate MRR
+        # MRR measures how early the first correct keyword appears.
         mrr = self._mean_reciprocal_rank(extracted_norm, ground_truth_set)
 
-        # Calculate nDCG@K
+        # nDCG is a position-discounted gain metric; here we assume binary relevance.
         ndcg_at_k = {}
         for k in self.k_values:
             if k > len(extracted_norm):
                 continue
             ndcg_at_k[k] = self._ndcg_at_k(extracted_norm, ground_truth_set, k)
 
-        # Calculate unsupervised metrics if text provided
+        # Optional unsupervised metrics can be computed when the raw text is known.
         diversity = None
         coverage = None
         if text:
+            # We use the original extracted strings (not normalized) because these
+            # metrics are about surface-form diversity/coverage in the text.
             diversity = self._diversity_score(extracted)
             coverage = self._coverage_score(extracted, text)
 
+        # Wrap all metrics into a structured result object.
         return EvaluationResult(
             precision_at_k=precision_at_k,
             recall_at_k=recall_at_k,
@@ -233,9 +254,13 @@ class KeywordEvaluator:
         if k == 0 or not extracted:
             return 0.0
 
+        # Rank cutoff: only the first k predictions count for P@K.
         top_k = extracted[:k]
+
+        # Count how many of the top-k are relevant (membership in ground truth).
         relevant_count = sum(1 for kw in top_k if kw in ground_truth)
 
+        # Normalize by k (fixed cutoff size).
         return relevant_count / k
 
     def _recall_at_k(self,
@@ -261,9 +286,11 @@ class KeywordEvaluator:
         if len(ground_truth) == 0 or not extracted:
             return 0.0
 
+        # Consider only top-k candidates, but normalize by |ground_truth|.
         top_k = extracted[:k]
         relevant_count = sum(1 for kw in top_k if kw in ground_truth)
 
+        # Recall is bounded by 1.0 and penalizes missing relevant keywords.
         return relevant_count / len(ground_truth)
 
     def _f1_score(self, precision: float, recall: float) -> float:
@@ -282,6 +309,7 @@ class KeywordEvaluator:
         if precision + recall == 0:
             return 0.0
 
+        # Harmonic mean emphasizes the smaller of precision/recall.
         return 2 * (precision * recall) / (precision + recall)
 
     def _mean_average_precision(self,
@@ -310,18 +338,23 @@ class KeywordEvaluator:
         if len(ground_truth) == 0 or not extracted:
             return 0.0
 
+        # `relevant_count` tracks how many relevant items have been seen so far.
         relevant_count = 0
         precision_sum = 0.0
 
+        # Enumerate ranks starting from 1 to match IR metric definitions.
         for i, keyword in enumerate(extracted, 1):
             if keyword in ground_truth:
                 relevant_count += 1
+                # Precision at rank i = (# relevant in top-i) / i.
                 precision_at_i = relevant_count / i
                 precision_sum += precision_at_i
 
         if relevant_count == 0:
             return 0.0
 
+        # Divide by |R| (the total number of relevant items) as in AP definition.
+        # This penalizes systems that fail to retrieve all ground-truth keywords.
         return precision_sum / len(ground_truth)
 
     def _mean_reciprocal_rank(self,
@@ -342,10 +375,12 @@ class KeywordEvaluator:
         Complexity:
             Time: O(n) in worst case
         """
+        # The first relevant item's rank dominates MRR.
         for i, keyword in enumerate(extracted, 1):
             if keyword in ground_truth:
                 return 1.0 / i
 
+        # If no relevant keyword is retrieved, the reciprocal rank is 0.
         return 0.0  # No relevant keyword found
 
     def _ndcg_at_k(self,
@@ -374,20 +409,23 @@ class KeywordEvaluator:
         if k == 0 or not extracted:
             return 0.0
 
-        # Calculate DCG@K
+        # DCG@K: discounted gain where early ranks contribute more.
         dcg = 0.0
         for i, keyword in enumerate(extracted[:k], 1):
+            # Binary relevance: relevant keywords have gain=1, others gain=0.
             relevance = 1.0 if keyword in ground_truth else 0.0
+            # Use log2(i+1) so the first position has divisor 1 (log2(2)).
             dcg += relevance / math.log2(i + 1)
 
-        # Calculate IDCG@K (ideal DCG)
-        # Ideal ranking: all relevant keywords first
+        # IDCG@K: the best possible DCG@K under the same binary relevance
+        # assumption, i.e., all relevant items appear before non-relevant ones.
         ideal_k = min(k, len(ground_truth))
         idcg = sum(1.0 / math.log2(i + 1) for i in range(1, ideal_k + 1))
 
         if idcg == 0:
             return 0.0
 
+        # Normalize by the ideal score so the result is in [0, 1].
         return dcg / idcg
 
     # ========================================================================
@@ -414,16 +452,21 @@ class KeywordEvaluator:
         if not keywords:
             return 0.0
 
-        # Tokenize all keywords into words
+        # Tokenize all keywords into tokens.
+        #
+        # NOTE: This uses whitespace tokenization. For Chinese keywords (often
+        # without spaces), consider injecting a tokenizer or using character
+        # n-grams instead if you need a meaningful "diversity" signal.
         all_tokens = []
         for kw in keywords:
-            # Simple whitespace tokenization
+            # Simple whitespace tokenization (fast, language-agnostic baseline).
             tokens = kw.split()
             all_tokens.extend(tokens)
 
         if not all_tokens:
             return 0.0
 
+        # Unique token ratio is a compact proxy for lexical variety.
         unique_tokens = set(all_tokens)
         return len(unique_tokens) / len(all_tokens)
 
@@ -448,18 +491,23 @@ class KeywordEvaluator:
         if not keywords or not text:
             return 0.0
 
-        # Tokenize text and keywords
+        # Tokenize text and keywords into comparable token sets.
+        #
+        # NOTE: Like `_diversity_score`, whitespace tokenization is a baseline.
+        # For CJK text without spaces, this metric will underestimate coverage.
         text_tokens = text.split()
         keyword_tokens = set()
         for kw in keywords:
+            # `set.update()` accumulates all keyword tokens for O(1) membership.
             keyword_tokens.update(kw.split())
 
         if not text_tokens:
             return 0.0
 
-        # Count how many text tokens are in keywords
+        # Count how many text tokens are "covered" by appearing in keyword tokens.
         covered = sum(1 for token in text_tokens if token in keyword_tokens)
 
+        # Normalize by the total number of text tokens.
         return covered / len(text_tokens)
 
     # ========================================================================
@@ -487,18 +535,23 @@ class KeywordEvaluator:
             >>> ground_truth_batch = [['kw1', 'kw3'], ['kw3', 'kw5']]
             >>> results = evaluator.evaluate_batch(extracted_batch, ground_truth_batch)
         """
+        # Sanity check: batch lists must align by document.
         if len(extracted_list) != len(ground_truth_list):
             raise ValueError("Number of extracted and ground truth lists must match")
 
+        # If raw texts are provided, they must align with the extracted lists.
         if texts and len(texts) != len(extracted_list):
             raise ValueError("Number of texts must match extracted lists")
 
         results = []
         for i in range(len(extracted_list)):
+            # Select the corresponding raw text for unsupervised metrics (optional).
             text = texts[i] if texts else None
+            # Reuse the single-document `evaluate()` to keep behavior consistent.
             result = self.evaluate(extracted_list[i], ground_truth_list[i], text)
             results.append(result)
 
+        # Logging summary keeps batch runs observable without printing metrics.
         self.logger.info(f"Evaluated {len(results)} documents")
 
         return results
@@ -507,7 +560,7 @@ class KeywordEvaluator:
         """
         Aggregate results from multiple documents.
 
-        Computes micro-averaged metrics across all documents.
+        Computes macro-averaged metrics across all documents (simple mean).
 
         Args:
             results: List of EvaluationResult objects
@@ -521,15 +574,17 @@ class KeywordEvaluator:
             >>> avg_result = evaluator.aggregate_results(results)
         """
         if not results:
+            # Return an "empty" result object with neutral numeric defaults.
             return EvaluationResult({}, {}, {}, 0.0, 0.0, {})
 
-        # Aggregate P@K, R@K, F1@K
+        # Collect per-document values for each cutoff so we can average them.
         precision_at_k = defaultdict(list)
         recall_at_k = defaultdict(list)
         f1_at_k = defaultdict(list)
         ndcg_at_k = defaultdict(list)
 
         for result in results:
+            # Each result may have a sparse set of k values (depending on length).
             for k, p in result.precision_at_k.items():
                 precision_at_k[k].append(p)
             for k, r in result.recall_at_k.items():
@@ -539,17 +594,17 @@ class KeywordEvaluator:
             for k, ndcg in result.ndcg_at_k.items():
                 ndcg_at_k[k].append(ndcg)
 
-        # Compute averages
+        # Compute macro averages for each cutoff.
         avg_precision = {k: sum(vals) / len(vals) for k, vals in precision_at_k.items()}
         avg_recall = {k: sum(vals) / len(vals) for k, vals in recall_at_k.items()}
         avg_f1 = {k: sum(vals) / len(vals) for k, vals in f1_at_k.items()}
         avg_ndcg = {k: sum(vals) / len(vals) for k, vals in ndcg_at_k.items()}
 
-        # Aggregate MAP and MRR
+        # MAP/MRR are also macro-averaged across documents here.
         avg_map = sum(r.map_score for r in results) / len(results)
         avg_mrr = sum(r.mrr for r in results) / len(results)
 
-        # Aggregate diversity and coverage if available
+        # Unsupervised metrics are averaged only over documents that computed them.
         diversities = [r.diversity for r in results if r.diversity is not None]
         coverages = [r.coverage for r in results if r.coverage is not None]
 
@@ -581,6 +636,9 @@ class KeywordEvaluator:
         Returns:
             Normalized keyword list
         """
+        # Normalization should mirror how your extraction method outputs strings.
+        # For example, if keywords include punctuation or extra whitespace, you
+        # may want to strip/normalize them here.
         if self.case_sensitive:
             return keywords
         else:

@@ -45,11 +45,14 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
+# Standard library imports (math/logging, typing, lightweight containers).
 import math
 import logging
 from typing import List, Dict, Tuple, Optional, Callable
 from dataclasses import dataclass
 from collections import defaultdict
+
+# NumPy is used for z-score normalization (mean/std) in a concise, stable way.
 import numpy as np
 
 
@@ -111,21 +114,29 @@ class HybridRanker:
         Complexity:
             Time: O(1)
         """
+        # Logger is useful for debugging per-ranker failures and fusion behavior.
         self.logger = logging.getLogger(__name__)
 
+        # Rankers must implement a `.search(query, topk=...)` method and return an
+        # object with `.doc_ids` and `.scores` lists of equal length.
         self.rankers = rankers
         self.fusion_method = fusion_method
         self.normalization = normalization
 
-        # Set default weights (equal weights)
+        # Weights control the contribution of each ranker.
+        # For score-fusion methods, weights act on normalized scores.
+        # For rank-fusion (RRF), weights scale each ranker's reciprocal ranks.
         if weights is None:
+            # Default: equal weights across rankers.
             num_rankers = len(rankers)
             self.weights = {name: 1.0 / num_rankers for name in rankers.keys()}
         else:
-            # Normalize weights to sum to 1
+            # Normalize weights to sum to 1 so different inputs are comparable.
+            # NOTE: If you pass all-zero weights, this will divide by zero.
             total_weight = sum(weights.values())
             self.weights = {k: v / total_weight for k, v in weights.items()}
 
+        # Log the fusion configuration for reproducibility.
         self.logger.info(
             f"HybridRanker initialized: {list(rankers.keys())}, "
             f"fusion={fusion_method}, normalization={normalization}"
@@ -154,31 +165,37 @@ class HybridRanker:
             >>> result.doc_ids
             [5, 12, 3, 18, ...]
         """
-        # Retrieve results from each ranker
+        # Step 1) Retrieve a candidate list from each ranker.
+        #
+        # We request `ranker_topk` from each component ranker because fusion
+        # needs enough overlap/candidates before truncating to final `topk`.
         ranker_results = {}
 
         for ranker_name, ranker in self.rankers.items():
             try:
-                # Call search method (assumes standard interface)
+                # Call each ranker with the same query string.
                 result = ranker.search(query, topk=ranker_topk)
 
-                # Extract doc_ids and scores
+                # Store raw lists; fusion methods will normalize/transform as needed.
                 ranker_results[ranker_name] = {
                     'doc_ids': result.doc_ids,
                     'scores': result.scores
                 }
 
+                # Debug log shows per-ranker fan-out size.
                 self.logger.debug(
                     f"Ranker '{ranker_name}' returned {len(result.doc_ids)} results"
                 )
             except Exception as e:
+                # Robustness: a single failing ranker should not crash the whole
+                # hybrid search; we treat it as returning no candidates.
                 self.logger.error(f"Error in ranker '{ranker_name}': {e}")
                 ranker_results[ranker_name] = {
                     'doc_ids': [],
                     'scores': []
                 }
 
-        # Fuse results
+        # Step 2) Fuse the per-ranker candidates into a single doc_id -> score map.
         if self.fusion_method == 'linear':
             fused_scores = self._linear_fusion(ranker_results)
         elif self.fusion_method == 'rrf':
@@ -190,23 +207,27 @@ class HybridRanker:
         else:
             raise ValueError(f"Unknown fusion method: {self.fusion_method}")
 
-        # Sort by fused score
+        # Step 3) Sort by fused score in descending order (higher is better).
         sorted_docs = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
 
-        # Get top-k
+        # Step 4) Apply the final cutoff after fusion.
         topk_docs = sorted_docs[:topk]
 
+        # Separate IDs and scores into aligned lists.
         doc_ids = [doc_id for doc_id, score in topk_docs]
         scores = [score for doc_id, score in topk_docs]
 
-        # Extract component scores for top-k docs
+        # Step 5) Build a "score breakdown" table: for each ranker, surface the
+        # raw score it assigned to each fused top-k doc (0.0 if not retrieved).
         component_scores = {}
         for ranker_name, result in ranker_results.items():
+            # Map doc_id -> score for O(1) lookup when building the aligned list.
             doc_to_score = dict(zip(result['doc_ids'], result['scores']))
             component_scores[ranker_name] = [
                 doc_to_score.get(doc_id, 0.0) for doc_id in doc_ids
             ]
 
+        # Return a structured result object for downstream UI/logging.
         return HybridResult(
             query=query,
             doc_ids=doc_ids,
@@ -230,30 +251,38 @@ class HybridRanker:
         Complexity:
             Time: O(n) where n = len(scores)
         """
+        # Normalization is critical when fusing scores from different models
+        # (e.g., BM25 ~ 0..50 vs. cosine similarity ~ 0..1).
         if not scores:
             return []
 
         if self.normalization == 'minmax':
-            # Min-max normalization: (x - min) / (max - min)
+            # Min-max normalization rescales scores into [0, 1].
+            # This preserves ordering but compresses outliers.
             min_score = min(scores)
             max_score = max(scores)
 
             if max_score == min_score:
+                # All scores are identical; return a constant vector.
                 return [1.0] * len(scores)
 
             return [(s - min_score) / (max_score - min_score) for s in scores]
 
         elif self.normalization == 'zscore':
-            # Z-score normalization: (x - mean) / std
+            # Z-score normalization produces a distribution with mean=0 and std=1.
+            # This is useful when different rankers have different score scales.
             mean = np.mean(scores)
             std = np.std(scores)
 
             if std == 0:
+                # No variance => all z-scores are 0.
                 return [0.0] * len(scores)
 
             return [(s - mean) / std for s in scores]
 
         else:  # 'none'
+            # No normalization: this can heavily bias fusion toward large-scale
+            # rankers (e.g., BM25) unless weights compensate.
             return scores
 
     def _linear_fusion(self, ranker_results: Dict[str, Dict]) -> Dict[int, float]:
@@ -272,19 +301,21 @@ class HybridRanker:
         fused_scores = defaultdict(float)
 
         for ranker_name, result in ranker_results.items():
+            # Pull out each ranker's raw result lists.
             doc_ids = result['doc_ids']
             scores = result['scores']
 
-            # Normalize scores
+            # Normalize within-ranker scores to make them comparable across rankers.
             normalized_scores = self._normalize_scores(scores)
 
-            # Weight for this ranker
+            # Weight controls this ranker's contribution in the weighted sum.
             weight = self.weights.get(ranker_name, 0.0)
 
-            # Add weighted scores
+            # Add weighted scores into the fused accumulator keyed by doc_id.
             for doc_id, score in zip(doc_ids, normalized_scores):
                 fused_scores[doc_id] += weight * score
 
+        # Convert back to a normal dict for JSON-serializable output.
         return dict(fused_scores)
 
     def _reciprocal_rank_fusion(self, ranker_results: Dict[str, Dict],
@@ -314,11 +345,12 @@ class HybridRanker:
         for ranker_name, result in ranker_results.items():
             doc_ids = result['doc_ids']
 
-            # Weight for this ranker
+            # Weight can be used to favor one ranker in the rank-based fusion.
             weight = self.weights.get(ranker_name, 1.0)
 
-            # Calculate RRF score
+            # RRF uses rank positions only; the numeric scores are ignored.
             for rank, doc_id in enumerate(doc_ids, start=1):
+                # Reciprocal rank decays slowly, making RRF robust across rankers.
                 rrf_score = 1.0 / (k + rank)
                 fused_scores[doc_id] += weight * rrf_score
 
@@ -345,7 +377,8 @@ class HybridRanker:
             doc_ids = result['doc_ids']
             scores = result['scores']
 
-            # Weight for this ranker
+            # Weight scales each ranker's raw scores. Without normalization,
+            # score scales must already be compatible (often not true in practice).
             weight = self.weights.get(ranker_name, 1.0)
 
             for doc_id, score in zip(doc_ids, scores):
@@ -370,7 +403,9 @@ class HybridRanker:
         Complexity:
             Time: O(R * N)
         """
-        # Count number of rankers matching each document
+        # CombMNZ requires two accumulators:
+        # - `doc_match_count`: how many rankers retrieved the doc with a "match"
+        # - `doc_sum_score`: weighted score sum across rankers
         doc_match_count = defaultdict(int)
         doc_sum_score = defaultdict(float)
 
@@ -378,15 +413,17 @@ class HybridRanker:
             doc_ids = result['doc_ids']
             scores = result['scores']
 
-            # Weight for this ranker
+            # Weight scales each ranker's score contribution.
             weight = self.weights.get(ranker_name, 1.0)
 
             for doc_id, score in zip(doc_ids, scores):
+                # Treat score>0 as a "match"; adjust this logic if your rankers
+                # legitimately produce negative scores.
                 if score > 0:
                     doc_match_count[doc_id] += 1
                 doc_sum_score[doc_id] += weight * score
 
-        # CombMNZ: multiply sum by match count
+        # CombMNZ: (Σ score_i) * (#rankers that matched this doc).
         fused_scores = {
             doc_id: doc_sum_score[doc_id] * doc_match_count[doc_id]
             for doc_id in doc_sum_score.keys()
@@ -420,27 +457,29 @@ class HybridRanker:
                 }
             }
         """
-        # Get results from each ranker
+        # Retrieve per-ranker results and compute a per-ranker breakdown for a
+        # specific document.
         component_scores = {}
 
         for ranker_name, ranker in self.rankers.items():
             try:
                 result = ranker.search(query, topk=ranker_topk)
 
-                # Find document in results
+                # Locate the document in this ranker's result list (if present).
                 if doc_id in result.doc_ids:
                     idx = result.doc_ids.index(doc_id)
                     raw_score = result.scores[idx]
                     rank = idx + 1
                 else:
+                    # Missing docs are treated as a score of 0.0 for explanation.
                     raw_score = 0.0
                     rank = None
 
-                # Normalize score
+                # Normalize across this ranker's score distribution for interpretability.
                 normalized_scores = self._normalize_scores(result.scores)
                 normalized_score = normalized_scores[idx] if rank else 0.0
 
-                # Weighted score
+                # Apply fusion weight (linear fusion semantics).
                 weight = self.weights.get(ranker_name, 0.0)
                 weighted_score = weight * normalized_score
 
@@ -456,7 +495,8 @@ class HybridRanker:
                 self.logger.error(f"Error explaining ranker '{ranker_name}': {e}")
                 component_scores[ranker_name] = {'error': str(e)}
 
-        # Calculate total score
+        # Total score is the sum of weighted normalized components (linear fusion).
+        # For other fusion methods, "explain" would need method-specific logic.
         total_score = sum(
             comp['weighted_score']
             for comp in component_scores.values()

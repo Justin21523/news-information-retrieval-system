@@ -33,6 +33,7 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
+# Standard library imports (math/logging, typing, counting containers).
 import math
 import logging
 from typing import List, Dict, Tuple, Optional, Callable
@@ -81,26 +82,37 @@ class NGramModel:
         Complexity:
             Time: O(1)
         """
+        # Logger helps trace training progress and chosen smoothing parameters.
         self.logger = logging.getLogger(__name__)
 
+        # N-gram order: n=1 unigram, n=2 bigram, etc.
         self.n = n
+
+        # Smoothing method controls how we handle zero-count n-grams.
+        # Currently implemented: 'laplace', 'jm', 'dirichlet' (others fall back to MLE).
         self.smoothing = smoothing
         self.lambda_param = lambda_param
         self.mu_param = mu_param
+
+        # Allow callers to inject a domain-specific tokenizer (e.g., jieba/CKIP).
+        # Default tokenizer is a light regex-based word extractor.
         self.tokenizer = tokenizer or self._default_tokenizer
 
-        # N-gram counts
+        # Frequency tables:
+        # - `ngram_counts`: count(w_{i-n+1}...w_i)
+        # - `context_counts`: count(w_{i-n+1}...w_{i-1})  (only for n>1)
         self.ngram_counts: Dict[Tuple[str, ...], int] = defaultdict(int)
         self.context_counts: Dict[Tuple[str, ...], int] = defaultdict(int)
 
-        # Vocabulary
+        # Vocabulary and corpus size statistics.
         self.vocab: set = set()
         self.total_ngrams: int = 0
         self.total_unigrams: int = 0
 
-        # Collection probabilities (for smoothing)
+        # Collection language model P(w|C) used by JM/Dirichlet smoothing.
         self.collection_probs: Dict[str, float] = {}
 
+        # Log the configuration so experiments are reproducible.
         self.logger.info(
             f"NGramModel initialized "
             f"(n={n}, smoothing={smoothing}, λ={lambda_param}, μ={mu_param})"
@@ -108,6 +120,8 @@ class NGramModel:
 
     def _default_tokenizer(self, text: str) -> List[str]:
         """Default tokenizer."""
+        # This regex treats CJK character runs and alphanumeric runs as tokens.
+        # It is a simple baseline and is not meant to replace real segmentation.
         import re
         return re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z0-9]+', text.lower())
 
@@ -125,39 +139,48 @@ class NGramModel:
         Examples:
             >>> model = NGramModel(n=2)
             >>> model.train(["the cat sat", "the dog ran"])
-            >>> model.probability(("cat",), ("sat",))
+            >>> model.probability(("cat",), "sat")
             0.5
         """
         self.logger.info(f"Training {self.n}-gram model on {len(documents)} documents...")
 
-        # First pass: collect all tokens for vocabulary
+        # First pass: tokenize all documents to build a vocabulary and the
+        # collection model P(w|C) needed for smoothing.
         all_tokens = []
         for doc in documents:
+            # Tokenization is delegated so the same segmentation is used everywhere.
             tokens = self.tokenizer(doc)
             all_tokens.extend(tokens)
             self.vocab.update(tokens)
 
+        # Total unigram count is the denominator for collection probabilities.
         self.total_unigrams = len(all_tokens)
 
-        # Compute collection probabilities (for smoothing)
+        # Compute collection probabilities P(w|C) = count(w) / |C|.
         unigram_counts = Counter(all_tokens)
         for word, count in unigram_counts.items():
             self.collection_probs[word] = count / self.total_unigrams
 
-        # Second pass: count N-grams
+        # Second pass: count n-grams and (n-1)-gram contexts.
+        # We do this in a second pass so `self.vocab`/`collection_probs` are ready.
         for doc in documents:
             tokens = self.tokenizer(doc)
 
-            # Generate N-grams
+            # Slide a window of size n across each token sequence.
             for i in range(len(tokens) - self.n + 1):
+                # N-gram as a tuple so it can be used as a dict key.
                 ngram = tuple(tokens[i:i + self.n])
+                # Context is the first n-1 tokens (empty for unigram models).
                 context = ngram[:-1] if self.n > 1 else ()
+                # The predicted word is the last token in the n-gram window.
                 word = ngram[-1]
 
+                # Increment observed counts.
                 self.ngram_counts[ngram] += 1
                 if context:
                     self.context_counts[context] += 1
 
+                # Total number of windows processed (normalizer for some models).
                 self.total_ngrams += 1
 
         vocab_size = len(self.vocab)
@@ -191,12 +214,13 @@ class NGramModel:
             0.33
         """
         if self.n == 1:
-            # Unigram model
+            # Unigram model ignores context.
             return self._unigram_probability(word)
 
-        # N-gram model (N > 1)
+        # N-gram model (n > 1): construct the full n-gram key.
         ngram = context + (word,)
 
+        # Dispatch to the requested smoothing method.
         if self.smoothing == 'laplace':
             return self._laplace_smoothing(ngram, context)
         elif self.smoothing == 'jm':
@@ -204,21 +228,26 @@ class NGramModel:
         elif self.smoothing == 'dirichlet':
             return self._dirichlet_smoothing(ngram, context, word)
         else:
-            # Default: Maximum likelihood estimation
+            # Default: maximum likelihood estimation (no smoothing).
+            # This can produce zero probabilities for unseen n-grams.
             return self._mle_probability(ngram, context)
 
     def _unigram_probability(self, word: str) -> float:
         """Unigram probability with Laplace smoothing."""
-        count = sum(1 for ngram in self.ngram_counts if ngram[0] == word)
+        # Unigram counts are stored under the (word,) key when n=1.
+        count = self.ngram_counts.get((word,), 0)
         vocab_size = len(self.vocab)
 
         if self.smoothing == 'laplace':
+            # Add-1 smoothing avoids zero probabilities for out-of-vocabulary words.
             return (count + 1) / (self.total_ngrams + vocab_size)
         else:
+            # MLE: count(w) / |C|.
             return count / self.total_ngrams if self.total_ngrams > 0 else 0.0
 
     def _mle_probability(self, ngram: Tuple[str, ...], context: Tuple[str, ...]) -> float:
         """Maximum Likelihood Estimation (no smoothing)."""
+        # P(w|context) = count(context, w) / count(context).
         ngram_count = self.ngram_counts[ngram]
         context_count = self.context_counts[context] if context else self.total_ngrams
 
@@ -233,6 +262,7 @@ class NGramModel:
 
         P(w|context) = (count(context, w) + 1) / (count(context) + V)
         """
+        # Add-1 smoothing redistributes one pseudo-count to every vocabulary item.
         ngram_count = self.ngram_counts[ngram]
         context_count = self.context_counts[context] if context else self.total_ngrams
         vocab_size = len(self.vocab)
@@ -248,13 +278,14 @@ class NGramModel:
 
         where P(w|C) is collection probability.
         """
-        # Maximum likelihood probability
+        # Maximum likelihood probability under the n-gram model.
         p_ml = self._mle_probability(ngram, context)
 
-        # Collection probability (fallback)
+        # Collection probability (fallback) is a robust back-off distribution.
+        # We use a uniform fallback for unseen words to avoid KeyError.
         p_collection = self.collection_probs.get(word, 1.0 / len(self.vocab))
 
-        # Interpolate
+        # Linear interpolation trades off specificity (p_ml) and robustness (p_collection).
         return self.lambda_param * p_ml + (1 - self.lambda_param) * p_collection
 
     def _dirichlet_smoothing(self, ngram: Tuple[str, ...],
@@ -273,10 +304,11 @@ class NGramModel:
         ngram_count = self.ngram_counts[ngram]
         context_count = self.context_counts[context] if context else self.total_ngrams
 
-        # Collection probability
+        # Collection probability P(w|C) acts as the prior mean.
         p_collection = self.collection_probs.get(word, 1.0 / len(self.vocab))
 
-        # Dirichlet smoothing
+        # Dirichlet smoothing can be seen as adding μ pseudo-counts distributed
+        # according to the collection model.
         numerator = ngram_count + self.mu_param * p_collection
         denominator = context_count + self.mu_param
 
@@ -296,6 +328,8 @@ class NGramModel:
         Complexity:
             Time: O(1)
         """
+        # Log-space computations avoid floating-point underflow when multiplying many
+        # small probabilities (common in sentence probability / perplexity).
         prob = self.probability(context, word)
         return math.log(prob) if prob > 0 else float('-inf')
 
@@ -314,20 +348,25 @@ class NGramModel:
         Complexity:
             Time: O(T) where T = sentence length
         """
+        # Tokenize the input sentence with the same tokenizer used for training.
         tokens = self.tokenizer(sentence)
 
         if not tokens:
             return 0.0
 
-        # Pad with start tokens if needed
+        # Pad with (n-1) start symbols so the first word has a full context window.
+        # NOTE: We do not train on <START>, so these contexts rely on smoothing.
         padded = ['<START>'] * (self.n - 1) + tokens
 
+        # Accumulate in log space: log Π p_i = Σ log p_i.
         log_prob = 0.0
         for i in range(self.n - 1, len(padded)):
+            # Context is the previous n-1 tokens in the padded sequence.
             context = tuple(padded[i - self.n + 1:i])
             word = padded[i]
             log_prob += self.log_probability(context, word)
 
+        # Convert back from log-space. For long sentences this may underflow to 0.
         return math.exp(log_prob)
 
     def perplexity(self, test_text: str) -> float:
@@ -352,19 +391,23 @@ class NGramModel:
             >>> print(f"Perplexity: {perplexity:.2f}")
             Perplexity: 45.32
         """
+        # Perplexity is commonly computed with base-2 logs for interpretability.
         tokens = self.tokenizer(test_text)
 
         if not tokens:
             return float('inf')
 
+        # Pad to create initial contexts.
         padded = ['<START>'] * (self.n - 1) + tokens
         log_prob_sum = 0.0
         count = 0
 
         for i in range(self.n - 1, len(padded)):
+            # Extract the context window and the next word.
             context = tuple(padded[i - self.n + 1:i])
             word = padded[i]
 
+            # Skip zero-probability events (should be rare with smoothing enabled).
             prob = self.probability(context, word)
             if prob > 0:
                 log_prob_sum += math.log2(prob)
@@ -373,7 +416,7 @@ class NGramModel:
         if count == 0:
             return float('inf')
 
-        # Perplexity = 2^(-average log probability)
+        # Perplexity = 2^(- average log2 probability).
         avg_log_prob = log_prob_sum / count
         return 2 ** (-avg_log_prob)
 
@@ -394,13 +437,15 @@ class NGramModel:
         """
         import random
 
+        # Start the generated sequence with the given context (seed).
         generated = list(context)
 
         for _ in range(max_len):
-            # Get current context
+            # Use only the last n-1 tokens as the current context window.
             current_context = tuple(generated[-(self.n - 1):]) if self.n > 1 else ()
 
-            # Get all possible next words with probabilities
+            # Build candidate next words. We restrict candidates to observed n-grams
+            # so generation stays on-distribution (faster than scoring all vocab).
             candidates = []
             for word in self.vocab:
                 ngram = current_context + (word,)
@@ -411,15 +456,17 @@ class NGramModel:
             if not candidates:
                 break
 
-            # Sample next word based on probabilities
+            # Sample next word proportional to its probability.
             words, probs = zip(*candidates)
             next_word = random.choices(words, weights=probs)[0]
             generated.append(next_word)
 
+        # Return only the generated continuation (exclude the seed context).
         return generated[len(context):]
 
     def get_stats(self) -> Dict:
         """Get model statistics."""
+        # Small, JSON-serializable summary that is handy for experiment logging.
         return {
             'n': self.n,
             'vocabulary_size': len(self.vocab),

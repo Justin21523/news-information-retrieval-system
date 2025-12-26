@@ -198,6 +198,11 @@ class UnifiedSearchEngine:
         Complexity:
             Time: O(B * T / batch_size) where B is buffer size, T is avg tokens
             Space: O(B * T) for batch processing buffer
+
+        Notes:
+            - doc_id alignment is critical: we rely on the doc_id assigned by the
+              content indexer (IncrementalIndexBuilder) and propagate it into
+              `field_docs` so FieldIndexer can share the same doc_id space.
         """
         # DEBUG: Log batch processing invocation
         self.logger.info(f"🔵 DEBUG: _process_document_batch called with {len(doc_buffer)} documents")
@@ -211,34 +216,51 @@ class UnifiedSearchEngine:
         # DEBUG: Log batch processing completion
         self.logger.info(f"✅ DEBUG: _process_document_batch completed, got {len(results)} results")
 
-        # Track successful documents and update metadata
-        for i, (success, message) in enumerate(results):
-            if success:
-                indexed_doc = doc_buffer[i]
-                doc_id = self.index_builder.docs_indexed - len([r for r in results if r[0]]) + i
+        if len(results) != len(doc_buffer):
+            self.logger.warning(
+                f"Batch result length mismatch: docs={len(doc_buffer)}, results={len(results)}"
+            )
 
-                # Store metadata AND content for retrieval
-                self.doc_metadata[doc_id] = {
-                    'title': indexed_doc.title,
-                    'content': indexed_doc.content,  # Store full content for snippet extraction
-                    'source': indexed_doc.source,
-                    'category': indexed_doc.category,
-                    'published_at': indexed_doc.published_at,
-                    'url': indexed_doc.url,
-                    'author': indexed_doc.author
-                }
+        # Track successful documents and update metadata.
+        #
+        # IMPORTANT: Use the doc_id returned by the underlying indexer (and stored
+        # on the NewsDocument) rather than recomputing it from batch position.
+        # This keeps metadata, content index, and field index aligned even when
+        # duplicates/errors occur inside a batch.
+        for doc, (success, _) in zip(doc_buffer, results):
+            if not success:
+                continue
 
-                # Prepare for field indexing
-                field_docs.append({
-                    'doc_id': doc_id,
-                    'title': indexed_doc.title,
-                    'content': indexed_doc.content,
-                    'source': indexed_doc.source,
-                    'category': indexed_doc.category,
-                    'published_date': indexed_doc.published_at,
-                    'author': indexed_doc.author or '',
-                    'url': indexed_doc.url or ''
-                })
+            doc_id = getattr(doc, "doc_id", None)
+            if doc_id is None:
+                self.logger.warning(
+                    "Batch result reported success but doc_id is missing; skipping metadata update"
+                )
+                continue
+
+            # Store metadata AND content for retrieval
+            self.doc_metadata[doc_id] = {
+                'title': doc.title,
+                'content': doc.content,  # Store full content for snippet extraction
+                'source': doc.source,
+                'category': doc.category,
+                'published_at': doc.published_at,
+                'url': doc.url,
+                'author': doc.author
+            }
+
+            # Prepare for field indexing. Keep doc_id so FieldIndexer can align
+            # with the content index doc_id space.
+            field_docs.append({
+                'doc_id': doc_id,
+                'title': doc.title,
+                'content': doc.content,
+                'source': doc.source,
+                'category': doc.category,
+                'published_date': doc.published_at,
+                'author': doc.author or '',
+                'url': doc.url or ''
+            })
 
     def build_index_from_jsonl(self,
                                data_dir: str,

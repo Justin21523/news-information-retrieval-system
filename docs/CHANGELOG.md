@@ -23,10 +23,12 @@
 - `src/ir/search/unified_search.py`：統一 BM25/VSM score 形狀（list vs dict），修正簡單查詢與 hybrid 融合流程中的取分/normalize 邏輯，並支援 content boolean 與 field boolean 的分流執行。
 - `src/ir/query/query_executor.py`：支援 `date:[start TO end]` 以 alias 對應 `published_date`，並將 AND 交集改為先交集小集合以降低運算量。
 - `src/ir/search/unified_search.py`：欄位前綴偵測改為由 `FieldIndexer.supported_fields` 動態派生（含 `date/published_at` alias），避免 `tags:`、`published_date:` 等欄位查詢被誤判成 content boolean。
+- `src/ir/index/incremental_builder.py` / `src/ir/search/unified_search.py` / `src/ir/index/field_indexer.py`：修正 batch indexing 下 doc_id 對齊（results 順序對齊輸入 docs、以實際 doc.doc_id 更新 metadata、FieldIndexer 支援顯式 doc_id）。
 
 #### 🧪 測試
 - `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。
 - 新增 `tests/test_query_executor.py`：覆蓋 QueryExecutor 的 AND/OR/NOT 與 date range alias。
+- 新增 `tests/test_field_indexer.py`、`tests/test_incremental_builder.py`：覆蓋 FieldIndexer 顯式 doc_id 與 IncrementalIndexBuilder batch 結果對齊/去重行為。
 
 ### [2025-11-18] 新聞爬蟲系統大規模擴充與測試框架建立
 

@@ -129,6 +129,9 @@ class FieldIndexer:
 
         Args:
             documents: List of document dictionaries with metadata fields
+                       If a document provides an integer `doc_id`, that id is
+                       used as the index key (useful when aligning metadata
+                       indexes with an external content index).
 
         Complexity:
             Time: O(N * F * T) where:
@@ -147,7 +150,21 @@ class FieldIndexer:
         """
         self.logger.info(f"Building field indexes for {len(documents)} documents...")
 
-        self.doc_count = len(documents)
+        # Determine the doc_id to use for each input document.
+        #
+        # By default, doc_ids are assigned by enumeration order (0..N-1).
+        # If the caller provides explicit doc_id values, we index using them
+        # so field-based search can share the same doc_id space as other
+        # retrieval models (e.g., an inverted index for content ranking).
+        doc_ids: List[int] = []
+        for i, doc in enumerate(documents):
+            explicit_doc_id = doc.get('doc_id')
+            doc_id = explicit_doc_id if isinstance(explicit_doc_id, int) else i
+            doc_ids.append(doc_id)
+
+        # doc_count is used as the "universe size" by NOT queries at a higher
+        # layer (QueryExecutor). If doc_ids are contiguous 0..N-1, this equals N.
+        self.doc_count = max(doc_ids) + 1 if doc_ids else 0
 
         # Initialize indexes for all supported fields
         for field in self.supported_fields:
@@ -157,11 +174,11 @@ class FieldIndexer:
                 self.field_indexes[field] = defaultdict(set)
 
         # Index each document
-        for doc_id, doc in enumerate(documents):
+        for count, (doc_id, doc) in enumerate(zip(doc_ids, documents), start=1):
             self._index_document(doc_id, doc)
 
-            if (doc_id + 1) % 100 == 0:
-                self.logger.info(f"Indexed {doc_id + 1}/{len(documents)} documents")
+            if count % 100 == 0:
+                self.logger.info(f"Indexed {count}/{len(documents)} documents")
 
         # Convert defaultdicts to regular dicts
         for field in self.field_indexes:

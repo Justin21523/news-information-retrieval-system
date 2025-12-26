@@ -386,3 +386,73 @@ prefixes.extend(["date:", "published_at:"])
 ### 驗證方式
 
 - 靜態語法檢查：`python -m py_compile src/ir/search/unified_search.py`
+
+---
+
+## 2025-12-26：Batch indexing doc_id 對齊修正（第 8 批）
+
+### 目標
+
+- 修正 batch indexing 下 `doc_id` 在「內容索引 / metadata / 欄位索引」之間可能錯位的問題，避免搜尋結果對到錯的文件。
+- 讓 batch indexing 的回傳結果順序與輸入文件順序一致，方便上層以位置對齊處理。
+
+### 本次修改範圍
+
+- `src/ir/index/incremental_builder.py`
+- `src/ir/search/unified_search.py`
+- `src/ir/index/field_indexer.py`
+- `tests/test_incremental_builder.py`
+- `tests/test_field_indexer.py`
+
+### 片段程式碼（Batch indexing：results 與輸入 docs 對齊）
+
+先建立固定長度的 results，並用原始位置回填，確保 `results[i]` 對應 `docs[i]`：
+
+```python
+results = [(False, "Not processed")] * len(docs)
+...
+results[i] = (False, "Duplicate")
+...
+results[pos] = (True, f"Indexed as doc_id={doc_id}")
+```
+
+### 片段程式碼（UnifiedSearch：使用實際被指派的 doc.doc_id）
+
+batch 中若有 duplicate/error，`doc_id` 不能用「batch 位置」推算；要用索引器回傳並寫回文件物件的 `doc_id`：
+
+```python
+for doc, (success, _) in zip(doc_buffer, results):
+    if success and doc.doc_id is not None:
+        self.doc_metadata[doc.doc_id] = {...}
+        field_docs.append({"doc_id": doc.doc_id, ...})
+```
+
+### 片段程式碼（FieldIndexer：尊重輸入文件的顯式 doc_id）
+
+`FieldIndexer.build()` 若輸入文件提供 `doc_id`，就用它做索引鍵，讓欄位索引可與內容索引共享同一套 doc_id 空間：
+
+```python
+explicit_doc_id = doc.get("doc_id")
+doc_id = explicit_doc_id if isinstance(explicit_doc_id, int) else i
+```
+
+### 原理整理（重點）
+
+- **doc_id 是跨模組的一致主鍵（primary key）**：
+  - 內容索引（倒排索引 / BM25 / VSM）、欄位索引（FieldIndexer）、以及 UI/metadata 都必須用同一個 doc_id 才能正確對應同一篇文件。
+
+- **為什麼 batch indexing 不能用位置推 doc_id**：
+  - batch 中可能混入 duplicate/error，導致「輸入文件數」≠「實際新增的文件數」。
+  - 若用 `batch index i` 推 `doc_id`，會把 metadata/欄位索引寫到錯的 doc_id → 查詢結果就會錯位。
+
+- **FieldIndexer 的 doc_id 對齊策略**：
+  - 若上層提供 `doc_id`（例如由內容索引器產生），FieldIndexer 直接用該 doc_id 建索引。
+  - 若未提供（一般小型單元測試或簡單 demo），則維持舊行為：用 enumerate 產生 0..N-1。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/index/field_indexer.py src/ir/index/incremental_builder.py src/ir/search/unified_search.py`
+- 單元測試：
+  - `pytest tests/test_field_indexer.py`
+  - `pytest tests/test_incremental_builder.py`
+  - `pytest tests/test_query_executor.py`

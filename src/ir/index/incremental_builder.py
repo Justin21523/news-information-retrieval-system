@@ -191,7 +191,9 @@ class IncrementalIndexBuilder:
             ckip_batch_size: Batch size for CKIP processing (default: 512)
 
         Returns:
-            List of (success, message) tuples for each document
+            List of (success, message) tuples aligned with the input `docs` order.
+            For successfully indexed documents, `doc.doc_id` is set to the
+            assigned integer doc_id from the underlying inverted index.
 
         Complexity:
             Time: O(N * T_avg / B) where B is batch size (vs O(N * T_avg) for single doc)
@@ -209,12 +211,14 @@ class IncrementalIndexBuilder:
             >>> success_count = sum(1 for success, _ in results if success)
             >>> print(f"Indexed {success_count}/{len(docs)} documents")
         """
-        results = []
+        # Keep result order aligned with the input document list so callers can
+        # safely zip(results, docs) or index by position.
+        results: List[Tuple[bool, str]] = [(False, "Not processed")] * len(docs)
 
         # Prepare texts for batch tokenization
-        texts = []
-        valid_docs = []
-        doc_indices = []  # Track original position
+        texts: List[str] = []
+        valid_docs: List[NewsDocument] = []
+        valid_positions: List[int] = []  # Track original positions in `docs`
 
         for i, doc in enumerate(docs):
             self.docs_processed += 1
@@ -232,18 +236,18 @@ class IncrementalIndexBuilder:
                     if not is_unique:
                         self.docs_duplicates += 1
                         dup_info = f" (similar to {dup_id})" if dup_id else ""
-                        results.append((False, f"Duplicate{dup_info}"))
+                        results[i] = (False, f"Duplicate{dup_info}")
                         continue
 
                 # Collect texts for batch processing
                 texts.append(doc.get_full_text())
                 valid_docs.append(doc)
-                doc_indices.append(i)
+                valid_positions.append(i)
 
             except Exception as e:
                 self.docs_errors += 1
                 self.logger.warning(f"Error pre-processing document: {e}")
-                results.append((False, f"Error: {e}"))
+                results[i] = (False, f"Error: {e}")
 
         # Batch tokenize all valid texts at once
         if texts:
@@ -263,7 +267,8 @@ class IncrementalIndexBuilder:
                 )
 
                 # Add all tokenized documents to index
-                for doc, tokens in zip(valid_docs, all_tokens):
+                should_checkpoint = (self.docs_processed % self.checkpoint_interval == 0)
+                for pos, doc, tokens in zip(valid_positions, valid_docs, all_tokens):
                     try:
                         # Add to inverted index using pre-tokenized tokens
                         doc_id = self.index.add_document_from_tokens(
@@ -273,25 +278,39 @@ class IncrementalIndexBuilder:
                         doc.doc_id = doc_id
                         self.docs_indexed += 1
 
-                        # Insert result at correct position
-                        results.append((True, f"Indexed as doc_id={doc_id}"))
-
-                        # Save checkpoint periodically
-                        if self.docs_processed % self.checkpoint_interval == 0:
-                            self.save_checkpoint()
+                        results[pos] = (True, f"Indexed as doc_id={doc_id}")
 
                     except Exception as e:
                         self.docs_errors += 1
                         self.logger.warning(f"Error adding document to index: {e}")
-                        results.append((False, f"Error: {e}"))
+                        results[pos] = (False, f"Error: {e}")
+
+                if should_checkpoint:
+                    self.save_checkpoint()
 
             except Exception as e:
                 self.logger.error(f"Batch tokenization error: {e}")
                 # Fallback to single-doc processing on error
                 self.logger.warning("Falling back to single-document processing...")
-                for doc in valid_docs:
-                    result = self.add_document(doc)
-                    results.append(result)
+                should_checkpoint = (self.docs_processed % self.checkpoint_interval == 0)
+                for pos, doc in zip(valid_positions, valid_docs):
+                    try:
+                        # Deduplication has already been applied in the pre-pass.
+                        # Fall back to the index's own tokenizer (single-doc mode).
+                        doc_id = self.index.add_document(
+                            doc.get_full_text(),
+                            metadata=doc.to_dict()
+                        )
+                        doc.doc_id = doc_id
+                        self.docs_indexed += 1
+                        results[pos] = (True, f"Indexed as doc_id={doc_id} (fallback)")
+                    except Exception as inner_e:
+                        self.docs_errors += 1
+                        self.logger.warning(f"Error indexing document in fallback mode: {inner_e}")
+                        results[pos] = (False, f"Error: {inner_e}")
+
+                if should_checkpoint:
+                    self.save_checkpoint()
 
         return results
 

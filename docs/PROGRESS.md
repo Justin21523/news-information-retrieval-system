@@ -756,3 +756,69 @@ else:
 
 - 靜態語法檢查：`python -m py_compile src/ir/index/compression.py src/ir/index/deduplication.py src/ir/index/doc_reader.py`
 - 建議快速 sanity（手動）：在 Python REPL 內做 `GammaEncoder().decode(GammaEncoder().encode([1, 5, 13]))` 應回到原序列
+
+---
+
+## 2025-12-26：IR 評估指標（Metrics）教科書式行內註解（第 15 批）
+
+### 目標
+
+- 把 `src/ir/eval/metrics.py` 補成更「教科書式」的逐步註解，讓你能一邊看程式一邊理解：
+  - Binary relevance（Precision/Recall/F1）
+  - Ranked metrics（AP/MAP/MRR）
+  - Graded relevance（DCG/nDCG/ERR）
+  - 不完整標註下的指標（Bpref）
+  - Run-level 聚合（evaluate_query / evaluate_run）
+
+### 本次修改範圍
+
+- `src/ir/eval/metrics.py`
+  - 在每個指標的「關鍵計算步驟」補上英文行內註解（為什麼這樣做、複雜度、常見定義/慣例）。
+  - 補強 `ndcg_at_k()` 的 IDCG 假設（基於 `relevance_scores` 的 judged docs 集合）與「unjudged = 0」的評估直覺。
+  - 補強 `evaluate_run()` 聚合流程註解（為什麼要先 collect per-query 再平均、以及 MAP/MRR/GMAP 為什麼再顯式重算）。
+
+### 片段程式碼（AP：只在 relevant 命中時累加 P@rank）
+
+Average Precision 會「只在命中 relevant 文件的 rank」累加 precision，因此會同時獎勵「命中」與「命中越早越好」：
+
+```python
+for rank, doc_id in enumerate(retrieved, start=1):
+    if doc_id in relevant:
+        num_relevant_seen += 1
+        precision_sum += num_relevant_seen / rank
+```
+
+### 片段程式碼（nDCG：用 IDCG 正規化）
+
+nDCG 的核心是用理想排序（IDCG）做 normalization，把 DCG 映射到 0..1：
+
+```python
+dcg = self.dcg_at_k(retrieved, relevance_scores, k)
+ideal = sorted(relevance_scores.keys(), key=lambda d: relevance_scores[d], reverse=True)
+idcg = self.dcg_at_k(ideal, relevance_scores, k)
+return 0.0 if idcg == 0 else dcg / idcg
+```
+
+### 原理整理（重點）
+
+- **Binary relevance metrics**（Precision/Recall/F1）：
+  - 只需要 `relevant: Set[int]`；集合 membership 平均 O(1)，整體計算 O(k)。
+  - 空集合時的慣例（P@0/Recall when |Relevant|=0）通常回 0.0，避免除以 0。
+
+- **AP/MAP**：
+  - AP 會把「未被取回的 relevant 文件」視為 0 貢獻（除以 |Relevant|），因此能同時衡量排序品質與召回不足。
+  - MAP 是把有 qrels 的 query 平均；沒 qrels 的 query 通常跳過（避免不公平拉低/拉高）。
+
+- **DCG/nDCG/ERR（graded relevance）**：
+  - DCG 用 log discount 模擬「使用者越往後越不看」。
+  - nDCG 用理想排序做 normalization，便於跨 query 比較。
+  - ERR 用 cascade user model，把「滿意就停」的行為寫進公式（prob_continue 的累乘）。
+
+- **Bpref**：
+  - 針對 judged 不完整的情境，避免把 unjudged 當 non-relevant。
+  - 核心是：對每個 relevant 文件 r，只看它前面有多少 judged non-relevant（並做 cap）。
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/eval/metrics.py`
+- 單元測試：`pytest tests/test_metrics.py`

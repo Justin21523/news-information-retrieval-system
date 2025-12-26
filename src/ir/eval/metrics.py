@@ -103,9 +103,13 @@ class Metrics:
             >>> metrics.precision([1, 2, 3, 4], {1, 3, 5})
             0.5  # 2 out of 4 retrieved are relevant
         """
+        # Precision is undefined when |Retrieved| == 0.
+        # In IR evaluation practice, we define it as 0.0 in this case.
         if not retrieved:
             return 0.0
 
+        # Membership test is O(1) average because `relevant` is a set.
+        # This keeps the overall loop O(k) where k = len(retrieved).
         relevant_retrieved = sum(1 for doc_id in retrieved if doc_id in relevant)
         return relevant_retrieved / len(retrieved)
 
@@ -130,9 +134,12 @@ class Metrics:
             >>> metrics.recall([1, 2, 3, 4], {1, 3, 5})
             0.667  # 2 out of 3 relevant are retrieved
         """
+        # Recall is undefined when |Relevant| == 0.
+        # Standard convention: return 0.0 rather than raising.
         if not relevant:
             return 0.0
 
+        # Same idea as precision: scan the retrieved list and count hits.
         relevant_retrieved = sum(1 for doc_id in retrieved if doc_id in relevant)
         return relevant_retrieved / len(relevant)
 
@@ -163,9 +170,13 @@ class Metrics:
             >>> metrics.f_measure(0.5, 0.667, beta=2.0)
             0.625  # F2 (favors recall)
         """
+        # Guard the 0/0 case to avoid division by zero.
         if precision + recall == 0:
             return 0.0
 
+        # F_beta is the weighted harmonic mean:
+        # - beta > 1 increases the weight of recall
+        # - beta < 1 increases the weight of precision
         beta_sq = beta ** 2
         return (1 + beta_sq) * (precision * recall) / (beta_sq * precision + recall)
 
@@ -192,9 +203,12 @@ class Metrics:
             >>> metrics.precision_at_k([1, 2, 3, 4, 5], {1, 3, 5}, k=3)
             0.667  # 2 out of top-3 are relevant
         """
+        # By definition, P@0 is 0.0 (no results considered).
         if k <= 0:
             return 0.0
 
+        # Only consider the top-k prefix of the ranked list.
+        # This matches user behavior: users rarely read beyond the first page.
         top_k = retrieved[:k]
         return self.precision(top_k, relevant)
 
@@ -217,9 +231,11 @@ class Metrics:
             Time: O(k)
             Space: O(1)
         """
+        # R@0 is defined as 0.0.
         if k <= 0:
             return 0.0
 
+        # Truncate ranking at k; recall is still normalized by |Relevant|.
         top_k = retrieved[:k]
         return self.recall(top_k, relevant)
 
@@ -255,18 +271,24 @@ class Metrics:
             >>> metrics.average_precision([2, 1, 4, 3], {1, 3})
             0.583  # (0.5 + 0.5) / 2 (relevant docs at rank 2, 4)
         """
+        # AP is defined as 0.0 when there are no relevant documents (qrels empty).
         if not relevant:
             return 0.0
 
+        # We accumulate precision values at the ranks where a relevant doc appears.
+        # This rewards systems that return relevant documents early.
         precision_sum = 0.0
         num_relevant_seen = 0
 
         for rank, doc_id in enumerate(retrieved, start=1):
             if doc_id in relevant:
                 num_relevant_seen += 1
+                # P@rank = (# relevant in top rank) / rank
                 precision_at_rank = num_relevant_seen / rank
                 precision_sum += precision_at_rank
 
+        # Normalization by |Relevant| means that unretrieved relevant docs
+        # contribute 0 to the sum (AP penalizes missing relevant documents).
         return precision_sum / len(relevant)
 
     def mean_average_precision(self,
@@ -297,6 +319,8 @@ class Metrics:
             >>> metrics.mean_average_precision(results, qrels)
             0.708  # (0.833 + 0.583) / 2
         """
+        # If we have no runs or no judgments, MAP is not meaningful.
+        # Convention: return 0.0.
         if not results or not qrels:
             return 0.0
 
@@ -310,6 +334,7 @@ class Metrics:
                 ap_sum += ap
                 num_queries += 1
 
+        # Only average over queries that have qrels.
         return ap_sum / num_queries if num_queries > 0 else 0.0
 
     def reciprocal_rank(self, retrieved: List[int],
@@ -339,6 +364,8 @@ class Metrics:
             >>> metrics.reciprocal_rank([1, 2, 3], {1})
             1.0  # First relevant at rank 1
         """
+        # Scan the ranking until we hit the first relevant document.
+        # This is an "early stopping" metric: only the first hit matters.
         for rank, doc_id in enumerate(retrieved, start=1):
             if doc_id in relevant:
                 return 1.0 / rank
@@ -363,6 +390,7 @@ class Metrics:
             Time: O(Q*k) where Q = queries, k = avg retrieved
             Space: O(1)
         """
+        # MRR behaves similarly to MAP: average the per-query RR values.
         if not results or not qrels:
             return 0.0
 
@@ -410,13 +438,19 @@ class Metrics:
             >>> metrics.dcg_at_k([1, 2, 3], rel, k=3)
             8.392  # (2^3-1)/log2(2) + (2^2-1)/log2(3) + (2^3-1)/log2(4)
         """
+        # DCG@0 is defined as 0.0.
         if k <= 0:
             return 0.0
 
         dcg = 0.0
         for i, doc_id in enumerate(retrieved[:k], start=1):
+            # Unjudged documents default to relevance 0.
             rel = relevance_scores.get(doc_id, 0.0)
             # DCG formula: (2^rel - 1) / log2(i + 1)
+            # - The gain uses an exponential scale so that highly relevant docs
+            #   dominate slightly relevant docs.
+            # - The log discount models user attention decreasing with rank.
+            # - i starts at 1 so that the top-ranked doc has discount log2(2)=1.
             gain = (2 ** rel - 1) / math.log2(i + 1)
             dcg += gain
 
@@ -453,6 +487,7 @@ class Metrics:
             >>> metrics.ndcg_at_k([4, 5, 1], rel, k=3)
             0.392  # Poor ranking (0, 1, 3 by relevance)
         """
+        # nDCG@0 is defined as 0.0.
         if k <= 0:
             return 0.0
 
@@ -461,6 +496,11 @@ class Metrics:
 
         # Calculate IDCG (ideal DCG)
         # Sort all documents by relevance (descending)
+        #
+        # Important note:
+        # IDCG is computed over the set of documents provided in `relevance_scores`.
+        # If `relevance_scores` only contains judged docs, this is the standard
+        # TREC-style evaluation setup (unjudged docs treated as 0 and omitted).
         ideal_ranking = sorted(
             relevance_scores.keys(),
             key=lambda x: relevance_scores[x],
@@ -514,6 +554,8 @@ class Metrics:
             >>> metrics.expected_reciprocal_rank([1, 2, 3, 4, 5], rel, k=5)
             0.631
         """
+        # ERR assumes a cascade user model:
+        # users scan results from top to bottom and may stop once satisfied.
         if k <= 0 or not retrieved:
             return 0.0
 
@@ -530,6 +572,8 @@ class Metrics:
             err += prob_relevant * prob_continue / r
 
             # Update probability of continuing
+            # If the user is satisfied at rank r with probability prob_relevant,
+            # then they continue with probability (1 - prob_relevant).
             prob_continue *= (1 - prob_relevant)
 
         return err
@@ -567,6 +611,8 @@ class Metrics:
             >>> metrics.geometric_mean_average_precision(results, qrels)
             0.645
         """
+        # GMAP is a multiplicative aggregation of per-query AP values.
+        # It penalizes "hard queries" (low AP) much more strongly than MAP.
         if not results or not qrels:
             return 0.0
 
@@ -577,7 +623,7 @@ class Metrics:
             if query_id in qrels:
                 relevant = qrels[query_id]
                 ap = self.average_precision(retrieved, relevant)
-                # Add epsilon to handle zero AP
+                # Add epsilon to handle AP=0 (log(0) is undefined).
                 log_ap_sum += math.log(ap + epsilon)
                 num_queries += 1
 
@@ -619,6 +665,8 @@ class Metrics:
             >>> metrics.rank_biased_precision([1, 2, 3, 4, 5], {1, 3, 5}, p=0.8)
             0.469
         """
+        # RBP uses a geometric decay with persistence probability p:
+        # the user continues to the next rank with prob p, so rank i gets weight p^i.
         if not retrieved or p < 0 or p >= 1:
             return 0.0
 
@@ -703,6 +751,9 @@ class Metrics:
             >>> metrics.bpref(retrieved, relevant, non_relevant)
             0.556
         """
+        # Bpref is designed for incomplete judgments:
+        # it only compares a relevant doc to the number of judged non-relevant docs
+        # that were ranked before it (ignoring unjudged docs).
         if not relevant:
             return 0.0
 
@@ -748,6 +799,8 @@ class Metrics:
             >>> metrics.r_precision([1, 2, 3, 4, 5], {1, 3, 5})
             0.667  # P@3 since there are 3 relevant docs
         """
+        # R-precision uses a query-dependent cutoff:
+        # R = number of known relevant documents for that query.
         if not relevant:
             return 0.0
 
@@ -774,6 +827,7 @@ class Metrics:
             Time: O(k)
             Space: O(1)
         """
+        # Success@K is a binary indicator for "did we get at least one hit?".
         if k <= 0:
             return 0.0
 
@@ -853,12 +907,14 @@ class Metrics:
                 ...
             }
         """
+        # Default cutoffs mirror common IR reporting (top 5 / 10 / 20).
         if k_values is None:
             k_values = [5, 10, 20]
 
         results = {}
 
-        # Binary relevance metrics
+        # Binary relevance metrics (relevant vs non-relevant).
+        # These require only a set of relevant doc_ids.
         p = self.precision(retrieved, relevant)
         r = self.recall(retrieved, relevant)
 
@@ -868,7 +924,7 @@ class Metrics:
         results['ap'] = self.average_precision(retrieved, relevant)
         results['rr'] = self.reciprocal_rank(retrieved, relevant)
 
-        # Advanced binary metrics
+        # Advanced binary metrics used in academic evaluations and benchmarks.
         results['r_precision'] = self.r_precision(retrieved, relevant)
         results['bpref'] = self.bpref(retrieved, relevant)
         results['rbp'] = self.rank_biased_precision(retrieved, relevant)
@@ -881,6 +937,8 @@ class Metrics:
 
             # Graded relevance metrics
             if relevance_scores:
+                # These metrics require a graded relevance mapping:
+                # doc_id -> grade (e.g., 0..3).
                 results[f'ndcg@{k}'] = self.ndcg_at_k(retrieved, relevance_scores, k)
                 results[f'err@{k}'] = self.expected_reciprocal_rank(
                     retrieved, relevance_scores, k
@@ -924,7 +982,8 @@ class Metrics:
         if k_values is None:
             k_values = [5, 10, 20]
 
-        # Aggregate per-query metrics
+        # Aggregate per-query metric values so we can average them later.
+        # We use list accumulation because some queries may be skipped (missing qrels).
         per_query_metrics = defaultdict(list)
 
         for query_id, retrieved in results.items():
@@ -946,12 +1005,15 @@ class Metrics:
             for metric_name, score in query_metrics.items():
                 per_query_metrics[metric_name].append(score)
 
-        # Average across queries
+        # Average each metric across queries.
+        # This produces the standard "run-level" summary table used in IR papers.
         aggregated = {}
         for metric_name, scores in per_query_metrics.items():
             aggregated[metric_name] = sum(scores) / len(scores) if scores else 0.0
 
-        # Add MAP, MRR, and GMAP explicitly
+        # Add MAP/MRR/GMAP explicitly (common headline metrics).
+        # These recompute from the raw inputs rather than reusing per_query_metrics
+        # to keep formulas consistent and easy to validate.
         aggregated['map'] = self.mean_average_precision(results, qrels)
         aggregated['mrr'] = self.mean_reciprocal_rank(results, qrels)
         aggregated['gmap'] = self.geometric_mean_average_precision(results, qrels)
@@ -1086,9 +1148,12 @@ def ndcg(relevance_scores: Union[Dict[int, float], List[float]], k: int) -> floa
     """
     # Convert list to dict if needed
     if isinstance(relevance_scores, list):
+        # Interpret a list as "relevance by rank position".
+        # This is useful in toy examples where doc_ids are not important.
         relevance_scores = {i: score for i, score in enumerate(relevance_scores)}
 
     # Create an ideal ranking based on the relevance scores
+    # This uses doc_id keys as "items" and orders them by grade.
     retrieved = sorted(relevance_scores.keys(), key=lambda x: relevance_scores[x], reverse=True)
     return _metrics_instance.ndcg_at_k(retrieved, relevance_scores, k)
 

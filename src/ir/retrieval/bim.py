@@ -156,6 +156,9 @@ class BinaryIndependenceModel:
         # Build inverted index
         for doc_id, doc_text in enumerate(documents):
             tokens = self.tokenizer(doc_text)
+            # BIM uses a *binary* representation:
+            #   xi(term, doc) = 1 if term appears at least once, else 0
+            # So we only keep the unique term set and ignore within-document tf.
             unique_terms = set(tokens)
 
             # Store document terms
@@ -163,6 +166,8 @@ class BinaryIndependenceModel:
 
             # Update inverted index
             for term in unique_terms:
+                # Inverted index stores the set of documents that contain a term.
+                # This supports fast candidate generation for a query.
                 self.inverted_index[term].add(doc_id)
                 self.vocab.add(term)
 
@@ -197,7 +202,9 @@ class BinaryIndependenceModel:
 
             # IDF-based weight (similar to BM25 IDF)
             weight = math.log((self.doc_count - df + 0.5) / (df + 0.5))
-            self.term_weights[term] = max(weight, 0.0)  # Ensure non-negative
+            # Some IDF variants can become negative when df > N/2. Clamping to
+            # non-negative is a common practical choice for ranking stability.
+            self.term_weights[term] = max(weight, 0.0)
 
     def _compute_rsj_weights(self) -> None:
         """
@@ -224,6 +231,9 @@ class BinaryIndependenceModel:
             self._compute_idf_weights()
             return
 
+        # RSJ weights incorporate relevance feedback. Intuitively:
+        # - Terms common in relevant docs (high pi) should get positive weight.
+        # - Terms common in non-relevant docs (high qi) should get negative weight.
         for term in self.vocab:
             df = self.doc_freq[term]
 
@@ -232,6 +242,8 @@ class BinaryIndependenceModel:
                     if term in self.doc_terms.get(doc_id, set()))
 
             # RSJ formula with smoothing
+            # The +0.5 constants are "additive smoothing" to avoid zero/one
+            # probabilities when counts are small (classic BIM practice).
             pi = (ri + 0.5) / (R + 1)
             qi = (df - ri + 0.5) / (N - R + 1)
 
@@ -261,6 +273,7 @@ class BinaryIndependenceModel:
             self.non_relevant_docs = set(non_relevant_docs)
         else:
             # Assume all other docs are non-relevant
+            # This is a common setup in pseudo/implicit feedback experiments.
             all_docs = set(range(self.doc_count))
             self.non_relevant_docs = all_docs - self.relevant_docs
 
@@ -300,6 +313,8 @@ class BinaryIndependenceModel:
         doc_terms = self.doc_terms[doc_id]
         rsv = 0.0
 
+        # Retrieval Status Value (RSV) is a weighted sum of binary indicators.
+        # Only terms present in the document contribute (xi = 1).
         for term in query_terms:
             if term in doc_terms:
                 # Binary presence: xi = 1
@@ -348,7 +363,9 @@ class BinaryIndependenceModel:
                 }
             )
 
-        # Get candidate documents (union of all docs containing query terms)
+        # Candidate generation: union of postings for query terms.
+        # If a document contains none of the query terms, its RSV is 0 and we
+        # can skip scoring it.
         candidate_docs = set()
         for term in query_terms:
             if term in self.inverted_index:

@@ -45,6 +45,9 @@ class CKIPTokenizerOptimized:
 
     def __new__(cls, *args, **kwargs):
         """Singleton pattern: ensure only one instance exists."""
+        # This class is designed to be a process-wide tokenizer: loading the model
+        # repeatedly is expensive, and thread settings are also global-ish. A
+        # singleton keeps both consistent.
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -70,6 +73,8 @@ class CKIPTokenizerOptimized:
         self.logger = logging.getLogger(__name__)
 
         # Optimize threading BEFORE importing CKIP
+        # CKIP runs on top of PyTorch; configuring thread pools before creating
+        # model objects helps avoid suboptimal defaults (e.g., too few threads).
         self._optimize_threading(num_threads)
 
         try:
@@ -123,12 +128,22 @@ class CKIPTokenizerOptimized:
 
         self.num_threads = num_threads
 
-        # Set environment variables (must be done BEFORE torch import)
+        # Set environment variables used by native BLAS/OpenMP backends.
+        #
+        # NOTE: These environment variables are most effective when set before
+        # importing libraries that initialize their thread pools. In this module
+        # `torch` is already imported at import time, so the main effect comes
+        # from the explicit `torch.set_num_threads()` calls below.
         os.environ['OMP_NUM_THREADS'] = str(num_threads)
         os.environ['MKL_NUM_THREADS'] = str(num_threads)
         os.environ['NUMEXPR_NUM_THREADS'] = str(num_threads)
 
-        # Set PyTorch threading
+        # Configure PyTorch intra-op and inter-op thread pools:
+        # - intra-op: parallelism within a single operator (e.g., matrix multiply)
+        # - inter-op: parallelism across independent operators
+        #
+        # For inference-heavy tokenization workloads, setting both to a high
+        # number can improve throughput, but may also contend with other jobs.
         torch.set_num_threads(num_threads)
         torch.set_num_interop_threads(num_threads)
 

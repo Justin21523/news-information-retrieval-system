@@ -15,6 +15,7 @@
 - 補齊 `src/**/__init__.py`、主要 `tests/test_*.py` 與多個 `scripts/*` CLI 入口的英文 docstring（提升可讀性與可維護性）。
 - 補強核心模組教學向註解：`src/ir/retrieval/boolean.py`、`src/ir/retrieval/vsm.py`、`src/ir/retrieval/bm25.py`、`src/ir/ranking/rocchio.py`、`src/ir/query/query_parser.py`。
 - 補強上述核心模組的「教科書式行內註解」（逐步拆解 parse → execute → rank / score 流程），便於逐行閱讀理解 IR 原理。
+- 補強 text/tokenizer 與其他 retrieval 模型（wildcard/fuzzy/LM/BIM）的「教科書式行內註解」，讓原理可逐行對照理解：`src/ir/text/chinese_tokenizer.py`、`src/ir/text/ckip_tokenizer*.py`、`src/ir/text/stopwords.py`、`src/ir/retrieval/wildcard.py`、`src/ir/retrieval/fuzzy.py`、`src/ir/retrieval/language_model_retrieval.py`、`src/ir/retrieval/bim.py`。
 - 補強索引/加權教學向註解：`src/ir/index/inverted_index.py`、`src/ir/index/positional_index.py`、`src/ir/index/term_weighting.py`。
 - 補強查詢最佳化/整合式搜尋教學向註解：`src/ir/retrieval/query_optimization.py`、`src/ir/search/unified_search.py`。
 - 補強欄位索引教學向註解：`src/ir/index/field_indexer.py`。
@@ -28,6 +29,7 @@
 - `src/ir/query/query_executor.py`：支援 `date:[start TO end]` 以 alias 對應 `published_date`，並將 AND 交集改為先交集小集合以降低運算量。
 - `src/ir/search/unified_search.py`：欄位前綴偵測改為由 `FieldIndexer.supported_fields` 動態派生（含 `date/published_at` alias），避免 `tags:`、`published_date:` 等欄位查詢被誤判成 content boolean。
 - `src/ir/index/incremental_builder.py` / `src/ir/search/unified_search.py` / `src/ir/index/field_indexer.py`：修正 batch indexing 下 doc_id 對齊（results 順序對齊輸入 docs、以實際 doc.doc_id 更新 metadata、FieldIndexer 支援顯式 doc_id）。
+- `src/ir/retrieval/language_model_retrieval.py`：修正 absolute discounting smoothing 使用未定義 `doc_id` 導致 `NameError`（補上 doc_id 參數並在 term_probability 分流傳入）。
 
 #### 🧪 測試
 - `tests/test_topic.py`：在缺少（或安裝不完整的）topic modeling 可選依賴時，pytest 收集階段自動 skip，避免整體測試中斷。

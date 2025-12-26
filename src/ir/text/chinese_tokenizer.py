@@ -110,6 +110,10 @@ class ChineseTokenizer:
 
         # Select engine
         if engine == 'auto':
+            # "auto" mode prefers CKIP (better segmentation quality) and falls
+            # back to Jieba when CKIP is not installed. This keeps the project
+            # usable in lightweight environments while still allowing higher
+            # accuracy in research/production setups.
             self.engine = 'ckip' if CKIP_AVAILABLE else 'jieba'
             if not CKIP_AVAILABLE:
                 self.logger.warning(
@@ -117,6 +121,8 @@ class ChineseTokenizer:
                     "Install with: pip install ckip-transformers"
                 )
         else:
+            # Explicit selection is respected even if the engine may be missing;
+            # in that case we raise during backend initialization below.
             self.engine = engine
 
         # Initialize backend
@@ -125,8 +131,12 @@ class ChineseTokenizer:
         self._ner = None  # NER chunker
 
         if self.engine == 'ckip':
+            # CKIP initialization loads transformer weights and can be slow.
+            # We do it once per tokenizer instance.
             self._init_ckip()
         else:
+            # Jieba initialization is lightweight; we also optionally load a
+            # custom dictionary to improve segmentation for domain terms.
             self._init_jieba(custom_dict_path)
 
         self.logger.info(
@@ -143,6 +153,8 @@ class ChineseTokenizer:
             )
 
         # Initialize word segmenter
+        # CKIP APIs are designed for batch inference, so we keep the driver
+        # object (`CkipWordSegmenter`) on the instance and reuse it.
         self._ws = CkipWordSegmenter(
             model="bert-base",
             device=self.device
@@ -151,6 +163,8 @@ class ChineseTokenizer:
 
         # Initialize POS tagger if requested
         if self.use_pos:
+            # POS tagging requires a second model head. We only load it when
+            # requested to save memory and startup time.
             self._pos = CkipPosTagger(
                 model="bert-base",
                 device=self.device
@@ -161,10 +175,14 @@ class ChineseTokenizer:
         """Initialize Jieba backend."""
         # Load custom dictionary
         if custom_dict_path:
+            # User dictionaries let us "teach" Jieba multi-character domain terms
+            # (e.g., "圖書資訊學") so they don't get split into smaller tokens.
             jieba.load_userdict(custom_dict_path)
             self.logger.info(f"Loaded custom dictionary: {custom_dict_path}")
 
         # Preload Jieba dictionary for faster first tokenization
+        # Jieba lazily initializes internal trie/HMM; calling initialize() here
+        # avoids a latency spike on the first tokenize() call.
         jieba.initialize()
         self.logger.info("Jieba initialized")
 
@@ -200,7 +218,8 @@ class ChineseTokenizer:
         if not text or not text.strip():
             return []
 
-        # Remove excessive whitespace
+        # Normalize whitespace to reduce "token noise" caused by repeated spaces,
+        # tabs, or newlines. This makes downstream indexing more stable.
         text = re.sub(r'\s+', ' ', text.strip())
 
         if self.engine == 'ckip':
@@ -215,7 +234,8 @@ class ChineseTokenizer:
         CKIP Transformers uses BERT-based model trained on Academia Sinica
         Balanced Corpus, achieving F1 > 90% on Traditional Chinese.
         """
-        # CKIP expects list input, returns list of lists
+        # CKIP expects a batch input (List[str]) and returns List[List[str]].
+        # We use a batch size of 1 to keep the API uniform for single texts.
         result = self._ws([text], batch_size=1, show_progress=False)
         return result[0] if result else []
 
@@ -269,14 +289,16 @@ class ChineseTokenizer:
             return []
 
         if self.engine == 'ckip':
-            # CKIP supports native batch processing
+            # CKIP provides efficient batch inference which amortizes model
+            # overhead and improves GPU/CPU utilization.
             return self._ws(
                 texts,
                 batch_size=batch_size,
                 show_progress=show_progress
             )
         else:
-            # Jieba processes sequentially
+            # Jieba tokenization is fast but does not expose a true batch API,
+            # so we loop. Keeping the same output shape preserves interchangeability.
             return [self.tokenize(text) for text in texts]
 
     # ========================================================================

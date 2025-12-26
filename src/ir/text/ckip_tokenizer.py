@@ -42,6 +42,9 @@ class CKIPTokenizer:
 
     def __new__(cls, *args, **kwargs):
         """Singleton pattern: ensure only one instance exists."""
+        # Loading transformer weights is expensive (seconds + memory). A singleton
+        # ensures we reuse the same model across the whole process (indexing,
+        # searching, batch scripts) rather than reloading per call.
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -72,12 +75,18 @@ class CKIPTokenizer:
             self.logger.info(f"Loading CKIP model: {model_name} (CPU mode)")
 
             # Initialize word segmenter with CPU
+            # CKIP uses PyTorch under the hood. We explicitly choose CPU by default
+            # because IR indexing often runs on commodity servers and CPU batching
+            # can still be efficient.
             self.ws = CkipWordSegmenter(
                 model=model_name,
                 device=-1 if not use_gpu else 0  # -1 for CPU, 0+ for GPU
             )
 
             # Load stopwords
+            # Stopwords are "high-frequency, low-content" tokens that often hurt
+            # retrieval precision (e.g., 的/了/在). Filtering them is a classic IR
+            # heuristic; for some tasks you may want to disable it.
             self.stopwords: Set[str] = set()
             if stopwords_file and Path(stopwords_file).exists():
                 with open(stopwords_file, 'r', encoding='utf-8') as f:
@@ -155,11 +164,17 @@ class CKIPTokenizer:
             return []
 
         try:
-            # CKIP segmentation (returns list of lists)
-            result = self.ws([text])  # Batch processing
+            # CKIP API is batch-oriented: input is List[str], output is List[List[str]].
+            # We pass a single-item batch here and unwrap the first result.
+            result = self.ws([text])
             tokens = result[0] if result else []
 
             # Post-processing
+            # This stage is where we apply practical IR heuristics:
+            # - strip whitespace
+            # - drop very short tokens (often punctuation/noise)
+            # - optionally filter stopwords
+            # - optionally drop pure numbers
             processed = []
             for token in tokens:
                 token = token.strip()
@@ -182,7 +197,9 @@ class CKIPTokenizer:
 
         except Exception as e:
             self.logger.warning(f"Tokenization error: {e}, falling back to character split")
-            # Fallback: simple character-based tokenization
+            # Fallback: character-based tokenization keeps the system working even
+            # if CKIP fails (e.g., model not loaded correctly). This is lower
+            # quality but avoids hard crashes in long indexing jobs.
             return [char for char in text if char.strip() and len(char) >= min_length]
 
     def tokenize_batch(self, texts: List[str],
@@ -222,7 +239,8 @@ class CKIPTokenizer:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i:i + batch_size]
 
-                # CKIP batch processing
+                # CKIP batch processing amortizes transformer overhead and is
+                # typically much faster than calling tokenize() repeatedly.
                 batch_results = self.ws(batch)
 
                 # Post-process each result

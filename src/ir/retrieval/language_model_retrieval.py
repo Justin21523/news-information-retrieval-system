@@ -150,7 +150,12 @@ class LanguageModelRetrieval:
         self.doc_count = len(documents)
         collection_term_counts = Counter()
 
-        # Build document models
+        # Build document language models (unigram counts).
+        # Each document model is represented as a sparse TF dictionary:
+        #   doc_models[doc_id][term] = tf(term, doc)
+        #
+        # We also accumulate collection-wide term counts to estimate P(w|C),
+        # which is needed for smoothing (background model).
         for doc_id, doc_text in enumerate(documents):
             tokens = self.tokenizer(doc_text)
             doc_length = len(tokens)
@@ -167,6 +172,9 @@ class LanguageModelRetrieval:
             self.vocab.update(tokens)
 
         # Build collection model
+        # Collection language model:
+        #   P(w|C) = count(w in collection) / |C|
+        # This acts as a "background" probability for unseen terms.
         self.collection_size = sum(collection_term_counts.values())
         for term, count in collection_term_counts.items():
             self.collection_model[term] = count / self.collection_size
@@ -200,11 +208,13 @@ class LanguageModelRetrieval:
         if doc_id not in self.doc_models:
             return 0.0
 
-        # Term frequency in document
+        # Term frequency in document (maximum-likelihood estimate uses tf/|D|).
         tf = self.doc_models[doc_id].get(term, 0)
         doc_length = self.doc_lengths[doc_id]
 
         # Collection probability (for smoothing)
+        # If a term never appears in the collection vocab, fall back to a small
+        # uniform probability. This prevents zero probabilities when smoothing.
         p_collection = self.collection_model.get(term, 1.0 / len(self.vocab))
 
         # Apply smoothing
@@ -213,7 +223,9 @@ class LanguageModelRetrieval:
         elif self.smoothing == 'dirichlet':
             return self._dirichlet_smoothing(tf, doc_length, p_collection)
         elif self.smoothing == 'absolute':
-            return self._absolute_discounting_smoothing(tf, doc_length, p_collection)
+            # Absolute discounting needs the number of unique terms in the
+            # document to compute the backoff mass.
+            return self._absolute_discounting_smoothing(tf, doc_length, p_collection, doc_id)
         else:
             # Maximum likelihood (no smoothing - NOT RECOMMENDED)
             return tf / doc_length if doc_length > 0 else 0.0
@@ -255,7 +267,9 @@ class LanguageModelRetrieval:
         denominator = doc_length + self.mu_param
         return numerator / denominator if denominator > 0 else 0.0
 
-    def _absolute_discounting_smoothing(self, tf: int, doc_length: int, p_collection: float) -> float:
+    def _absolute_discounting_smoothing(
+        self, tf: int, doc_length: int, p_collection: float, doc_id: int
+    ) -> float:
         """
         Absolute discounting smoothing.
 
@@ -267,6 +281,7 @@ class LanguageModelRetrieval:
             tf: Term frequency in document
             doc_length: Document length
             p_collection: Collection probability P(w|C)
+            doc_id: Document ID (used to compute number of unique terms)
 
         Returns:
             Smoothed probability
@@ -274,7 +289,9 @@ class LanguageModelRetrieval:
         if doc_length == 0:
             return 0.0
 
-        # Discount term frequency
+        # Discount term frequency:
+        # - Seen terms get (tf - δ)
+        # - Unseen terms get 0 from the document model and rely on backoff
         discounted_tf = max(tf - self.delta_param, 0)
 
         # Calculate normalization factor
@@ -307,6 +324,9 @@ class LanguageModelRetrieval:
             >>> lm.query_likelihood(["information", "retrieval"], 5)
             -12.456
         """
+        # Query likelihood multiplies probabilities, which underflows quickly.
+        # We therefore accumulate in log-space:
+        #   log P(Q|D) = Σ log P(qi|D)
         log_likelihood = 0.0
 
         for term in query_terms:
@@ -361,7 +381,10 @@ class LanguageModelRetrieval:
                 }
             )
 
-        # Score all documents
+        # Score all documents.
+        # This is the simplest implementation (O(N*T)). A faster alternative
+        # is to build an inverted index of term -> doc_ids and score only
+        # candidate docs that contain at least one query term.
         doc_scores: List[Tuple[int, float]] = []
         for doc_id in range(self.doc_count):
             score = self.query_likelihood(query_terms, doc_id)

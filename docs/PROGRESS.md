@@ -648,3 +648,45 @@ if rank_results:
 
 - 靜態語法檢查：`python -m py_compile src/ir/retrieval/boolean.py src/ir/query/query_parser.py src/ir/query/query_executor.py src/ir/retrieval/vsm.py src/ir/retrieval/bm25.py src/ir/ranking/rocchio.py`
 - 測試子集：`pytest tests/test_boolean.py tests/test_query_executor.py tests/test_rocchio.py tests/test_vsm.py`
+
+---
+
+## 2025-12-26：Text/Tokenizer 與其他 Retrieval 模型的教科書式行內註解（第 13 批）
+
+### 目標
+
+- 先把「文本處理（tokenizer/stopwords）」補成教科書式逐步註解，讓你能清楚理解：
+  - 為什麼要做 tokenizer normalization（空白、大小寫、字典）
+  - 為什麼 IR 常用 stopwords（以及可能的副作用）
+  - CKIP/Jieba 的取捨與 fallback 策略
+- 再補齊 retrieval 其他模型的教科書式行內註解：
+  - wildcard / fuzzy 的 expansion 原理與「防爆炸」限制
+  - LM retrieval 的 smoothing 與 log-likelihood ranking
+  - BIM 的 binary 表示法與 RSJ 權重（relevance feedback）
+
+### 本次修改範圍
+
+- Text / Tokenizer
+  - `src/ir/text/chinese_tokenizer.py`：補強 engine auto-selection、backend init、batch、cache 等行內註解。
+  - `src/ir/text/ckip_tokenizer.py`：補強 singleton、post-processing（min_length/stopwords/digits）、fallback 的行內註解。
+  - `src/ir/text/ckip_tokenizer_optimized.py`：補強 thread pool/環境變數/torch threading 的教學式註解（強調其作用與限制）。
+  - `src/ir/text/stopwords.py`：補強 stopwords 在 IR 的角色、case normalization、filter 的成本與使用時機。
+- Retrieval 其他模型
+  - `src/ir/retrieval/wildcard.py`：補強 wildcard → regex、fullmatch vs substring、max_expansions 的行內註解。
+  - `src/ir/retrieval/fuzzy.py`：補強 Levenshtein DP table 意義、fuzzy scan 的複雜度與常見加速策略（BK-tree 等）註解。
+  - `src/ir/retrieval/language_model_retrieval.py`：補強 index-time（doc model / collection model）、smoothing 選擇、log-likelihood 的行內註解；並修正 absolute discounting smoothing 的 `doc_id` 參數遺漏問題（避免 `NameError`）。
+  - `src/ir/retrieval/bim.py`：補強 binary 表示法、candidate generation、RSJ smoothing 常數的行內註解。
+
+### 片段程式碼（LM：smoothing 分流 + 絕對折扣修正）
+
+LM retrieval 的核心是先算 `tf`、`|D|`、`P(w|C)`，再依 smoothing 方法套公式：
+
+```python
+if self.smoothing == 'absolute':
+    return self._absolute_discounting_smoothing(tf, doc_length, p_collection, doc_id)
+```
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile src/ir/text/chinese_tokenizer.py src/ir/text/ckip_tokenizer.py src/ir/text/ckip_tokenizer_optimized.py src/ir/text/stopwords.py src/ir/retrieval/wildcard.py src/ir/retrieval/fuzzy.py src/ir/retrieval/language_model_retrieval.py src/ir/retrieval/bim.py`
+- 測試子集（確保 wildcard 整合沒壞）：`pytest tests/test_boolean.py`

@@ -106,12 +106,19 @@ class WildcardExpander:
             return [pattern] if pattern in vocabulary else []
 
         # Convert wildcard pattern to regex
+        # We translate glob-like wildcards to regex:
+        #   '*' -> '.*' (any sequence)
+        #   '?' -> '.'  (single char)
+        # Then we match against the full term (fullmatch), not a substring.
         regex_pattern = self._wildcard_to_regex(pattern)
         compiled_pattern = re.compile(regex_pattern, re.IGNORECASE)
 
         # Find matching terms
         matching_terms = []
         for term in vocabulary:
+            # fullmatch() enforces that the entire vocabulary term matches the
+            # wildcard pattern. For example, "info*" matches "information" but
+            # would not match "bioinformatics" unless pattern is "*info*".
             if compiled_pattern.fullmatch(term):
                 matching_terms.append(term)
 
@@ -124,6 +131,8 @@ class WildcardExpander:
                     break
 
         self.logger.debug(f"Expanded '{pattern}' to {len(matching_terms)} terms")
+        # Sorting makes expansion deterministic, which helps testing and
+        # reproducibility (same vocabulary -> same expanded list).
         return sorted(matching_terms)
 
     def _wildcard_to_regex(self, pattern: str) -> str:
@@ -149,7 +158,11 @@ class WildcardExpander:
             >>> _wildcard_to_regex("*form*")
             '.*form.*'
         """
-        # Escape special regex characters except * and ?
+        # Escape special regex characters so user-provided patterns do not turn
+        # into unintended regex operators (security + correctness).
+        #
+        # We escape everything first, then "re-enable" wildcard semantics by
+        # replacing the escaped \* and \? sequences.
         # Characters to escape: . ^ $ + { } [ ] \ | ( )
         escaped = re.escape(pattern)
 

@@ -80,8 +80,13 @@ class StopwordsFilter:
 
         # Load stopwords from file
         if stopwords_file:
+            # Explicit stopword lists are useful when you need reproducible
+            # experiments (the set of removed tokens becomes a controlled input).
             self._load_from_file(stopwords_file)
         elif self.DEFAULT_STOPWORDS_FILE.exists():
+            # Default: Traditional Chinese stopwords list shipped with the repo.
+            # This is an IR heuristic: removing very frequent function words
+            # often improves precision and reduces index size.
             self._load_from_file(str(self.DEFAULT_STOPWORDS_FILE))
             self.logger.info(f"Loaded default stopwords: {self.DEFAULT_STOPWORDS_FILE}")
         else:
@@ -161,6 +166,9 @@ class StopwordsFilter:
             >>> filter.is_stopword('機器')
             False
         """
+        # We normalize case to keep lookups consistent with how we loaded the
+        # stopword list. Chinese tokens are usually case-less, but mixed
+        # Chinese/English corpora can contain ASCII terms.
         if not self.case_sensitive:
             token = token.lower()
 
@@ -187,6 +195,8 @@ class StopwordsFilter:
             >>> print(filtered)
             ['機器', '學習', '重要', '領域']
         """
+        # Filtering is linear in the number of tokens and uses O(1) set lookups.
+        # This is typically cheap compared to tokenization/model inference.
         if not self.case_sensitive:
             return [token for token in tokens
                    if token.lower() not in self.stopwords]

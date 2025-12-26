@@ -90,6 +90,15 @@ class FuzzyMatcher:
         m, n = len(str1), len(str2)
 
         # Create DP table
+        # dp[i][j] = edit distance between:
+        #   - the prefix str1[:i] (first i chars)
+        #   - the prefix str2[:j] (first j chars)
+        #
+        # This "prefix DP" formulation makes the recurrence simple and is the
+        # standard textbook presentation of Levenshtein distance.
+        #
+        # Note: this uses O(m*n) memory for clarity. A memory-optimized version
+        # would keep only two rows (O(min(m, n)) space).
         dp = [[0] * (n + 1) for _ in range(m + 1)]
 
         # Initialize base cases
@@ -106,6 +115,9 @@ class FuzzyMatcher:
                     dp[i][j] = dp[i-1][j-1]
                 else:
                     # Take minimum of: insert, delete, substitute
+                    # - insert:    align str1[:i] with str2[:j-1] then insert str2[j-1]
+                    # - delete:    align str1[:i-1] with str2[:j] then delete str1[i-1]
+                    # - substitute:align str1[:i-1] with str2[:j-1] then substitute last char
                     dp[i][j] = 1 + min(
                         dp[i][j-1],    # Insert
                         dp[i-1][j],    # Delete
@@ -139,10 +151,15 @@ class FuzzyMatcher:
         if max_distance is None:
             max_distance = self.max_distance
 
+        # Normalize query so matching is case-insensitive.
+        # (For Chinese this is usually a no-op; for mixed corpora it matters.)
         query_lower = query.lower()
         matches = []
 
         # Calculate distance for each term
+        # This is the simplest approach: scan the whole vocabulary and compute
+        # edit distance. For large vocabularies you would typically accelerate
+        # this with a BK-tree or a trie + dynamic programming pruning.
         for term in vocabulary:
             distance = self.edit_distance(query_lower, term.lower())
 
@@ -150,6 +167,8 @@ class FuzzyMatcher:
                 matches.append((term, distance))
 
                 # Limit expansions
+                # Fuzzy matching can explode (many near matches). We cap the
+                # expansion size to keep boolean evaluation and UI output stable.
                 if len(matches) >= self.max_expansions:
                     self.logger.warning(
                         f"Fuzzy expansion limit reached ({self.max_expansions}). "
@@ -158,6 +177,7 @@ class FuzzyMatcher:
                     break
 
         # Sort by distance (closer matches first), then alphabetically
+        # Deterministic ordering makes behavior reproducible and easier to debug.
         matches.sort(key=lambda x: (x[1], x[0]))
 
         self.logger.debug(

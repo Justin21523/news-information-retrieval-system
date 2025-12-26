@@ -51,6 +51,7 @@ class IndexBuilder:
     """
 
     def __init__(self):
+        """Initialize empty index containers and corpus statistics (O(1) time/space)."""
         # Core indexes
         self.inverted_index = defaultdict(list)  # term -> [(doc_id, tf), ...]
         self.positional_index = defaultdict(list)  # term -> [(doc_id, [positions]), ...]

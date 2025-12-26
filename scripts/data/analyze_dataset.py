@@ -103,6 +103,7 @@ def analyze_dataset(input_file: str, output_file: str = None):
     report_lines = []
 
     def add_line(line=""):
+        """Append a line to the report buffer and echo it to stdout."""
         report_lines.append(line)
         print(line)
 

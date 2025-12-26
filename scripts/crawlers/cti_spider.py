@@ -67,6 +67,7 @@ except ImportError:
         }
 
         def __init__(self, *args, **kwargs):
+            """Initialize the fallback base spider (delegates to Scrapy.Spider)."""
             super().__init__(*args, **kwargs)
 
 logger = logging.getLogger(__name__)

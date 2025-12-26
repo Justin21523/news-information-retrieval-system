@@ -31,17 +31,20 @@ def sample_docs():
 class TestDocumentClustering:
     """Unit tests for document clustering algorithms and utilities."""
     def test_cosine_similarity(self, doc_clusterer):
+        """Return 1.0 cosine similarity for identical sparse vectors."""
         vec1 = {"term1": 1.0}
         vec2 = {"term1": 1.0}
         sim = doc_clusterer.cosine_similarity(vec1, vec2)
         assert sim == pytest.approx(1.0)
 
     def test_hac_clustering(self, doc_clusterer, sample_docs):
+        """Cluster separable document vectors into k clusters with HAC."""
         result = doc_clusterer.hierarchical_clustering(sample_docs, k=2)
         assert result.num_clusters == 2
         assert len(result.clusters) == 2
 
     def test_kmeans_clustering(self, doc_clusterer, sample_docs):
+        """Cluster separable document vectors into k clusters with k-means."""
         result = doc_clusterer.kmeans_clustering(sample_docs, k=2, random_seed=42)
         assert result.num_clusters == 2
         assert len(result.assignments) == 4
@@ -58,10 +61,12 @@ def term_clusterer():
 class TestTermClustering:
     """Unit tests for term clustering algorithms (edit distance, star clustering)."""
     def test_edit_distance(self, term_clusterer):
+        """Compute edit distance (Levenshtein) for two short words."""
         dist = term_clusterer.edit_distance("cat", "hat")
         assert dist == 1
 
     def test_star_clustering(self, term_clusterer):
+        """Group similar terms with star clustering using a similarity threshold."""
         terms = ["color", "colour", "paint"]
         clusters = term_clusterer.star_clustering(terms, similarity_threshold=0.7)
         assert len(clusters) > 0

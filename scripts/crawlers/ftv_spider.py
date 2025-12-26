@@ -78,6 +78,7 @@ class FTVNewsSpider(BasePlaywrightSpider):
 
     def __init__(self, category: str = 'all', days: int = 730,  # 2 years default
                  max_pages: int = 500, max_articles: int = None, *args, **kwargs):
+        """Initialize crawl configuration, date window, and counters (O(1) time/space)."""
         super().__init__(*args, **kwargs)
 
         if category not in self.CATEGORIES:
@@ -379,10 +380,12 @@ class FTVNewsSpider(BasePlaywrightSpider):
             self.articles_failed += 1
 
     def handle_error(self, failure):
+        """Handle a failed request callback by logging and counting failures."""
         logger.error(f"Request failed: {failure.request.url} - {failure.type.__name__}")
         self.articles_failed += 1
 
     def closed(self, reason):
+        """Log a crawl summary when the spider is closed."""
         super().closed(reason)
 
         total = self.articles_scraped + self.articles_failed
@@ -406,12 +409,14 @@ class FTVNewsSpider(BasePlaywrightSpider):
         logger.info("=" * 70)
 
     def _generate_article_id(self, url: str) -> str:
+        """Generate a stable article_id from the URL (detail id or hashed fallback)."""
         match = re.search(r'/detail/([A-Z0-9]+)', url)
         if match:
             return f"ftv_{match.group(1)}"
         return hashlib.md5(url.encode('utf-8')).hexdigest()[:16]
 
     def _extract_from_jsonld(self, response, field: str) -> Optional[str]:
+        """Extract a metadata field from JSON-LD scripts embedded in the page."""
         try:
             jsonld_scripts = response.css('script[type="application/ld+json"]::text').getall()
             for script in jsonld_scripts:
@@ -432,6 +437,7 @@ class FTVNewsSpider(BasePlaywrightSpider):
         return None
 
     def _clean_text(self, text: Optional[str]) -> str:
+        """Remove HTML tags and normalize whitespace from a text snippet."""
         if not text:
             return ""
         text = re.sub(r'<[^>]+>', '', text)
@@ -439,6 +445,7 @@ class FTVNewsSpider(BasePlaywrightSpider):
         return text.strip()
 
     def _parse_publish_date(self, date_text: Optional[str]) -> Optional[str]:
+        """Parse a publish date string into YYYY-MM-DD, or return None when unknown."""
         if not date_text:
             return None
 

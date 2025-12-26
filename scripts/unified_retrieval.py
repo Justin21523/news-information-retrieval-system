@@ -66,6 +66,7 @@ class SearchResult:
     metadata: Dict = None
 
     def __post_init__(self):
+        """Normalize optional fields so callers can treat metadata as a dict."""
         if self.metadata is None:
             self.metadata = {}
 

@@ -538,3 +538,60 @@ def count_nodes(node):
 ### 驗證方式
 
 - 靜態語法檢查：`python -m py_compile src/ir/keyextract/evaluator.py src/ir/patterns/pat_tree.py src/ir/syntax/parser.py src/ir/topic/bertopic_model.py src/ir/topic/lda_model.py`
+
+---
+
+## 2025-12-26：補齊 `tests/` 與 `scripts/` 缺漏函式 docstring（第 11 批）
+
+### 目標
+
+- 針對 AST 盤點仍缺漏 docstring 的部分，集中在 `tests/` 與 `scripts/`：
+  - `tests/`：替大量 `test_*` 函式補上一行英文 docstring，讓測試本身變成「行為規格（spec）」。
+  - `scripts/`：替 CLI / crawler / data 工具內的 `__init__`、`__post_init__`、nested helper 加上英文 docstring，讓未來維護者可以快速理解意圖與資料流。
+- 將「全 repo」函式 docstring 缺口收斂到 0（以 AST 掃描驗證）。
+
+### 本次修改範圍
+
+- 測試（tests）
+  - `tests/test_metrics.py`：補齊所有 `test_*` 方法 docstring（precision/recall、AP/MAP、DCG/nDCG 等）。
+  - `tests/test_rocchio.py`：補齊 Rocchio expansion / reweight / edge cases 的 `test_*` docstring。
+  - `tests/test_term_weighting.py`、`tests/test_vsm.py`、`tests/test_clustering.py`：補齊核心模型/工具的 `test_*` docstring。
+  - `tests/test_incremental_builder.py`：補齊 stub tokenizer methods 的 docstring（避免教學閱讀斷層）。
+- 腳本（scripts）
+  - 索引與檢索工具：`scripts/build_indexes_from_preprocessed.py`、`scripts/unified_retrieval.py`
+  - 資料處理：`scripts/preprocess_news.py`、`scripts/data/analyze_dataset.py`
+  - 爬蟲與啟動器：`scripts/run_crawlers.py`、`scripts/crawlers/*`（CNA/CTI/FTV/NextApple）
+  - 測試工具：`scripts/comprehensive_test.py`
+
+### 片段程式碼（測試 docstring = 行為規格）
+
+把每個測試的意圖寫成一行 docstring，能在 IDE tooltip / `pytest -q` 失敗訊息中快速知道「這個測試在保證什麼」：
+
+```python
+def test_precision(self, metrics, sample_retrieved, sample_relevant):
+    \"\"\"Compute precision as |retrieved ∩ relevant| / |retrieved|.\"\"\"
+    ...
+```
+
+### 片段程式碼（nested helper 的 docstring：工具腳本可讀性）
+
+像 `run_crawlers.py` 的 concurrent 模式是 nested coroutine，沒有 docstring 很難從結構一眼看懂流程：
+
+```python
+@defer.inlineCallbacks
+def crawl():
+    \"\"\"Run selected spiders with CrawlerRunner and stop the reactor when done.\"\"\"
+    ...
+```
+
+### 盤點結果（本批結束）
+
+以 AST 掃描全專案（`src/` + `tests/` + `scripts/`）函式 docstring 缺口：
+
+- 變更前：`112`（`tests: 93`、`scripts: 19`）
+- 變更後：`0`
+
+### 驗證方式
+
+- 靜態語法檢查：`python -m py_compile tests/test_metrics.py tests/test_rocchio.py tests/test_term_weighting.py tests/test_vsm.py tests/test_clustering.py scripts/build_indexes_from_preprocessed.py scripts/unified_retrieval.py scripts/run_crawlers.py scripts/preprocess_news.py scripts/data/analyze_dataset.py scripts/comprehensive_test.py scripts/crawlers/cna_spider_simple.py scripts/crawlers/cti_spider.py scripts/crawlers/ftv_spider.py scripts/crawlers/nextapple_spider.py`
+- 測試子集：`pytest tests/test_metrics.py tests/test_rocchio.py tests/test_term_weighting.py tests/test_vsm.py tests/test_clustering.py`

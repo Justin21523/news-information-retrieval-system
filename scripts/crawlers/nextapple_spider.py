@@ -116,6 +116,7 @@ class NextAppleSpider(scrapy.Spider):
     def __init__(self, sitemap: str = 'news', days: int = None,
                  start_date: str = None, end_date: str = None,
                  max_articles: int = None, *args, **kwargs):
+        """Initialize sitemap selection, optional date filters, and crawl counters."""
         super(NextAppleSpider, self).__init__(*args, **kwargs)
 
         # Sitemap selection
@@ -622,12 +623,14 @@ class NextAppleSpider(scrapy.Spider):
 
     @staticmethod
     def clean_text(text: Optional[str]) -> str:
+        """Normalize whitespace and coerce None/empty values to an empty string."""
         if not text:
             return ""
         return re.sub(r'\s+', ' ', text).strip()
 
     @staticmethod
     def parse_date(date_str: Optional[str]) -> Optional[str]:
+        """Parse ISO-8601 or extract a YYYY-MM-DD date from a string."""
         if not date_str:
             return None
         try:

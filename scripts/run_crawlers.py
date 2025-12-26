@@ -198,6 +198,7 @@ def run_spiders(sources: list, start_date: str, end_date: str, output_dir: str, 
 
         @defer.inlineCallbacks
         def crawl():
+            """Run selected spiders with CrawlerRunner and stop the reactor when done."""
             for source in sources:
                 spider_cls = spider_map[source]
                 yield runner.crawl(

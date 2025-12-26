@@ -58,6 +58,7 @@ class CNANewsSpiderSimple(scrapy.Spider):
 
     def __init__(self, start_date: str = None, end_date: str = None,
                 categories: str = None, max_articles: int = None, *args, **kwargs):
+        """Initialize date/category filters and basic crawl statistics."""
         super().__init__(*args, **kwargs)
 
         # Parse dates

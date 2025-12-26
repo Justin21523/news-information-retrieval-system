@@ -46,6 +46,7 @@ def nonrelevant_vectors():
 class TestBasicExpansion:
     """Unit tests for basic Rocchio query expansion behavior."""
     def test_expand_query_with_relevant_docs(self, expander, query_vector, relevant_vectors):
+        """Expand a query using relevant document vectors and verify result metadata."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
 
         assert isinstance(expanded, ExpandedQuery)
@@ -56,12 +57,14 @@ class TestBasicExpansion:
         assert expanded.num_nonrelevant == 0
 
     def test_expanded_terms_not_in_original(self, expander, query_vector, relevant_vectors):
+        """Ensure expansion terms do not duplicate original query terms."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
 
         for term in expanded.expanded_terms:
             assert term not in expanded.original_terms
 
     def test_all_terms_include_original_and_expanded(self, expander, query_vector, relevant_vectors):
+        """Ensure all_terms contains both original and expanded term sets."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
 
         for term in expanded.original_terms:
@@ -71,6 +74,7 @@ class TestBasicExpansion:
             assert term in expanded.all_terms
 
     def test_term_weights_exist_for_all_terms(self, expander, query_vector, relevant_vectors):
+        """Ensure every term in all_terms has a non-negative weight entry."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
 
         for term in expanded.all_terms:
@@ -83,6 +87,7 @@ class TestWithNonRelevantDocs:
     """Unit tests for Rocchio expansion when non-relevant docs are provided."""
     def test_expand_with_nonrelevant_docs(self, expander, query_vector,
                                          relevant_vectors, nonrelevant_vectors):
+        """Expand a query with both relevant and non-relevant document vectors."""
         expanded = expander.expand_query(
             query_vector, relevant_vectors, nonrelevant_vectors
         )
@@ -91,6 +96,7 @@ class TestWithNonRelevantDocs:
         assert expanded.num_nonrelevant == 2
 
     def test_nonrelevant_docs_reduce_weights(self, expander, query_vector, relevant_vectors):
+        """Penalize terms appearing in non-relevant docs and reduce their weights."""
         # Expand without non-relevant docs
         expanded_without = expander.expand_query(query_vector, relevant_vectors)
 
@@ -113,6 +119,7 @@ class TestWithNonRelevantDocs:
 class TestPseudoRelevanceFeedback:
     """Unit tests for pseudo relevance feedback expansion helpers."""
     def test_pseudo_feedback_basic(self, expander, query_vector, relevant_vectors):
+        """Treat top documents as relevant in pseudo relevance feedback expansion."""
         expanded = expander.expand_with_pseudo_feedback(
             query_vector, relevant_vectors, num_relevant=3
         )
@@ -121,6 +128,7 @@ class TestPseudoRelevanceFeedback:
         assert expanded.num_nonrelevant == 0
 
     def test_pseudo_feedback_with_nonrelevant(self, expander, query_vector):
+        """Split top docs into relevant/non-relevant groups for pseudo feedback."""
         top_docs = [
             {"term1": 0.9, "term2": 0.8},
             {"term1": 0.7, "term3": 0.6},
@@ -136,6 +144,7 @@ class TestPseudoRelevanceFeedback:
         assert expanded.num_nonrelevant == 2
 
     def test_pseudo_feedback_empty_docs(self, expander, query_vector):
+        """Return an empty expansion when no top documents are provided."""
         expanded = expander.expand_with_pseudo_feedback(
             query_vector, [], num_relevant=5
         )
@@ -148,6 +157,7 @@ class TestPseudoRelevanceFeedback:
 class TestParameters:
     """Unit tests for Rocchio parameter effects (alpha/beta/gamma)."""
     def test_alpha_weight(self):
+        """Verify that a larger alpha emphasizes original query weights."""
         # High alpha emphasizes original query
         expander_high_alpha = RocchioExpander(alpha=2.0, beta=0.5, gamma=0.1)
 
@@ -160,6 +170,7 @@ class TestParameters:
         assert expanded.term_weights["query"] > expanded.term_weights.get("other", 0)
 
     def test_beta_weight(self):
+        """Verify that a larger beta increases influence from relevant docs."""
         # High beta emphasizes relevant docs
         expander_high_beta = RocchioExpander(alpha=1.0, beta=2.0, gamma=0.1)
 
@@ -172,6 +183,7 @@ class TestParameters:
         assert "relevant" in expanded.term_weights
 
     def test_gamma_weight(self):
+        """Verify that gamma penalizes terms from non-relevant documents."""
         # Gamma reduces weight of non-relevant terms
         expander = RocchioExpander(alpha=1.0, beta=0.75, gamma=0.5)
 
@@ -185,6 +197,7 @@ class TestParameters:
         assert "shared" in expanded.term_weights
 
     def test_set_parameters(self, expander):
+        """Update expander parameters via set_parameters()."""
         expander.set_parameters(alpha=1.5, beta=0.8, gamma=0.2)
 
         assert expander.alpha == 1.5
@@ -196,6 +209,7 @@ class TestParameters:
 class TestExpansionControl:
     """Unit tests for expansion controls (max terms, min weight)."""
     def test_max_expansion_terms(self):
+        """Cap the number of expansion terms using max_expansion_terms."""
         expander = RocchioExpander(max_expansion_terms=3)
 
         query_vec = {"query": 1.0}
@@ -209,6 +223,7 @@ class TestExpansionControl:
         assert len(expanded.expanded_terms) <= 3
 
     def test_min_term_weight(self):
+        """Filter out low-weight expansion terms using min_term_weight."""
         expander = RocchioExpander(min_term_weight=0.5)
 
         query_vec = {"query": 1.0}
@@ -223,6 +238,7 @@ class TestExpansionControl:
             assert expanded.term_weights[term] >= 0.5
 
     def test_zero_max_expansion_terms(self):
+        """Disable expansion by setting max_expansion_terms to 0."""
         expander = RocchioExpander(max_expansion_terms=0)
 
         query_vec = {"query": 1.0}
@@ -237,6 +253,7 @@ class TestExpansionControl:
 class TestReweighting:
     """Unit tests for reweighting the original query using an expanded query."""
     def test_reweight_query(self, expander, query_vector, relevant_vectors):
+        """Reweight a query into the expanded term space without normalization."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
         reweighted = expander.reweight_query(query_vector, expanded, normalize=False)
 
@@ -244,6 +261,7 @@ class TestReweighting:
         assert len(reweighted) == len(expanded.all_terms)
 
     def test_reweight_with_normalization(self, expander, query_vector, relevant_vectors):
+        """Normalize reweighted query so that weights sum to 1.0."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
         reweighted = expander.reweight_query(query_vector, expanded, normalize=True)
 
@@ -252,6 +270,7 @@ class TestReweighting:
         assert total == pytest.approx(1.0)
 
     def test_reweight_without_normalization(self, expander, query_vector, relevant_vectors):
+        """Skip normalization and keep raw weights from the expanded query."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
         reweighted = expander.reweight_query(query_vector, expanded, normalize=False)
 
@@ -264,6 +283,7 @@ class TestReweighting:
 class TestTopExpansionTerms:
     """Unit tests for selecting the top expansion terms from an expanded query."""
     def test_get_top_expansion_terms(self, expander, query_vector):
+        """Return up to k expansion terms sorted by descending weight."""
         rel_vecs = [
             {"term1": 0.9, "term2": 0.8, "term3": 0.7, "term4": 0.6, "term5": 0.5}
         ]
@@ -279,6 +299,7 @@ class TestTopExpansionTerms:
         assert weights == sorted(weights, reverse=True)
 
     def test_top_terms_format(self, expander, query_vector, relevant_vectors):
+        """Return top terms as (term, weight) pairs with expected types."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
         top_terms = expander.get_top_expansion_terms(expanded, k=5)
 
@@ -288,6 +309,7 @@ class TestTopExpansionTerms:
             assert weight >= 0
 
     def test_top_terms_all_from_expanded(self, expander, query_vector, relevant_vectors):
+        """Ensure selected top terms are drawn from expanded_terms."""
         expanded = expander.expand_query(query_vector, relevant_vectors)
         top_terms = expander.get_top_expansion_terms(expanded, k=10)
 
@@ -299,6 +321,7 @@ class TestTopExpansionTerms:
 class TestEdgeCases:
     """Unit tests for Rocchio expansion edge cases."""
     def test_no_relevant_documents(self, expander, query_vector):
+        """Return an expansion with no expanded_terms when no relevant docs exist."""
         expanded = expander.expand_query(query_vector, [])
 
         assert expanded.num_relevant == 0
@@ -306,6 +329,7 @@ class TestEdgeCases:
         assert expanded.all_terms == list(query_vector.keys())
 
     def test_empty_query_vector(self, expander, relevant_vectors):
+        """Allow expansion even when the original query vector is empty."""
         empty_query = {}
         expanded = expander.expand_query(empty_query, relevant_vectors)
 
@@ -314,6 +338,7 @@ class TestEdgeCases:
         assert len(expanded.expanded_terms) > 0
 
     def test_no_overlap_terms(self, expander):
+        """Handle relevant docs with terms that do not overlap the query terms."""
         query_vec = {"query_term": 1.0}
         rel_vecs = [{"completely_different": 1.0}]
 
@@ -323,6 +348,7 @@ class TestEdgeCases:
         assert "completely_different" in expanded.all_terms or len(expanded.expanded_terms) == 0
 
     def test_negative_weights_filtered(self, expander):
+        """Ensure negative weights are filtered/clipped to keep weights non-negative."""
         query_vec = {"term1": 1.0}
         rel_vecs = [{"term2": 0.5}]
         nonrel_vecs = [{"term2": 2.0}]  # High non-relevant weight
@@ -334,6 +360,7 @@ class TestEdgeCases:
             assert weight >= 0
 
     def test_single_relevant_document(self, expander, query_vector):
+        """Expand a query using a single relevant document vector."""
         rel_vecs = [{"system": 0.5, "database": 0.3}]
 
         expanded = expander.expand_query(query_vector, rel_vecs)

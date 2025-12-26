@@ -67,6 +67,7 @@ class ProcessingStats:
     errors: List[str] = None
 
     def __post_init__(self):
+        """Ensure mutable fields are initialized per instance (avoid shared defaults)."""
         if self.errors is None:
             self.errors = []
 

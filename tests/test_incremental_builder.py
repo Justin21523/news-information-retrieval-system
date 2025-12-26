@@ -22,6 +22,7 @@ class _DummyTokenizer:
     """Simple whitespace tokenizer stub for unit tests."""
 
     def tokenize(self, text: str, filter_stopwords: bool = True, min_length: int = 2):
+        """Tokenize by whitespace and apply a minimal length filter (test stub)."""
         return [t for t in text.lower().split() if len(t) >= min_length]
 
 
@@ -29,6 +30,7 @@ class _DummyOptimizedTokenizer:
     """Batch tokenizer stub returning whitespace-split tokens."""
 
     def tokenize_batch(self, texts, batch_size: int = 512, filter_stopwords: bool = True, min_length: int = 2):
+        """Tokenize a batch of texts with the same stub logic (test helper)."""
         return [[t for t in text.lower().split() if len(t) >= min_length] for text in texts]
 
 

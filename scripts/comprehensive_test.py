@@ -45,6 +45,7 @@ class TestResults:
     """測試結果記錄器"""
 
     def __init__(self):
+        """Initialize counters and timestamps for a test run (O(1) time/space)."""
         self.total_tests = 0
         self.passed_tests = 0
         self.failed_tests = 0
@@ -128,6 +129,7 @@ class ComprehensiveTest:
     """綜合測試類"""
 
     def __init__(self):
+        """Initialize the comprehensive test harness and load static test data."""
         self.results = TestResults()
         self.test_data = self._load_test_data()
         self.tokenizer = None

@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
 from src.ir_app.config import Settings
+from src.ir_app.services.data_contract import (
+    DatasetValidationStats,
+    compute_dedup_hash,
+    normalize_tags,
+    validate_article,
+)
 
 
 class DocumentService:
@@ -20,6 +27,10 @@ class DocumentService:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.dataset_source = "none"
+        self.dataset_hash = ""
+        self.dataset_mtime: float | None = None
+        self.dataset_size: int | None = None
+        self.validation_stats = DatasetValidationStats()
         self.documents = self._load_documents()
         self._by_doc_id = {str(doc["doc_id"]): doc for doc in self.documents}
         self._by_article_id = {
@@ -53,13 +64,14 @@ class DocumentService:
             Time: O(n)
             Space: O(n)
         """
-        docs: list[dict[str, Any]] = []
+        self._record_dataset_file(path)
+        raw_docs: list[dict[str, Any]] = []
         with path.open("r", encoding="utf-8") as handle:
-            for idx, line in enumerate(handle):
+            for line in handle:
                 if not line.strip():
                     continue
-                docs.append(self._normalize_document(json.loads(line), idx))
-        return docs
+                raw_docs.append(json.loads(line))
+        return self._normalize_records(raw_docs)
 
     def _load_json(self, path: Path) -> list[dict[str, Any]]:
         """Load JSON array documents.
@@ -68,24 +80,79 @@ class DocumentService:
             Time: O(n)
             Space: O(n)
         """
+        self._record_dataset_file(path)
         with path.open("r", encoding="utf-8") as handle:
             raw_docs = json.load(handle)
-        return [self._normalize_document(doc, idx) for idx, doc in enumerate(raw_docs)]
+        return self._normalize_records(raw_docs)
 
-    def _normalize_document(self, raw: dict[str, Any], fallback_id: int) -> dict[str, Any]:
+    def _record_dataset_file(self, path: Path) -> None:
+        """Record dataset file metadata for index invalidation.
+
+        Complexity:
+            Time: O(n) where n is file size
+            Space: O(1)
+        """
+        stat = path.stat()
+        self.dataset_mtime = stat.st_mtime
+        self.dataset_size = stat.st_size
+
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        self.dataset_hash = digest.hexdigest()
+
+    def _normalize_records(self, raw_docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Validate, deduplicate, and normalize raw article records.
+
+        Complexity:
+            Time: O(n)
+            Space: O(n)
+        """
+        docs: list[dict[str, Any]] = []
+        seen_hashes: set[str] = set()
+        self.validation_stats = DatasetValidationStats(total=len(raw_docs))
+
+        for row, raw in enumerate(raw_docs):
+            issues = validate_article(raw, row)
+            for issue in issues:
+                if issue.code == "MISSING_FIELD":
+                    field_name = issue.message.rsplit(": ", 1)[-1]
+                    self.validation_stats.add_missing(field_name)
+            if issues:
+                self.validation_stats.invalid += 1
+                self.validation_stats.issues.extend(issues)
+                continue
+
+            dedup_hash = compute_dedup_hash(str(raw.get("title") or ""), str(raw.get("url") or ""))
+            if dedup_hash in seen_hashes:
+                self.validation_stats.duplicates += 1
+                continue
+            seen_hashes.add(dedup_hash)
+
+            doc = self._normalize_document(raw, len(docs), dedup_hash)
+            docs.append(doc)
+            self.validation_stats.valid += 1
+
+        return docs
+
+    def _normalize_document(
+        self,
+        raw: dict[str, Any],
+        fallback_id: int,
+        dedup_hash: str | None = None,
+    ) -> dict[str, Any]:
         """Normalize crawler/demo fields into a single document shape.
 
         Complexity:
             Time: O(t) where t is number of tags
             Space: O(t)
         """
-        doc_id = raw.get("doc_id", fallback_id)
-        article_id = raw.get("article_id")
+        doc_id = fallback_id
+        article_id = raw.get("article_id") or dedup_hash or str(fallback_id)
         content = raw.get("content") or raw.get("text") or raw.get("body") or ""
         title = raw.get("title") or f"Document {doc_id}"
-        tags = raw.get("tags") or []
-        if isinstance(tags, str):
-            tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        tags = normalize_tags(raw.get("tags"))
 
         published_date = (
             raw.get("published_date")
@@ -107,6 +174,7 @@ class DocumentService:
             "source_name": raw.get("source_name"),
             "author": raw.get("author"),
             "tags": tags,
+            "dedup_hash": dedup_hash or compute_dedup_hash(str(title), str(raw.get("url") or "")),
         }
         normalized["text"] = normalized["content"]
         return normalized
@@ -135,6 +203,10 @@ class DocumentService:
             "categories": len(categories),
             "sources": len(sources),
             "dataset_source": self.dataset_source,
+            "dataset_hash": self.dataset_hash,
+            "dataset_mtime": self.dataset_mtime,
+            "dataset_size": self.dataset_size,
+            "validation": self.validation_stats.to_dict(),
         }
 
     def to_api_document(self, doc: dict[str, Any]) -> dict[str, Any]:
@@ -155,6 +227,7 @@ class DocumentService:
             "source_name": doc.get("source_name"),
             "author": doc.get("author"),
             "tags": doc.get("tags") or [],
+            "dedup_hash": doc.get("dedup_hash"),
             "content": doc.get("content") or "",
         }
         return {

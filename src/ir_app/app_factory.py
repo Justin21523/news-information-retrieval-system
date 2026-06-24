@@ -247,14 +247,7 @@ def register_api_routes(
         query = (payload.get("query") or "").strip()
         if not query:
             return api_error("QUERY_REQUIRED", "Query is required", 400)
-        terms = search_service.index.tokenize(query)
-        expanded = list(dict.fromkeys(terms))
-        data = {
-            "original_query": query,
-            "expanded_query": " ".join(expanded),
-            "expanded_terms": expanded,
-            "method": "tokenizer_terms",
-        }
+        data = search_service.expand_query(query, payload.get("top_k", 5))
         return api_success(data, **data)
 
     @app.post("/api/compare")
@@ -263,7 +256,7 @@ def register_api_routes(
         query = (payload.get("query") or "").strip()
         if not query:
             return api_error("QUERY_REQUIRED", "Query is required", 400)
-        models = payload.get("models") or ["bm25", "tfidf", "boolean"]
+        models = payload.get("models") or ["bm25", "tfidf", "hybrid"]
         comparisons = {}
         timings = {}
         for model in models:
@@ -292,6 +285,9 @@ def register_api_routes(
                 {"id": "bm25", "name": "BM25", "available": True},
                 {"id": "tfidf", "name": "TF-IDF", "available": True},
                 {"id": "boolean", "name": "Boolean", "available": True},
+                {"id": "hybrid", "name": "Hybrid RRF", "available": True},
+                {"id": "fuzzy", "name": "Fuzzy", "available": True},
+                {"id": "csoundex", "name": "CSoundex", "available": True},
                 {"id": "bert", "name": "BERT", "available": False},
             ]
         }

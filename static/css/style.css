@@ -370,6 +370,28 @@ body {
     margin-top: 12px;
 }
 
+.result-explanation {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.result-explanation summary {
+    cursor: pointer;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.result-explain-row {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
 /* Metadata Chips */
 .meta-chip {
     display: inline-flex;

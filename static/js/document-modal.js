@@ -360,7 +360,8 @@ function makeResultsClickable() {
         item.style.cursor = 'pointer';
         item.addEventListener('click', (e) => {
             // Don't trigger if clicking on a button or link
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' ||
+                e.target.tagName === 'SUMMARY' || e.target.closest('.result-explanation')) {
                 return;
             }
             const docId = item.getAttribute('data-doc-id');

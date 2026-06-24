@@ -257,19 +257,42 @@ function displayResults(data) {
             metaChips += `<span class="meta-chip meta-author">✍️ ${author}</span>`;
         }
 
+        const explanation = result.explanation || {};
+        const componentScores = explanation.component_scores || {};
+        const fieldMatches = explanation.field_matches || {};
+        const matchedTerms = explanation.matched_terms || [];
+        const expandedTerms = explanation.expanded_terms || [];
+        const componentHtml = Object.keys(componentScores).length
+            ? Object.entries(componentScores).map(([name, score]) => `<span class="meta-chip">${name}: ${Number(score || 0).toFixed(4)}</span>`).join('')
+            : '<span class="meta-chip">No component scores</span>';
+        const fieldHtml = Object.keys(fieldMatches).length
+            ? Object.entries(fieldMatches).map(([field, terms]) => `<span class="meta-chip">${field}: ${terms.join(', ')}</span>`).join('')
+            : '<span class="meta-chip">No field breakdown</span>';
+        const expansionHtml = expandedTerms.length
+            ? `<div class="result-explain-row"><strong>Expanded:</strong> ${expandedTerms.join(', ')}</div>`
+            : '';
+        const snippetHtml = result.highlighted_snippet || highlightQuery(displayText, data.query);
+
         return `
         <div class="result-item" data-doc-id="${docId}">
             <div class="result-header">
                 <div class="result-rank">#${result.rank}</div>
                 <div class="result-title">${highlightQuery(result.title, data.query)}</div>
-                <div class="result-score">${result.score.toFixed(4)}</div>
+                <div class="result-score">${Number(result.score || 0).toFixed(4)}</div>
             </div>
             <div class="result-snippet">
-                ${highlightQuery(displayText, data.query)}
+                ${snippetHtml}
             </div>
             <div class="result-meta" data-doc-id="${docId}">
                 ${metaChips}
             </div>
+            <details class="result-explanation">
+                <summary>Why this result?</summary>
+                <div class="result-explain-row"><strong>Matched:</strong> ${matchedTerms.join(', ') || 'None'}</div>
+                ${expansionHtml}
+                <div class="result-explain-row"><strong>Fields:</strong> ${fieldHtml}</div>
+                <div class="result-explain-row"><strong>Scores:</strong> ${componentHtml}</div>
+            </details>
         </div>
         `;
     }).join('');

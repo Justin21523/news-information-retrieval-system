@@ -83,8 +83,16 @@ async function openDocumentModal(docId) {
     contentArea.style.display = 'none';
 
     try {
-        // Fetch document details
-        const response = await fetch(`api/document/${docId}?include_similar=true&top_k=5`);
+        const query = typeof currentSearchQuery !== 'undefined' ? currentSearchQuery : '';
+        const params = new URLSearchParams({
+            include_related: 'true',
+            include_kwic: query ? 'true' : 'false',
+            top_k: '5'
+        });
+        if (query) {
+            params.set('query', query);
+        }
+        const response = await fetch(`api/document/${encodeURIComponent(docId)}?${params.toString()}`);
         const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
@@ -108,35 +116,61 @@ async function openDocumentModal(docId) {
  */
 function displayDocumentDetails(data) {
     const contentArea = document.getElementById('modal-content-area');
-    // Support both nested (data.document) and flat (data) response structures
     const doc = data.document || data;
     const metadata = doc.metadata || {};
+    const summary = data.summary || {};
+    const keywords = data.keywords || {};
+    const kwic = data.kwic || {};
+    const relatedDocuments = data.related_documents || data.similar_documents || [];
+    const taxonomy = data.taxonomy || {};
+    const explanation = data.explanation || {};
+    const keywordItems = keywords.items || keywords.keywords || [];
 
     let html = `
         <div class="doc-details">
-            <!-- Document Header -->
             <div class="doc-header">
-                <h3>${doc.title || '未命名文檔'}</h3>
+                <h3>${escapeHtml(doc.title || '未命名文檔')}</h3>
                 <div class="doc-meta-chips">
-                    <span class="meta-chip">📄 ${doc.doc_id}</span>
-                    <span class="meta-chip">📅 ${metadata.published_date || metadata.date || '未知日期'}</span>
-                    <span class="meta-chip">🏷️ ${metadata.category || '未分類'}</span>
+                    <span class="meta-chip">📄 ${escapeHtml(doc.doc_id)}</span>
+                    <span class="meta-chip">📅 ${escapeHtml(metadata.published_date || metadata.date || '未知日期')}</span>
+                    <span class="meta-chip">🏷️ ${escapeHtml(taxonomy.label || metadata.category_name || metadata.category || '未分類')}</span>
+                    ${metadata.source_label || metadata.source ? `<span class="meta-chip">📰 ${escapeHtml(metadata.source_label || metadata.source)}</span>` : ''}
                 </div>
             </div>
 
-            <!-- Metadata Section -->
+            <div class="doc-insight-grid">
+                <section class="doc-summary-section">
+                    <h4>摘要 Summary</h4>
+                    ${renderSummarySection(summary)}
+                </section>
+
+                <section class="doc-keywords-section">
+                    <h4>關鍵詞 Keywords</h4>
+                    ${renderKeywordsSection(keywordItems)}
+                </section>
+            </div>
+
+            <section class="doc-kwic-section">
+                <h4>KWIC</h4>
+                ${renderKwicSection(kwic, doc.doc_id)}
+            </section>
+
+            <section class="doc-explanation-section">
+                <h4>Why this document?</h4>
+                ${renderDocumentExplanation(explanation, taxonomy)}
+            </section>
+
             <div class="doc-metadata">
-                <h4>📋 完整 Metadata</h4>
+                <h4>Metadata / Facets</h4>
                 <div class="metadata-grid">
     `;
 
-    // Display all metadata fields
     for (const [key, value] of Object.entries(metadata)) {
-        if (key !== 'content') {  // Skip content here, show separately
+        if (key !== 'content') {
             html += `
                 <div class="metadata-item">
-                    <span class="metadata-key">${key}:</span>
-                    <span class="metadata-value">${value}</span>
+                    <span class="metadata-key">${escapeHtml(key)}:</span>
+                    <span class="metadata-value">${escapeHtml(formatMetadataValue(value))}</span>
                 </div>
             `;
         }
@@ -146,17 +180,15 @@ function displayDocumentDetails(data) {
                 </div>
             </div>
 
-            <!-- Document Content -->
             <div class="doc-content-section">
-                <h4>📖 完整內容</h4>
+                <h4>完整內容 Full Content</h4>
                 <div class="doc-content">
-                    ${doc.content || metadata.content || '無內容'}
+                    ${escapeHtml(doc.content || metadata.content || '無內容')}
                 </div>
             </div>
 
-            <!-- Summary Section -->
-            <div class="doc-summary-section">
-                <h4>📝 智能摘要</h4>
+            <details class="doc-tools-section">
+                <summary>Generate new analysis</summary>
                 <div class="summary-controls">
                     <select id="summary-method">
                         <option value="key_sentence">關鍵句摘要</option>
@@ -175,11 +207,6 @@ function displayDocumentDetails(data) {
                     <div id="summary-content"></div>
                     <div class="processing-time" id="summary-time"></div>
                 </div>
-            </div>
-
-            <!-- Keywords Section -->
-            <div class="doc-keywords-section">
-                <h4>🔑 關鍵詞提取</h4>
                 <div class="keywords-controls">
                     <select id="keywords-method">
                         <option value="tfidf">TF-IDF</option>
@@ -199,24 +226,34 @@ function displayDocumentDetails(data) {
                     <div id="keywords-content"></div>
                     <div class="processing-time" id="keywords-time"></div>
                 </div>
-            </div>
+                <div class="kwic-controls">
+                    <input type="text" id="kwic-query-input" placeholder="輸入 KWIC query">
+                    <button class="btn-generate" onclick="generateKwicFromInput('${doc.doc_id}')">
+                        生成 KWIC
+                    </button>
+                </div>
+                <div id="kwic-generated-result"></div>
+            </details>
     `;
 
-    // Similar Documents Section
-    if (data.similar_documents && data.similar_documents.length > 0) {
+    if (relatedDocuments.length > 0) {
         html += `
             <div class="similar-docs-section">
-                <h4>🔗 相似文檔</h4>
+                <h4>Related News</h4>
                 <div class="similar-docs-list">
         `;
 
-        data.similar_documents.forEach(sim => {
+        relatedDocuments.forEach(sim => {
+            const reason = sim.relation_reason || {};
             html += `
-                <div class="similar-doc-item" onclick="openDocumentModal('${sim.doc_id}')">
-                    <div class="similar-doc-title">${sim.title}</div>
+                <div class="similar-doc-item" onclick="openDocumentModal('${escapeAttribute(sim.doc_id)}')">
+                    <div class="similar-doc-title">${escapeHtml(sim.title)}</div>
                     <div class="similar-doc-meta">
-                        <span>📄 ${sim.doc_id}</span>
-                        <span>相似度: ${(sim.similarity * 100).toFixed(1)}%</span>
+                        <span>📄 ${escapeHtml(sim.doc_id)}</span>
+                        <span>Score: ${Number(sim.score || 0).toFixed(4)}</span>
+                        <span>Similarity: ${(Number(sim.similarity || 0) * 100).toFixed(1)}%</span>
+                        ${reason.same_category ? '<span>same category</span>' : ''}
+                        ${reason.same_taxonomy_topic ? '<span>same taxonomy</span>' : ''}
                     </div>
                 </div>
             `;
@@ -232,6 +269,85 @@ function displayDocumentDetails(data) {
 
     contentArea.innerHTML = html;
     contentArea.style.display = 'block';
+}
+
+function renderSummarySection(summary) {
+    if (!summary || !summary.available) {
+        return '<div class="empty-state">No summary available.</div>';
+    }
+    const sentences = summary.sentences || [];
+    const body = sentences.length
+        ? `<ol class="summary-list">${sentences.map(sentence => `<li>${escapeHtml(sentence)}</li>`).join('')}</ol>`
+        : `<div class="summary-text">${escapeHtml(summary.text || '')}</div>`;
+    return `
+        <div class="method-label">${escapeHtml(summary.method || 'summary')}</div>
+        ${body}
+    `;
+}
+
+function renderKeywordsSection(items) {
+    if (!items || items.length === 0) {
+        return '<div class="empty-state">No keywords available.</div>';
+    }
+    return `
+        <div class="keywords-cloud">
+            ${items.slice(0, 16).map((item, idx) => {
+                const size = 1 + (1 - idx / Math.max(items.length, 1)) * 0.35;
+                const term = item.term || item.word || '';
+                return `
+                    <span class="keyword-tag" style="font-size: ${size.toFixed(2)}rem;">
+                        ${escapeHtml(term)}
+                        <span class="keyword-score">${Number(item.score || 0).toFixed(2)}</span>
+                    </span>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function renderKwicSection(kwic, docId) {
+    if (!kwic || !kwic.available) {
+        return `
+            <div class="empty-state">No KWIC query is active.</div>
+            <div class="kwic-inline-controls">
+                <input type="text" id="kwic-inline-query" placeholder="輸入 KWIC query">
+                <button class="btn-generate" onclick="generateKwicFromInlineInput('${escapeAttribute(docId)}')">生成 KWIC</button>
+            </div>
+            <div id="kwic-inline-result"></div>
+        `;
+    }
+    if (!kwic.matches || kwic.matches.length === 0) {
+        return `<div class="empty-state">No KWIC matches for "${escapeHtml(kwic.query || '')}".</div>`;
+    }
+    return `
+        <div class="method-label">Query: ${escapeHtml(kwic.query || '')} | ${kwic.match_count || 0} matches</div>
+        <div class="kwic-list">
+            ${kwic.matches.map(match => `
+                <div class="kwic-item">${match.highlighted_snippet || escapeHtml(match.plain_snippet || '')}</div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function renderDocumentExplanation(explanation, taxonomy) {
+    const signals = explanation.signals || {};
+    const sections = explanation.sections || {};
+    return `
+        <div class="explanation-grid">
+            <span class="meta-chip">summary: ${sections.summary ? 'available' : 'empty'}</span>
+            <span class="meta-chip">keywords: ${sections.keywords ? signals.keyword_count || 0 : 0}</span>
+            <span class="meta-chip">KWIC: ${signals.kwic_match_count || 0}</span>
+            <span class="meta-chip">related: ${signals.related_count || 0}</span>
+            ${taxonomy.topic ? `<span class="meta-chip">topic: ${escapeHtml(taxonomy.topic)}</span>` : ''}
+            ${taxonomy.source ? `<span class="meta-chip">source: ${escapeHtml(taxonomy.source)}</span>` : ''}
+        </div>
+    `;
+}
+
+function formatMetadataValue(value) {
+    if (Array.isArray(value)) return value.join(', ');
+    if (value === null || value === undefined) return '';
+    return String(value);
 }
 
 /**
@@ -341,6 +457,57 @@ async function extractKeywords(docId) {
     } finally {
         processingDiv.style.display = 'none';
     }
+}
+
+async function generateKwicFromInlineInput(docId) {
+    const input = document.getElementById('kwic-inline-query');
+    const resultDiv = document.getElementById('kwic-inline-result');
+    await loadKwic(docId, input?.value || '', resultDiv);
+}
+
+async function generateKwicFromInput(docId) {
+    const input = document.getElementById('kwic-query-input');
+    const resultDiv = document.getElementById('kwic-generated-result');
+    await loadKwic(docId, input?.value || '', resultDiv);
+}
+
+async function loadKwic(docId, query, resultDiv) {
+    if (!resultDiv) return;
+    if (!query.trim()) {
+        resultDiv.innerHTML = '<div class="empty-state">請先輸入 KWIC query</div>';
+        return;
+    }
+    resultDiv.innerHTML = '<div class="processing-indicator"><div class="spinner-small"></div><span>正在生成 KWIC...</span></div>';
+    try {
+        const params = new URLSearchParams({
+            include_related: 'false',
+            include_kwic: 'true',
+            query: query.trim()
+        });
+        const response = await fetch(`api/document/${encodeURIComponent(docId)}?${params.toString()}`);
+        const data = normalizeApiPayload(await response.json());
+        if (data.success) {
+            resultDiv.innerHTML = renderKwicSection(data.kwic || {}, docId);
+        } else {
+            resultDiv.innerHTML = `<div class="error">KWIC 生成失敗: ${apiErrorMessage(data)}</div>`;
+        }
+    } catch (error) {
+        console.error('KWIC generation error:', error);
+        resultDiv.innerHTML = '<div class="error">KWIC 生成時發生錯誤</div>';
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value);
 }
 
 /**

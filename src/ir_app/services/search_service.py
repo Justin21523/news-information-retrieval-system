@@ -58,7 +58,15 @@ class SearchService:
         stats.update(
             {
                 "total_terms": self.index.vocabulary_size(),
-                "models": ["boolean", "tfidf", "bm25", "hybrid", "lm", "fuzzy", "csoundex"],
+                "models": [
+                    "boolean",
+                    "tfidf",
+                    "bm25",
+                    "hybrid",
+                    "lm",
+                    "fuzzy",
+                    "csoundex",
+                ],
                 "optional_models": ["bert"],
                 "tokenizer_engine": self.settings.tokenizer_engine,
                 "heavy_models_enabled": self.settings.enable_heavy_models,
@@ -85,7 +93,10 @@ class SearchService:
         started = time.perf_counter()
         query = (query or "").strip()
         if not query:
-            return [], {"execution_time": time.perf_counter() - started, "query_terms": []}
+            return [], {
+                "execution_time": time.perf_counter() - started,
+                "query_terms": [],
+            }
 
         model = (model or "bm25").lower()
         top_k = max(1, min(int(top_k or 20), 100))
@@ -109,10 +120,14 @@ class SearchService:
             ranked = self._search_lm(query, retrieval_top_k)
         elif model == "fuzzy":
             expanded_terms = self._fuzzy_expansion(query_terms)
-            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), retrieval_top_k)
+            ranked = self._search_bm25(
+                " ".join(expanded_terms or query_terms), retrieval_top_k
+            )
         elif model == "csoundex":
             expanded_terms = self._csoundex_expansion(query_terms)
-            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), retrieval_top_k)
+            ranked = self._search_bm25(
+                " ".join(expanded_terms or query_terms), retrieval_top_k
+            )
         elif model == "bert":
             raise FeatureUnavailableError(
                 "BERT semantic search is disabled or unavailable in lightweight startup mode."
@@ -131,8 +146,12 @@ class SearchService:
             if not doc:
                 continue
             doc_components = dict(component_scores.get(str(doc_key), {}))
-            doc_components.setdefault(model, base_scores.get(str(doc_key), float(score)))
-            doc_components["field_boost"] = float(field_boosts.get(str(doc_key), {}).get("boost", 0.0))
+            doc_components.setdefault(
+                model, base_scores.get(str(doc_key), float(score))
+            )
+            doc_components["field_boost"] = float(
+                field_boosts.get(str(doc_key), {}).get("boost", 0.0)
+            )
             results.append(
                 self._make_result(
                     doc,
@@ -180,7 +199,10 @@ class SearchService:
             boolean_query = joiner.join(query_terms)
         result = self.index.boolean_engine.query(boolean_query, rank_results=True)
         if result.scores:
-            return [(str(doc_id), float(result.scores.get(doc_id, 1.0))) for doc_id in result.doc_ids]
+            return [
+                (str(doc_id), float(result.scores.get(doc_id, 1.0)))
+                for doc_id in result.doc_ids
+            ]
         return [(str(doc_id), 1.0) for doc_id in result.doc_ids]
 
     def _search_tfidf(self, query: str, top_k: int) -> list[tuple[str, float]]:
@@ -202,7 +224,10 @@ class SearchService:
         scored: list[tuple[str, float]] = []
         for doc_key in candidates:
             doc_vector = self.index.tfidf_vectors.get(doc_key, {})
-            score = sum(weight * doc_vector.get(term, 0.0) for term, weight in query_vector.items())
+            score = sum(
+                weight * doc_vector.get(term, 0.0)
+                for term, weight in query_vector.items()
+            )
             if score > 0:
                 scored.append((doc_key, score))
         scored.sort(key=lambda item: item[1], reverse=True)
@@ -216,9 +241,14 @@ class SearchService:
             Space: O(r)
         """
         result = self.index.bm25.search(query, topk=top_k)
-        return [(str(doc_id), float(score)) for doc_id, score in zip(result.doc_ids, result.scores)]
+        return [
+            (str(doc_id), float(score))
+            for doc_id, score in zip(result.doc_ids, result.scores)
+        ]
 
-    def _search_hybrid(self, query: str, top_k: int) -> tuple[list[tuple[str, float]], dict[str, dict[str, float]]]:
+    def _search_hybrid(
+        self, query: str, top_k: int
+    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, float]]]:
         """Search with reciprocal-rank fusion over BM25 and cached TF-IDF.
 
         Complexity:
@@ -258,12 +288,17 @@ class SearchService:
 
         candidates: set[int] = set()
         for term in query_terms:
-            candidates.update(int(doc_id) for doc_id in self.index.inverted_index.get(term, {}))
+            candidates.update(
+                int(doc_id) for doc_id in self.index.inverted_index.get(term, {})
+            )
         if not candidates:
             candidates = set(range(self.index.language_model.doc_count))
 
         scored = [
-            (str(doc_id), float(self.index.language_model.query_likelihood(query_terms, doc_id)))
+            (
+                str(doc_id),
+                float(self.index.language_model.query_likelihood(query_terms, doc_id)),
+            )
             for doc_id in candidates
         ]
         scored.sort(key=lambda item: item[1], reverse=True)
@@ -310,7 +345,9 @@ class SearchService:
         vocabulary = list(self.index.inverted_index.keys())
         expanded: list[str] = []
         for term in query_terms:
-            matches = self.index.csoundex.find_similar(term, vocabulary, threshold=0.72, topk=8)
+            matches = self.index.csoundex.find_similar(
+                term, vocabulary, threshold=0.72, topk=8
+            )
             expanded.extend(match for match, _ in matches)
         return list(dict.fromkeys(expanded))
 
@@ -384,7 +421,9 @@ class SearchService:
             "boost": round(min(boost, 1.5), 6),
         }
 
-    def _document_matches_filters(self, doc: dict[str, Any], filters: dict[str, set[str]]) -> bool:
+    def _document_matches_filters(
+        self, doc: dict[str, Any], filters: dict[str, set[str]]
+    ) -> bool:
         """Check if a document matches all filters.
 
         Complexity:
@@ -437,7 +476,9 @@ class SearchService:
         }
         if model in {"bm25", "hybrid", "fuzzy", "csoundex"}:
             bm25_explain = self.index.bm25.explain_score(query, doc_id)
-            ranking_features["bm25"] = bm25_explain if "error" not in bm25_explain else {}
+            ranking_features["bm25"] = (
+                bm25_explain if "error" not in bm25_explain else {}
+            )
         if model == "lm":
             lm_explain = self.index.language_model.explain_score(query, doc_id)
             ranking_features["lm"] = lm_explain if "error" not in lm_explain else {}
@@ -490,14 +531,10 @@ class SearchService:
 
         ranked = self._search_bm25(query, top_k)
         relevant_vectors = [
-            self.index.tfidf_vectors.get(str(doc_id), {})
-            for doc_id, _ in ranked
+            self.index.tfidf_vectors.get(str(doc_id), {}) for doc_id, _ in ranked
         ]
         doc_scores = [score for _, score in ranked]
-        query_vector = {
-            term: self.index.idf.get(term, 1.0)
-            for term in query_terms
-        }
+        query_vector = {term: self.index.idf.get(term, 1.0) for term in query_terms}
         expanded = self.index.rocchio.expand_query(
             query_vector=query_vector,
             relevant_vectors=relevant_vectors,
@@ -516,7 +553,9 @@ class SearchService:
             "method": "rocchio_prf",
         }
 
-    def _snippet(self, doc: dict[str, Any], query_terms: list[str], window: int = 180) -> dict[str, str]:
+    def _snippet(
+        self, doc: dict[str, Any], query_terms: list[str], window: int = 180
+    ) -> dict[str, str]:
         """Generate a query-centered snippet.
 
         Complexity:
@@ -531,7 +570,11 @@ class SearchService:
         if not content:
             return {"text": title, "source": "title"}
 
-        sentences = [sentence.strip() for sentence in re.split(r"(?<=[。！？.!?])", content) if sentence.strip()]
+        sentences = [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[。！？.!?])", content)
+            if sentence.strip()
+        ]
         scored: list[tuple[int, int, str]] = []
         for index, sentence in enumerate(sentences):
             hits = self._terms_in_text(sentence, query_terms)
@@ -539,7 +582,10 @@ class SearchService:
                 scored.append((len(set(hits)), -index, sentence))
         if scored:
             sentence = sorted(scored, reverse=True)[0][2]
-            return {"text": self._trim_snippet(sentence, window), "source": "content_sentence"}
+            return {
+                "text": self._trim_snippet(sentence, window),
+                "source": "content_sentence",
+            }
 
         sentence = sentences[0] if sentences else content
         return {"text": self._trim_snippet(sentence, window), "source": "fallback_lead"}
@@ -563,7 +609,8 @@ class SearchService:
         """
         normalized = self.index.normalize_text(text)
         return [
-            term for term in terms
+            term
+            for term in terms
             if term and self.index.normalize_text(term) in normalized
         ]
 
@@ -579,7 +626,9 @@ class SearchService:
             if not term:
                 continue
             pattern = re.compile(re.escape(html.escape(term)), re.IGNORECASE)
-            escaped = pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", escaped)
+            escaped = pattern.sub(
+                lambda match: f"<mark>{match.group(0)}</mark>", escaped
+            )
         return escaped
 
     def _matched_terms(self, doc: dict[str, Any], query_terms: list[str]) -> list[str]:
@@ -595,11 +644,14 @@ class SearchService:
         if direct:
             return direct
         return [
-            term for term in query_terms
+            term
+            for term in query_terms
             if self._terms_in_text(self.index._document_text(doc), [term])
         ]
 
-    def _field_matches(self, doc: dict[str, Any], query_terms: list[str]) -> dict[str, list[str]]:
+    def _field_matches(
+        self, doc: dict[str, Any], query_terms: list[str]
+    ) -> dict[str, list[str]]:
         """Return matched terms by visible field.
 
         Complexity:
@@ -616,14 +668,17 @@ class SearchService:
         for field, value in fields.items():
             normalized = self.index.normalize_text(value)
             hits = [
-                term for term in query_terms
+                term
+                for term in query_terms
                 if term and self.index.normalize_text(term) in normalized
             ]
             if hits:
                 matches[field] = hits
         return matches
 
-    def suggestions(self, query: str, query_terms: list[str] | None = None) -> list[dict[str, Any]]:
+    def suggestions(
+        self, query: str, query_terms: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """Return fallback suggestions for no-result searches.
 
         Complexity:
@@ -634,37 +689,218 @@ class SearchService:
         suggestions: list[dict[str, Any]] = []
         synonyms = self.index.text_quality.synonym_terms(terms)
         if synonyms:
-            suggestions.append({
-                "type": "synonym",
-                "query": " ".join(list(dict.fromkeys(terms + synonyms))),
-                "terms": synonyms,
-            })
+            suggestions.append(
+                {
+                    "type": "synonym",
+                    "query": " ".join(list(dict.fromkeys(terms + synonyms))),
+                    "terms": synonyms,
+                }
+            )
         fuzzy_terms = self._fuzzy_expansion(terms)
         if fuzzy_terms and fuzzy_terms != terms:
-            suggestions.append({
-                "type": "fuzzy",
-                "query": " ".join(fuzzy_terms),
-                "terms": fuzzy_terms,
-            })
+            suggestions.append(
+                {
+                    "type": "fuzzy",
+                    "query": " ".join(fuzzy_terms),
+                    "terms": fuzzy_terms,
+                }
+            )
         csoundex_terms = self._csoundex_expansion(terms)
         if csoundex_terms and csoundex_terms != terms:
-            suggestions.append({
-                "type": "csoundex",
-                "query": " ".join(csoundex_terms),
-                "terms": csoundex_terms,
-            })
+            suggestions.append(
+                {
+                    "type": "csoundex",
+                    "query": " ".join(csoundex_terms),
+                    "terms": csoundex_terms,
+                }
+            )
         try:
             expansion = self.expand_query(query)
             expanded_terms = expansion.get("expanded_terms") or []
             if expanded_terms:
-                suggestions.append({
-                    "type": "rocchio",
-                    "query": expansion.get("expanded_query", query),
-                    "terms": expanded_terms,
-                })
+                suggestions.append(
+                    {
+                        "type": "rocchio",
+                        "query": expansion.get("expanded_query", query),
+                        "terms": expanded_terms,
+                    }
+                )
         except Exception:
             pass
         return suggestions[:5]
+
+    def related_documents(
+        self,
+        doc: dict[str, Any],
+        top_k: int = 5,
+        model: str = "hybrid",
+    ) -> list[dict[str, Any]]:
+        """Return explainable lexical related documents.
+
+        Complexity:
+            Time: O(q * p + r log r)
+            Space: O(r)
+        """
+        top_k = max(1, min(int(top_k or 5), 20))
+        source_doc_key = str(doc.get("doc_id"))
+        query = self._related_query(doc)
+        if not query:
+            return []
+
+        model = (model or "hybrid").lower()
+        search_top_k = min(len(self.documents_by_id), max(50, top_k * 12))
+        if model == "tfidf":
+            ranked = self._search_tfidf(query, search_top_k)
+            component_scores: dict[str, dict[str, float]] = {}
+            model = "tfidf"
+        elif model == "bm25":
+            ranked = self._search_bm25(query, search_top_k)
+            component_scores = {}
+        else:
+            ranked, component_scores = self._search_hybrid(query, search_top_k)
+            model = "hybrid"
+
+        query_terms = self.index.tokenize(query)
+        quality_terms = self.index.text_quality.matching_terms(query_terms, query)
+        base_scores = {str(doc_key): float(score) for doc_key, score in ranked}
+        ranked, field_boosts = self._rerank_with_field_boost(ranked, quality_terms)
+
+        source_profile = self._relation_profile(doc)
+        boosted: list[tuple[str, float, float]] = []
+        for doc_key, score in ranked:
+            if str(doc_key) == source_doc_key:
+                continue
+            candidate = self.documents_by_id.get(str(doc_key))
+            if not candidate:
+                continue
+            relation_boost = self._relation_boost(source_profile, candidate)
+            boosted.append(
+                (str(doc_key), float(score) + relation_boost, relation_boost)
+            )
+        boosted.sort(key=lambda item: item[1], reverse=True)
+        selected = boosted[:top_k]
+        max_score = max((score for _, score, _ in selected), default=1.0) or 1.0
+
+        results: list[dict[str, Any]] = []
+        for rank, (doc_key, score, relation_boost) in enumerate(selected, 1):
+            candidate = self.documents_by_id.get(doc_key)
+            if not candidate:
+                continue
+            doc_components = dict(component_scores.get(doc_key, {}))
+            doc_components.setdefault(model, base_scores.get(doc_key, score))
+            doc_components["field_boost"] = float(
+                field_boosts.get(doc_key, {}).get("boost", 0.0)
+            )
+            doc_components["relation_boost"] = float(relation_boost)
+            result = self._make_result(
+                candidate,
+                query,
+                quality_terms or query_terms,
+                float(score),
+                model,
+                rank,
+                component_scores=doc_components,
+                field_boost=field_boosts.get(doc_key, {}),
+            ).to_dict()
+            result["similarity"] = min(1.0, max(0.0, float(score) / max_score))
+            result["relation_reason"] = self._relation_reason(source_profile, candidate)
+            result["explanation"]["relation_reason"] = result["relation_reason"]
+            results.append(result)
+        return results
+
+    def _related_query(self, doc: dict[str, Any]) -> str:
+        """Build a related-document query from title and salient terms.
+
+        Complexity:
+            Time: O(t log t)
+            Space: O(k)
+        """
+        title = doc.get("title") or ""
+        keywords = [
+            item["word"]
+            for item in self.extract_keywords(doc, "tfidf", 8)
+            if item.get("word")
+        ]
+        tags = doc.get("tags") or []
+        return " ".join(str(part) for part in [title, *keywords, *tags] if part)
+
+    def _relation_profile(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """Return metadata used for related-document boosts.
+
+        Complexity:
+            Time: O(t)
+            Space: O(t)
+        """
+        return {
+            "source": doc.get("source"),
+            "category": doc.get("category"),
+            "taxonomy_topic": doc.get("taxonomy_topic"),
+            "content_type": doc.get("content_type"),
+            "tags": set(doc.get("tags") or []),
+        }
+
+    def _relation_boost(
+        self, source_profile: dict[str, Any], candidate: dict[str, Any]
+    ) -> float:
+        """Compute metadata boost for related documents.
+
+        Complexity:
+            Time: O(t)
+            Space: O(1)
+        """
+        boost = 0.0
+        if source_profile.get("taxonomy_topic") and source_profile[
+            "taxonomy_topic"
+        ] == candidate.get("taxonomy_topic"):
+            boost += 0.25
+        if source_profile.get("category") and source_profile[
+            "category"
+        ] == candidate.get("category"):
+            boost += 0.18
+        if source_profile.get("source") and source_profile["source"] == candidate.get(
+            "source"
+        ):
+            boost += 0.08
+        if source_profile.get("content_type") and source_profile[
+            "content_type"
+        ] == candidate.get("content_type"):
+            boost += 0.05
+        tag_overlap = source_profile.get("tags", set()).intersection(
+            set(candidate.get("tags") or [])
+        )
+        boost += min(len(tag_overlap) * 0.06, 0.18)
+        return round(boost, 6)
+
+    def _relation_reason(
+        self, source_profile: dict[str, Any], candidate: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Return related-document explanation fields.
+
+        Complexity:
+            Time: O(t)
+            Space: O(t)
+        """
+        shared_tags = sorted(
+            source_profile.get("tags", set()).intersection(
+                set(candidate.get("tags") or [])
+            )
+        )
+        return {
+            "method": "hybrid_lexical",
+            "same_taxonomy_topic": bool(
+                source_profile.get("taxonomy_topic")
+                and source_profile["taxonomy_topic"] == candidate.get("taxonomy_topic")
+            ),
+            "same_category": bool(
+                source_profile.get("category")
+                and source_profile["category"] == candidate.get("category")
+            ),
+            "same_source": bool(
+                source_profile.get("source")
+                and source_profile["source"] == candidate.get("source")
+            ),
+            "shared_tags": shared_tags,
+        }
 
     def summarize(self, doc: dict[str, Any], method: str = "lead_k", k: int = 3) -> str:
         """Generate a lightweight extractive summary.
@@ -674,7 +910,11 @@ class SearchService:
             Space: O(n)
         """
         content = doc.get("content") or ""
-        sentences = [sentence.strip() for sentence in re.split(r"(?<=[。！？.!?])", content) if sentence.strip()]
+        sentences = [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[。！？.!?])", content)
+            if sentence.strip()
+        ]
         if not sentences:
             return content[:300]
         k = max(1, min(int(k or 3), 10))
@@ -682,13 +922,17 @@ class SearchService:
             term_counts = Counter(self.index.tokenize(content))
             scored = []
             for idx, sentence in enumerate(sentences):
-                score = sum(term_counts.get(term, 0) for term in self.index.tokenize(sentence))
+                score = sum(
+                    term_counts.get(term, 0) for term in self.index.tokenize(sentence)
+                )
                 scored.append((score, -idx, sentence))
             selected = [sentence for _, _, sentence in sorted(scored, reverse=True)[:k]]
             return "\n".join(selected)
         return "\n".join(sentences[:k])
 
-    def extract_keywords(self, doc: dict[str, Any], method: str = "tfidf", top_k: int = 10) -> list[dict[str, Any]]:
+    def extract_keywords(
+        self, doc: dict[str, Any], method: str = "tfidf", top_k: int = 10
+    ) -> list[dict[str, Any]]:
         """Extract lightweight keywords from one document.
 
         Complexity:

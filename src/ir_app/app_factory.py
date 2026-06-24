@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
 from src.ir_app.config import Settings
 from src.ir_app.schemas import api_error, api_success
 from src.ir_app.services import (
+    DocumentDetailService,
     DocumentService,
     FeatureUnavailableError,
     RetrievalOrchestrator,
@@ -43,13 +44,21 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     document_service = DocumentService(settings)
     search_service = SearchService(settings, document_service)
+    document_detail_service = DocumentDetailService(document_service, search_service)
     retrieval_orchestrator = RetrievalOrchestrator(search_service)
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
+    app.config["DOCUMENT_DETAIL_SERVICE"] = document_detail_service
     app.config["RETRIEVAL_ORCHESTRATOR"] = retrieval_orchestrator
 
     register_page_routes(app, settings)
-    register_api_routes(app, document_service, search_service, retrieval_orchestrator)
+    register_api_routes(
+        app,
+        document_service,
+        search_service,
+        retrieval_orchestrator,
+        document_detail_service,
+    )
     return app
 
 
@@ -64,7 +73,9 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def render_if_exists(template_name: str):
         path = settings.project_root / "templates" / template_name
         if not path.exists():
-            return api_error("PAGE_NOT_FOUND", f"Template not found: {template_name}", 404)
+            return api_error(
+                "PAGE_NOT_FOUND", f"Template not found: {template_name}", 404
+            )
         return render_template(template_name)
 
     @app.route("/")
@@ -97,6 +108,7 @@ def register_api_routes(
     document_service: DocumentService,
     search_service: SearchService,
     retrieval_orchestrator: RetrievalOrchestrator,
+    document_detail_service: DocumentDetailService,
 ) -> None:
     """Register API routes.
 
@@ -131,7 +143,9 @@ def register_api_routes(
         filters = payload.get("filters") or None
 
         try:
-            results, meta = retrieval_orchestrator.search(query, model, top_k, operator, filters)
+            results, meta = retrieval_orchestrator.search(
+                query, model, top_k, operator, filters
+            )
         except FeatureUnavailableError as exc:
             return api_error("FEATURE_UNAVAILABLE", str(exc), 503)
         except ValueError as exc:
@@ -140,7 +154,9 @@ def register_api_routes(
         model_info = meta.get("model_info", {})
         data = {
             "query": query,
-            "model": model_info.get("id", "tfidf" if str(model).lower() == "vsm" else str(model).lower()),
+            "model": model_info.get(
+                "id", "tfidf" if str(model).lower() == "vsm" else str(model).lower()
+            ),
             "results": results,
             "total_results": len(results),
             "response_time": meta["execution_time"],
@@ -221,11 +237,37 @@ def register_api_routes(
         if not doc:
             return api_error("DOCUMENT_NOT_FOUND", f"Document not found: {doc_id}", 404)
 
-        api_doc = document_service.to_api_document(doc)
-        data: dict[str, Any] = {"document": api_doc}
-        if request.args.get("include_similar", "false").lower() == "true":
-            data["similar_documents"] = []
-        return api_success(data, document=api_doc, similar_documents=data.get("similar_documents", []))
+        include_related = _truthy_arg("include_related", True) or _truthy_arg(
+            "include_similar", False
+        )
+        query = (request.args.get("query") or "").strip()
+        include_kwic = request.args.get("include_kwic")
+        kwic_flag = (
+            None
+            if include_kwic is None
+            else include_kwic.lower() in {"1", "true", "yes", "on"}
+        )
+        top_k = request.args.get("top_k", 5)
+        data, meta = document_detail_service.build_detail(
+            doc,
+            query=query,
+            top_k=top_k,
+            include_related=include_related,
+            include_kwic=kwic_flag,
+        )
+        return api_success(
+            data,
+            meta,
+            document=data["document"],
+            summary=data["summary"],
+            keywords=data["keywords"],
+            kwic=data["kwic"],
+            related_documents=data["related_documents"],
+            similar_documents=data["similar_documents"],
+            taxonomy=data["taxonomy"],
+            topic=data["topic"],
+            explanation=data["explanation"],
+        )
 
     @app.post("/api/summarize")
     def summarize():
@@ -237,10 +279,17 @@ def register_api_routes(
         doc = document_service.get_document(doc_id)
         if not doc:
             return api_error("DOCUMENT_NOT_FOUND", f"Document not found: {doc_id}", 404)
-        summary = search_service.summarize(doc, payload.get("method", "lead_k"), payload.get("k", 3))
+        summary = search_service.summarize(
+            doc, payload.get("method", "lead_k"), payload.get("k", 3)
+        )
         processing_time = time.perf_counter() - started
         data = {"summary": summary, "processing_time": processing_time}
-        return api_success(data, {"execution_time": processing_time}, summary=summary, processing_time=processing_time)
+        return api_success(
+            data,
+            {"execution_time": processing_time},
+            summary=summary,
+            processing_time=processing_time,
+        )
 
     @app.post("/api/extract_keywords")
     def extract_keywords():
@@ -259,9 +308,15 @@ def register_api_routes(
                 f"{method} keyword extraction requires optional dependencies.",
                 503,
             )
-        keywords = search_service.extract_keywords(doc, method, payload.get("top_k", 10))
+        keywords = search_service.extract_keywords(
+            doc, method, payload.get("top_k", 10)
+        )
         processing_time = time.perf_counter() - started
-        data = {"keywords": keywords, "method": method, "processing_time": processing_time}
+        data = {
+            "keywords": keywords,
+            "method": method,
+            "processing_time": processing_time,
+        }
         return api_success(
             data,
             {"execution_time": processing_time},
@@ -321,16 +376,29 @@ def register_api_routes(
 
     @app.get("/api/algorithms")
     def algorithms():
-        data = {
-            "models": retrieval_orchestrator.supported_models()
-        }
+        data = {"models": retrieval_orchestrator.supported_models()}
         return api_success(data, models=data["models"])
 
     @app.post("/api/export")
     def export_results():
         payload = request.get_json(silent=True) or {}
-        data = {"results": payload.get("results") or [], "format": payload.get("format", "json")}
+        data = {
+            "results": payload.get("results") or [],
+            "format": payload.get("format", "json"),
+        }
         return api_success(data, **data)
+
+    def _truthy_arg(name: str, default: bool) -> bool:
+        """Parse a boolean query argument.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
+        value = request.args.get(name)
+        if value is None:
+            return default
+        return value.lower() in {"1", "true", "yes", "on"}
 
 
 def run() -> None:

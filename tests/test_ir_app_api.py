@@ -15,7 +15,10 @@ def make_test_app(tmp_path):
     settings = Settings(
         project_root=settings.project_root,
         dataset_path=tmp_path / "missing.jsonl",
-        fallback_dataset_path=settings.project_root / "datasets" / "mini" / "ir_documents.json",
+        fallback_dataset_path=settings.project_root
+        / "datasets"
+        / "mini"
+        / "ir_documents.json",
         index_dir=tmp_path / "indexes",
         tokenizer_engine="jieba",
         enable_heavy_models=False,
@@ -40,7 +43,10 @@ def test_app_stats_uses_structured_schema(tmp_path):
     assert payload["ok"] is True
     assert payload["success"] is True
     assert payload["data"]["stats"]["total_documents"] > 0
-    assert payload["stats"]["total_documents"] == payload["data"]["stats"]["total_documents"]
+    assert (
+        payload["stats"]["total_documents"]
+        == payload["data"]["stats"]["total_documents"]
+    )
     assert "validation" in payload["data"]["stats"]
     assert "index" in payload["data"]["stats"]
     assert "dataset_limit" in payload["data"]["stats"]
@@ -62,14 +68,23 @@ def test_bm25_search_returns_results(tmp_path):
     """BM25 can search the mini fallback corpus."""
     client = make_test_app(tmp_path).test_client()
 
-    response = client.post("/api/search", json={"query": "information retrieval", "model": "bm25"})
+    response = client.post(
+        "/api/search", json={"query": "information retrieval", "model": "bm25"}
+    )
     payload = response.get_json()
 
     assert response.status_code == 200
     assert payload["ok"] is True
     assert payload["data"]["results"]
     first = payload["data"]["results"][0]
-    assert {"doc_id", "title", "snippet", "highlighted_snippet", "score", "model"} <= set(first)
+    assert {
+        "doc_id",
+        "title",
+        "snippet",
+        "highlighted_snippet",
+        "score",
+        "model",
+    } <= set(first)
     assert payload["results"] == payload["data"]["results"]
     assert "ranking_features" in first["explanation"]
 
@@ -112,6 +127,62 @@ def test_document_endpoint_returns_document(tmp_path):
     assert payload["ok"] is True
     assert payload["data"]["document"]["doc_id"] == 0
     assert payload["document"]["title"]
+    assert "summary" in payload["data"]
+    assert "keywords" in payload["data"]
+    assert "related_documents" in payload["data"]
+    assert "taxonomy" in payload["data"]
+    assert "topic" in payload["data"]
+    assert "explanation" in payload["data"]
+
+
+def test_document_endpoint_returns_kwic_for_query(tmp_path):
+    """Document details include stable KWIC payloads when query is provided."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get(
+        "/api/document/0?query=information%20retrieval&include_kwic=true"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    kwic = payload["data"]["kwic"]
+    assert kwic["available"] is True
+    assert kwic["query"] == "information retrieval"
+    assert "matches" in kwic
+    if kwic["matches"]:
+        assert {"keyword", "position", "plain_snippet", "highlighted_snippet"} <= set(
+            kwic["matches"][0]
+        )
+
+
+def test_document_endpoint_related_documents_exclude_self(tmp_path):
+    """Related documents are returned with explanations and never include the source doc."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/document/0?include_related=true&top_k=5")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    related = payload["data"]["related_documents"]
+    assert related
+    assert all(str(item["doc_id"]) != "0" for item in related)
+    first = related[0]
+    assert "similarity" in first
+    assert "relation_reason" in first
+    assert "component_scores" in first["explanation"]
+
+
+def test_document_endpoint_missing_doc_returns_structured_error(tmp_path):
+    """Missing document details return the standard structured error."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/document/missing-doc")
+    payload = response.get_json()
+
+    assert response.status_code == 404
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "DOCUMENT_NOT_FOUND"
 
 
 def test_bert_search_is_structured_unavailable(tmp_path):
@@ -186,7 +257,10 @@ def test_faceted_search_filters_metadata(tmp_path):
     assert payload["ok"] is True
     assert payload["data"]["results"]
     assert all(result["category"] == "models" for result in payload["data"]["results"])
-    assert all(result["content_type"] == "news_article" for result in payload["data"]["results"])
+    assert all(
+        result["content_type"] == "news_article"
+        for result in payload["data"]["results"]
+    )
 
 
 def test_facets_for_query_use_candidate_set_and_filters(tmp_path):
@@ -208,14 +282,18 @@ def test_facets_for_query_use_candidate_set_and_filters(tmp_path):
     assert payload["data"]["total_documents"] >= 1
     assert "category" in payload["data"]["facets"]
     category_values = payload["data"]["facets"]["category"]["values"]
-    assert any(value["value"] == "models" and value["selected"] for value in category_values)
+    assert any(
+        value["value"] == "models" and value["selected"] for value in category_values
+    )
 
 
 def test_lm_search_returns_language_model_explanation(tmp_path):
     """Language Model retrieval is available through the unified search API."""
     client = make_test_app(tmp_path).test_client()
 
-    response = client.post("/api/search", json={"query": "information retrieval", "model": "lm"})
+    response = client.post(
+        "/api/search", json={"query": "information retrieval", "model": "lm"}
+    )
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -343,4 +421,6 @@ def test_no_result_search_returns_suggestions(tmp_path):
     assert payload["ok"] is True
     assert payload["data"]["results"] == []
     assert payload["data"]["suggestions"]
-    assert any(suggestion["type"] == "synonym" for suggestion in payload["data"]["suggestions"])
+    assert any(
+        suggestion["type"] == "synonym" for suggestion in payload["data"]["suggestions"]
+    )

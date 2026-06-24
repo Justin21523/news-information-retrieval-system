@@ -174,6 +174,7 @@ class WANDRetrieval:
         Complexity:
             Time: O(V) where V = vocabulary size
         """
+        min_doc_length = min(self.doc_lengths.values()) if self.doc_lengths else 1
         for term, postings in self.inverted_index.items():
             df = len(postings)
 
@@ -182,9 +183,6 @@ class WANDRetrieval:
 
             # Maximum term frequency in any document for this term
             max_tf = max(postings.values()) if postings else 0
-
-            # Minimum document length (for maximum score)
-            min_doc_length = min(self.doc_lengths.values()) if self.doc_lengths else 1
 
             # Upper bound score
             ub = self.scorer(max_tf, min_doc_length, df, idf)
@@ -484,12 +482,12 @@ class MaxScoreRetrieval:
 
     def _compute_upper_bounds(self) -> None:
         """Compute upper bound score for each term."""
+        min_doc_length = min(self.doc_lengths.values()) if self.doc_lengths else 1
         for term, postings in self.inverted_index.items():
             df = len(postings)
             idf = math.log((self.doc_count - df + 0.5) / (df + 0.5) + 1.0)
 
             max_tf = max(postings.values()) if postings else 0
-            min_doc_length = min(self.doc_lengths.values()) if self.doc_lengths else 1
 
             ub = self.scorer(max_tf, min_doc_length, df, idf)
             self.term_upper_bounds[term] = ub

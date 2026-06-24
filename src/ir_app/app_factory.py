@@ -16,6 +16,8 @@ except ImportError:  # pragma: no cover
 from src.ir_app.config import Settings
 from src.ir_app.schemas import api_error, api_success
 from src.ir_app.services import (
+    ClusterTopicService,
+    CorpusAuditService,
     DocumentDetailService,
     DocumentService,
     EvaluationCacheService,
@@ -53,6 +55,8 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     document_service = DocumentService(settings)
     search_service = SearchService(settings, document_service)
+    corpus_audit_service = CorpusAuditService(document_service, search_service)
+    cluster_topic_service = ClusterTopicService(document_service, search_service)
     document_detail_service = DocumentDetailService(document_service, search_service)
     retrieval_orchestrator = RetrievalOrchestrator(search_service)
     evaluation_cache_service = EvaluationCacheService(settings.project_root)
@@ -77,6 +81,8 @@ def create_app(settings: Settings | None = None) -> Flask:
     ltr_training_service = LearningToRankTrainingService(ltr_feature_service)
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
+    app.config["CORPUS_AUDIT_SERVICE"] = corpus_audit_service
+    app.config["CLUSTER_TOPIC_SERVICE"] = cluster_topic_service
     app.config["DOCUMENT_DETAIL_SERVICE"] = document_detail_service
     app.config["RETRIEVAL_ORCHESTRATOR"] = retrieval_orchestrator
     app.config["EVALUATION_CACHE_SERVICE"] = evaluation_cache_service
@@ -94,6 +100,8 @@ def create_app(settings: Settings | None = None) -> Flask:
         app,
         document_service,
         search_service,
+        corpus_audit_service,
+        cluster_topic_service,
         retrieval_orchestrator,
         document_detail_service,
         evaluation_service,
@@ -136,6 +144,10 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def about_page():
         return render_if_exists("about.html")
 
+    @app.route("/guide")
+    def guide_page():
+        return render_if_exists("guide.html")
+
     @app.route("/expand")
     def expand_page():
         return render_if_exists("expand.html")
@@ -152,6 +164,10 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def feedback_page():
         return render_if_exists("feedback.html")
 
+    @app.route("/corpus")
+    def corpus_page():
+        return render_if_exists("corpus.html")
+
     @app.route("/pat_tree")
     def pat_tree_page():
         return render_if_exists("pat_tree.html")
@@ -161,6 +177,8 @@ def register_api_routes(
     app: Flask,
     document_service: DocumentService,
     search_service: SearchService,
+    corpus_audit_service: CorpusAuditService,
+    cluster_topic_service: ClusterTopicService,
     retrieval_orchestrator: RetrievalOrchestrator,
     document_detail_service: DocumentDetailService,
     evaluation_service: EvaluationService,
@@ -306,6 +324,42 @@ def register_api_routes(
             total_documents=len(document_service.documents),
             corpus_distribution=distribution,
         )
+
+    @app.get("/api/corpus/audit")
+    def corpus_audit():
+        data, meta = corpus_audit_service.audit()
+        return api_success(
+            data,
+            meta,
+            summary=data["summary"],
+            metadata_completeness=data["metadata_completeness"],
+            distributions=data["distributions"],
+            readiness=data["readiness"],
+        )
+
+    def _cluster_topic_response():
+        payload = request.get_json(silent=True) or {}
+        try:
+            data, meta = cluster_topic_service.cluster(payload)
+        except ValueError as exc:
+            return api_error("INVALID_CLUSTER_REQUEST", str(exc), 400)
+        return api_success(
+            data,
+            meta,
+            clusters=data["clusters"],
+            topics=data["topics"],
+            method=data["method"],
+            n_clusters=data["n_clusters"],
+            quality_score=data["quality_score"],
+        )
+
+    @app.post("/api/cluster")
+    def cluster_documents():
+        return _cluster_topic_response()
+
+    @app.post("/api/topics")
+    def topics():
+        return _cluster_topic_response()
 
     @app.get("/api/document/<path:doc_id>")
     def document(doc_id: str):
@@ -561,7 +615,7 @@ def register_api_routes(
 
     @app.get("/api/algorithms")
     def algorithms():
-        data = {"models": retrieval_orchestrator.supported_models()}
+        data = {"models": _with_demo_coverage(retrieval_orchestrator.supported_models())}
         return api_success(data, models=data["models"])
 
     @app.post("/api/export")
@@ -593,6 +647,62 @@ def register_api_routes(
             Space: O(1)
         """
         return request.headers.get("X-IR-Session") or request.headers.get("X-Session-ID")
+
+    def _with_demo_coverage(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Add demo coverage status for algorithm discovery.
+
+        Complexity:
+            Time: O(m)
+            Space: O(m)
+        """
+        statuses = {
+            "bm25": ("demo_ready", "Search, compare, diagnostics, evaluation"),
+            "tfidf": ("demo_ready", "Search, compare, diagnostics, evaluation"),
+            "boolean": ("demo_ready", "Search and field/phrase syntax"),
+            "hybrid": ("demo_ready", "Search, compare, related documents"),
+            "lm": ("demo_ready", "Search, compare, diagnostics, evaluation"),
+            "bim": ("demo_ready", "Search and compare with RSV explanation"),
+            "wand_bm25": ("demo_ready", "Optimized BM25 search with WAND scoring diagnostics"),
+            "maxscore_bm25": ("demo_ready", "Optimized BM25 search with MaxScore scoring diagnostics"),
+            "fuzzy": ("demo_ready", "Search suggestions and tolerant BM25 fallback"),
+            "csoundex": ("demo_ready", "Chinese phonetic tolerant retrieval"),
+            "bert": ("optional_disabled", "Disabled in lightweight deployment"),
+        }
+        enriched = []
+        existing_ids = set()
+        for model in models:
+            existing_ids.add(model.get("id"))
+            status, note = statuses.get(
+                model.get("id"), ("backend_only", "Implemented outside the main demo UI")
+            )
+            enriched.append({**model, "demo_status": status, "coverage_note": note})
+        if "clustering_topic" not in existing_ids:
+            enriched.append(
+                {
+                    "id": "clustering_topic",
+                    "name": "Clustering / Topic Modeling",
+                    "available": True,
+                    "default": False,
+                    "supports_filters": True,
+                    "supports_explanation": True,
+                    "demo_status": "demo_ready",
+                    "coverage_note": "Available through /api/cluster and the corpus Topic Explorer.",
+                }
+            )
+        if "lda_bertopic" not in existing_ids:
+            enriched.append(
+                {
+                    "id": "lda_bertopic",
+                    "name": "LDA / BERTopic",
+                    "available": False,
+                    "default": False,
+                    "supports_filters": False,
+                    "supports_explanation": False,
+                    "demo_status": "optional_disabled",
+                    "coverage_note": "Heavy topic modeling dependencies stay optional in lightweight deployment.",
+                }
+            )
+        return enriched
 
 
 def run() -> None:

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Guide - CNIRS</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
+    <div class="container">
+        <header class="header">
+            <h1>CNIRS Demo Guide</h1>
+            <p class="subtitle">From query to explainable retrieval, evaluation, and feedback learning<br>中文新聞檢索操作導覽</p>
+            <nav class="nav">
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link">排序診斷</a>
+                <a href="feedback" class="nav-link">回饋分析</a>
+                <a href="corpus" class="nav-link">語料庫</a>
+                <a href="guide" class="nav-link active">導覽</a>
+                <a href="about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <main class="guide-page">
+            <section class="guide-hero">
+                <div>
+                    <span class="demo-guide-kicker">Recommended flow</span>
+                    <h2>Run a complete search engine demo in five minutes</h2>
+                    <p>Use real news queries, inspect how each ranking model behaves, and show how feedback can become a future Learning-to-Rank feature set.</p>
+                </div>
+                <div class="guide-hero-actions">
+                    <a class="btn btn-primary" href="./?q=%E5%8D%8A%E5%B0%8E%E9%AB%94%20%E4%BA%BA%E5%B7%A5%E6%99%BA%E6%85%A7&model=hybrid&run=1">Start Search Demo</a>
+                    <a class="btn btn-secondary" href="compare?q=%E5%8D%8A%E5%B0%8E%E9%AB%94%20%E4%BA%BA%E5%B7%A5%E6%99%BA%E6%85%A7&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1">Compare Models</a>
+                </div>
+            </section>
+
+            <section class="pipeline-card">
+                <h2>Operation Flow</h2>
+                <div class="pipeline-steps">
+                    <a href="./?q=%E5%8F%B0%E7%81%A3%20%E7%B6%93%E6%BF%9F&model=bm25&run=1" class="pipeline-step">
+                        <span>1</span>
+                        <strong>Search</strong>
+                        <p>Query, model, top-k, and facet filters</p>
+                    </a>
+                    <a href="./?q=%E5%8D%8A%E5%B0%8E%E9%AB%94%20%E4%BA%BA%E5%B7%A5%E6%99%BA%E6%85%A7&model=hybrid&run=1" class="pipeline-step">
+                        <span>2</span>
+                        <strong>Explain</strong>
+                        <p>Matched terms, field boosts, component scores</p>
+                    </a>
+                    <a href="compare?q=%E7%BE%8E%E5%9C%8B%20%E4%B8%AD%E5%9C%8B&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1" class="pipeline-step">
+                        <span>3</span>
+                        <strong>Compare</strong>
+                        <p>BM25, TF-IDF, Hybrid, LM, BIM, WAND, MaxScore</p>
+                    </a>
+                    <a href="corpus" class="pipeline-step">
+                        <span>4</span>
+                        <strong>Explore</strong>
+                        <p>Corpus readiness, taxonomy facets, topic clusters</p>
+                    </a>
+                    <a href="evaluation?query_set=news_demo&models=bm25,tfidf,hybrid,lm&top_k=10&run=1" class="pipeline-step">
+                        <span>5</span>
+                        <strong>Evaluate</strong>
+                        <p>Demo qrels, PR curves, diagnostics, feedback logs</p>
+                    </a>
+                </div>
+            </section>
+
+            <section class="guide-grid">
+                <article class="guide-card">
+                    <h3>1. Natural Search</h3>
+                    <p>Start with Hybrid for normal language queries. Switch to BM25 or WAND when demonstrating classic lexical ranking and optimization.</p>
+                    <a href="./?q=%E5%8D%8A%E5%B0%8E%E9%AB%94%20%E4%BA%BA%E5%B7%A5%E6%99%BA%E6%85%A7&model=hybrid&run=1">Run Hybrid search</a>
+                </article>
+                <article class="guide-card">
+                    <h3>2. Facets + Metadata</h3>
+                    <p>Use source, category, taxonomy, content type, date, and tags to narrow real news results without changing the query.</p>
+                    <a href="corpus">Inspect corpus facets</a>
+                </article>
+                <article class="guide-card">
+                    <h3>3. Why This Result?</h3>
+                    <p>Open result explanations and document detail to inspect snippets, highlights, KWIC, keywords, summary, and related news.</p>
+                    <a href="./?q=%E5%8F%B0%E7%81%A3%20%E7%B6%93%E6%BF%9F&model=bm25&run=1">Open explainable results</a>
+                </article>
+                <article class="guide-card">
+                    <h3>4. Model Comparison</h3>
+                    <p>Compare rank overlap, unique documents, component scores, and optimized retrieval behavior across all demo-ready models.</p>
+                    <a href="compare?q=%E7%BE%8E%E5%9C%8B%20%E4%B8%AD%E5%9C%8B&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1">Compare rankings</a>
+                </article>
+                <article class="guide-card">
+                    <h3>5. Evaluation</h3>
+                    <p>Run the small curated demo qrels. Metrics are labeled as a portfolio smoke evaluation, not a full benchmark.</p>
+                    <a href="evaluation?query_set=news_demo&models=bm25,tfidf,hybrid,lm&top_k=10&run=1">Run demo evaluation</a>
+                </article>
+                <article class="guide-card">
+                    <h3>6. Feedback + LTR</h3>
+                    <p>Review click/relevance logs, zero-result queries, quality controls, and the weak-supervision Learning-to-Rank sandbox.</p>
+                    <a href="feedback">Open feedback analytics</a>
+                </article>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 CNIRS | Guided Search Engine Demo</p>
+        </footer>
+    </div>
+</body>
+</html>

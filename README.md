@@ -9,10 +9,12 @@ A comprehensive Information Retrieval (IR) system implementation for **LIS5033 -
 This repository now includes a Flask-based **News Information Retrieval System** for searching a unified Taiwanese news corpus. The demo focuses on explainable IR rather than a black-box search box:
 
 - Unified search across BM25, TF-IDF, Boolean, Hybrid RRF, LM, fuzzy, and CSoundex modes.
+- Additional demo-ready IR models: BIM, WAND BM25, and MaxScore BM25.
 - Faceted metadata filtering by source, category, taxonomy, content type, date, and tags.
 - Search result explanations with matched terms, field boosts, component scores, snippets, and highlights.
 - Document detail enrichment with summary, KWIC, keywords, taxonomy metadata, and related documents.
-- Model comparison for BM25 / TF-IDF / Hybrid / LM on the same query.
+- Model comparison for BM25 / TF-IDF / Hybrid / LM / BIM / WAND / MaxScore on the same query.
+- Corpus dashboard and Topic Explorer for source distribution, taxonomy coverage, metadata completeness, and topic clusters.
 - Demo evaluation dashboard with cached/async Precision@K, Recall@K, MAP, MRR, nDCG, PR curves, per-query breakdown, and clearly labeled small demo qrels.
 - Ranking diagnostics for BM25 term contribution, TF-IDF vector weights, LM likelihood breakdown, query coverage, and field match heatmaps.
 - SQLite feedback analytics for clicks, explicit relevance labels, zero-result queries, CTR, feedback quality controls, and weak-supervision Learning-to-Rank sandbox.
@@ -24,14 +26,14 @@ pip install -r requirements.txt
 IR_ENABLE_HEAVY_MODELS=false python app.py
 ```
 
-Open `http://localhost:5001` and try:
+Open `http://localhost:5001/guide` for the guided walkthrough, or use these direct demo links:
 
-1. Search `半導體` with BM25 or Hybrid.
-2. Open a document detail modal and inspect Summary, Keywords, KWIC, and Related News.
-3. Visit `/compare` and compare `人工智慧` across BM25 / TF-IDF / Hybrid / LM.
-4. Visit `/evaluation`, choose `News Demo Qrels`, and run the evaluation dashboard.
-5. Visit `/diagnostics` or expand “Ranking Diagnostics” inside a result explanation panel.
-6. Visit `/feedback` to inspect feedback analytics, quality controls, and the weak-supervision LTR training sandbox.
+1. `/?q=半導體%20人工智慧&model=hybrid&run=1` - run Hybrid search with explainable snippets and facets.
+2. Open “Why this result?” and a document detail modal to inspect Summary, Keywords, KWIC, and Related News.
+3. `/compare?q=半導體%20人工智慧&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1` - compare all demo-ready ranking models.
+4. `/corpus` - inspect corpus source distribution, taxonomy facets, metadata quality, index cache status, and Topic Explorer.
+5. `/evaluation?query_set=news_demo&models=bm25,tfidf,hybrid,lm&top_k=10&run=1` - run the small demo qrels evaluation.
+6. `/diagnostics` and `/feedback` - inspect ranking contribution breakdowns, feedback analytics, quality controls, and the weak-supervision LTR sandbox.
 
 ### Demo Media
 
@@ -44,8 +46,11 @@ python scripts/verify_ui_playwright.py
 Artifacts:
 
 - [Search Results](docs/assets/evaluation/search-results.png)
+- [Demo Guide](docs/assets/evaluation/demo-guide.png)
 - [Document Detail](docs/assets/evaluation/document-detail.png)
 - [Model Comparison](docs/assets/evaluation/model-compare.png)
+- [Corpus Dashboard](docs/assets/evaluation/corpus-dashboard.png)
+- [Corpus Topic Explorer](docs/assets/evaluation/topic-explorer.png)
 - [Evaluation Dashboard](docs/assets/evaluation/evaluation-dashboard.png)
 - [Ranking Diagnostics](docs/assets/evaluation/ranking-diagnostics.png)
 - [Feedback Analytics](docs/assets/evaluation/feedback-analytics.png)

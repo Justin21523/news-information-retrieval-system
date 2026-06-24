@@ -1,6 +1,8 @@
 """Service layer for the Flask IR application."""
 
 from .document_service import DocumentService
+from .cluster_topic_service import ClusterTopicService
+from .corpus_audit_service import CorpusAuditService
 from .document_detail_service import DocumentDetailService
 from .evaluation_cache_service import EvaluationCacheService
 from .evaluation_job_service import EvaluationJobService
@@ -15,6 +17,8 @@ from .search_log_service import SearchLogService
 from .search_service import FeatureUnavailableError, SearchService
 
 __all__ = [
+    "CorpusAuditService",
+    "ClusterTopicService",
     "DocumentDetailService",
     "DocumentService",
     "EvaluationCacheService",

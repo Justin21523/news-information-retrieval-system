@@ -159,8 +159,10 @@ async function preloadAllFacets() {
 
         FacetState.facets = data.facets;
         FacetState.corpusDistribution = data.corpus_distribution || {};
+        applyPendingUrlFilters();
         renderCorpusDistribution(FacetState.corpusDistribution);
         renderFacets(data.facets, false); // false = not from search
+        updateActiveFiltersDisplay();
 
         console.log(`Loaded facets for ${data.total_documents} documents`);
 
@@ -303,6 +305,19 @@ function renderFacets(facets, fromSearch = false) {
         const facetGroup = createFacetGroup(fieldName, facet);
         DOM.facetGroups.appendChild(facetGroup);
     }
+}
+
+function applyPendingUrlFilters() {
+    const pending = window.pendingUrlFilters || {};
+    Object.entries(pending).forEach(([fieldName, rawValues]) => {
+        const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+        const available = new Set((FacetState.facets[fieldName]?.values || []).map((item) => String(item.value)));
+        const validValues = values.map(String).filter((value) => available.size === 0 || available.has(value));
+        if (validValues.length) {
+            FacetState.activeFilters[fieldName] = [...new Set([...(FacetState.activeFilters[fieldName] || []), ...validValues])];
+        }
+    });
+    window.pendingUrlFilters = {};
 }
 
 /**

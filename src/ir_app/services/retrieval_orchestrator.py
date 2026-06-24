@@ -50,6 +50,9 @@ class RetrievalOrchestrator:
             self.model_info("boolean"),
             self.model_info("hybrid"),
             self.model_info("lm"),
+            self.model_info("bim"),
+            self.model_info("wand_bm25"),
+            self.model_info("maxscore_bm25"),
             self.model_info("fuzzy"),
             self.model_info("csoundex"),
             {
@@ -100,6 +103,21 @@ class RetrievalOrchestrator:
                 "name": "Language Model",
                 "description": "Query likelihood retrieval with Dirichlet smoothing.",
                 "parameters": {"smoothing": "dirichlet", "mu": 2000.0},
+            },
+            "bim": {
+                "name": "Binary Independence Model",
+                "description": "Classic probabilistic retrieval with binary term presence and RSJ-style weights.",
+                "parameters": {"weighting": "idf_without_feedback"},
+            },
+            "wand_bm25": {
+                "name": "WAND BM25",
+                "description": "BM25-style top-k retrieval with WAND early termination diagnostics.",
+                "parameters": {"optimization": "WAND"},
+            },
+            "maxscore_bm25": {
+                "name": "MaxScore BM25",
+                "description": "BM25-style top-k retrieval with MaxScore scoring diagnostics.",
+                "parameters": {"optimization": "MaxScore"},
             },
             "fuzzy": {
                 "name": "Fuzzy BM25",

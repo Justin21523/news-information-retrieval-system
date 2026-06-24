@@ -72,6 +72,15 @@
         if (features?.lm && Object.keys(features.lm).length) {
             rows.push(chip('lm', features.lm.smoothing || 'query likelihood', 'feature-chip'));
         }
+        if (features?.bim && Object.keys(features.bim).length) {
+            rows.push(chip('bim rsv', formatScore(features.bim.total_rsv || 0), 'feature-chip'));
+        }
+        if (features?.optimization && Object.keys(features.optimization).length) {
+            const opt = features.optimization;
+            rows.push(chip('optimizer', opt.algorithm || 'top-k', 'feature-chip'));
+            rows.push(chip('scored', `${opt.num_scored_docs || 0}/${opt.num_candidate_docs || 0}`, 'feature-chip'));
+            rows.push(chip('speedup', `${formatScore(opt.speedup_ratio || 0)}x`, 'feature-chip'));
+        }
         return rows.join('') || '<span class="explain-muted">No ranking features</span>';
     }
 

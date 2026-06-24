@@ -55,6 +55,19 @@ def test_app_stats_uses_structured_schema(tmp_path):
     assert "dataset_limit" in payload["data"]["stats"]
 
 
+def test_guide_page_exposes_demo_walkthrough(tmp_path):
+    """Guide page renders the user-facing demo workflow."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/guide")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "CNIRS Demo Guide" in html
+    assert "Operation Flow" in html
+    assert "run=1" in html
+
+
 def test_search_requires_query(tmp_path):
     """Search rejects empty queries with structured errors."""
     client = make_test_app(tmp_path).test_client()
@@ -96,7 +109,17 @@ def test_supported_search_models_return_stable_schema(tmp_path):
     """Formal lexical, hybrid, LM, fuzzy, and CSoundex models share one result schema."""
     client = make_test_app(tmp_path).test_client()
 
-    for model in ["tfidf", "boolean", "hybrid", "lm", "fuzzy", "csoundex"]:
+    for model in [
+        "tfidf",
+        "boolean",
+        "hybrid",
+        "lm",
+        "bim",
+        "wand_bm25",
+        "maxscore_bm25",
+        "fuzzy",
+        "csoundex",
+    ]:
         response = client.post(
             "/api/search",
             json={"query": "information retrieval", "model": model, "operator": "OR"},
@@ -117,6 +140,11 @@ def test_supported_search_models_return_stable_schema(tmp_path):
             assert "field_boost" in result["explanation"]["component_scores"]
             assert "field_boost" in result["explanation"]["ranking_features"]
             assert "snippet_source" in result["explanation"]["ranking_features"]
+            if model == "bim":
+                assert "bim" in result["explanation"]["ranking_features"]
+            if model in {"wand_bm25", "maxscore_bm25"}:
+                optimization = result["explanation"]["ranking_features"]["optimization"]
+                assert optimization["num_candidate_docs"] >= optimization["num_scored_docs"]
 
 
 def test_document_endpoint_returns_document(tmp_path):
@@ -242,6 +270,42 @@ def test_all_facets_exposes_taxonomy_metadata(tmp_path):
     assert payload["data"]["corpus_distribution"]["content_type"]
 
 
+def test_corpus_dashboard_page_exists(tmp_path):
+    """Corpus dashboard route renders the portfolio-facing audit page."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/corpus")
+
+    assert response.status_code == 200
+    assert b"Corpus Dashboard" in response.data
+
+
+def test_corpus_audit_endpoint_reports_readiness_and_metadata(tmp_path):
+    """Corpus audit summarizes data quality, distributions, and index cache state."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/corpus/audit")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["summary"]["total_documents"] > 0
+    assert data["summary"]["dataset_source"]
+    assert data["metadata_completeness"]["fields"]
+    fields = {item["field"]: item for item in data["metadata_completeness"]["fields"]}
+    assert fields["title"]["coverage"] == 1.0
+    assert fields["content"]["coverage"] == 1.0
+    assert data["distributions"]["source"]
+    assert data["distributions"]["taxonomy_topic"]
+    assert data["index"]["manifest"]["document_count"] == data["summary"]["total_documents"]
+    assert "cache_files" in data["index"]
+    assert data["readiness"]["checks"]
+    assert data["external_sources"][0]["project"] == "news-web-crawler"
+    assert data["flow"][0]["id"] == "crawl"
+    assert payload["meta"]["execution_time"] >= 0
+
+
 def test_faceted_search_filters_metadata(tmp_path):
     """Faceted search applies raw metadata filters with stable schema."""
     client = make_test_app(tmp_path).test_client()
@@ -316,7 +380,7 @@ def test_compare_endpoint_returns_unified_model_payloads(tmp_path):
         "/api/search/compare",
         json={
             "query": "information retrieval",
-            "models": ["bm25", "tfidf", "hybrid", "lm"],
+            "models": ["bm25", "tfidf", "hybrid", "lm", "bim", "wand_bm25", "maxscore_bm25"],
             "top_k": 5,
         },
     )
@@ -325,7 +389,15 @@ def test_compare_endpoint_returns_unified_model_payloads(tmp_path):
     assert response.status_code == 200
     assert payload["ok"] is True
     assert payload["data"]["query_analysis"]["query_terms"]
-    assert set(payload["data"]["models"]) == {"bm25", "tfidf", "hybrid", "lm"}
+    assert set(payload["data"]["models"]) == {
+        "bm25",
+        "tfidf",
+        "hybrid",
+        "lm",
+        "bim",
+        "wand_bm25",
+        "maxscore_bm25",
+    }
     assert "overlap" in payload["data"]["comparison"]
     assert "rank_changes" in payload["data"]["comparison"]
     for model_data in payload["data"]["models"].values():
@@ -392,7 +464,54 @@ def test_algorithms_endpoint_exposes_lm_capabilities(tmp_path):
     assert models["lm"]["available"] is True
     assert models["lm"]["supports_filters"] is True
     assert models["lm"]["supports_explanation"] is True
+    assert models["lm"]["demo_status"] == "demo_ready"
     assert models["bert"]["available"] is False
+    assert models["bert"]["demo_status"] == "optional_disabled"
+    assert models["bim"]["demo_status"] == "demo_ready"
+    assert models["wand_bm25"]["demo_status"] == "demo_ready"
+    assert models["maxscore_bm25"]["demo_status"] == "demo_ready"
+    assert models["clustering_topic"]["demo_status"] == "demo_ready"
+    assert models["lda_bertopic"]["demo_status"] == "optional_disabled"
+
+
+def test_cluster_endpoint_returns_topic_cards(tmp_path):
+    """Cluster endpoint groups query results into lightweight topic cards."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/cluster",
+        json={
+            "query": "information retrieval",
+            "method": "kmeans",
+            "n_clusters": 2,
+            "sample_size": 10,
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["method"] == "kmeans"
+    assert data["sample_size"] >= 2
+    assert data["clusters"]
+    assert data["topics"]
+    first = data["clusters"][0]
+    assert "keywords" in first
+    assert "documents" in first
+    assert payload["meta"]["execution_time"] >= 0
+
+
+def test_topics_endpoint_validates_method(tmp_path):
+    """Topic endpoint returns structured errors for unknown clustering methods."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post("/api/topics", json={"method": "bad-method"})
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "INVALID_CLUSTER_REQUEST"
 
 
 def test_evaluation_query_sets_endpoint_lists_demo_qrels(tmp_path):

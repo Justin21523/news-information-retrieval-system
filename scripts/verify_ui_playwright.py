@@ -80,6 +80,10 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page = context.new_page()
         page.set_default_timeout(45000)
 
+        page.goto(f"{base_url}/guide", wait_until="networkidle")
+        page.wait_for_selector(".guide-page", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-guide.png", full_page=True)
+
         page.goto(f"{base_url}/", wait_until="networkidle")
         fill_search(page, "半導體")
         seed_feedback(page)
@@ -91,6 +95,12 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.goto(f"{base_url}/compare", wait_until="networkidle")
         fill_compare(page, "人工智慧")
         page.screenshot(path=asset_dir / "model-compare.png", full_page=True)
+
+        page.goto(f"{base_url}/corpus", wait_until="networkidle")
+        page.wait_for_selector("#corpus-content", state="visible", timeout=45000)
+        page.screenshot(path=asset_dir / "corpus-dashboard.png", full_page=True)
+        run_topic_explorer(page)
+        page.screenshot(path=asset_dir / "topic-explorer.png", full_page=True)
 
         page.goto(f"{base_url}/evaluation", wait_until="networkidle")
         run_evaluation(page)
@@ -230,6 +240,20 @@ def run_evaluation(page) -> None:
     page.locator("#run-eval-btn").click()
     page.wait_for_selector("#eval-results", state="visible", timeout=180000)
     page.wait_for_selector("#comparison-table table", timeout=180000)
+
+
+def run_topic_explorer(page) -> None:
+    """Run the corpus topic explorer flow.
+
+    Complexity:
+        Time: O(clustering)
+        Space: O(1)
+    """
+    page.locator("#topic-query").fill("半導體 人工智慧")
+    page.locator("#topic-clusters").fill("3")
+    page.locator("#topic-sample-size").fill("30")
+    page.locator("#run-topic-explorer").click()
+    page.wait_for_selector(".topic-card", timeout=60000)
 
 
 def run_diagnostics(page) -> None:

@@ -17,8 +17,10 @@ from src.ir.index.positional_index import PositionalIndex
 from src.ir.ranking.rocchio import RocchioExpander
 from src.ir.retrieval.bm25 import BM25Ranker
 from src.ir.retrieval.boolean import BooleanQueryEngine
+from src.ir.retrieval.bim import BinaryIndependenceModel
 from src.ir.retrieval.fuzzy import FuzzyMatcher
 from src.ir.retrieval.language_model_retrieval import LanguageModelRetrieval
+from src.ir.retrieval.query_optimization import MaxScoreRetrieval, WANDRetrieval
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.text.csoundex import CSoundex
 from src.ir_app.services.text_quality import TextQualityService
@@ -342,6 +344,41 @@ class IndexService:
         self.bm25.doc_count = len(self.documents)
         self.bm25.avg_doc_length = self.avg_doc_length
         self.bm25._compute_idf()
+
+        self.bim = BinaryIndependenceModel(tokenizer=self.tokenize, use_idf=True)
+        self.bim.inverted_index = {
+            term: {int(doc_id) for doc_id in postings}
+            for term, postings in self.inverted_index.items()
+        }
+        self.bim.doc_count = len(self.documents)
+        self.bim.doc_terms = {
+            int(doc_id): set(terms) for doc_id, terms in self.doc_terms.items()
+        }
+        self.bim.doc_freq = Counter(
+            {term: len(postings) for term, postings in self.bim.inverted_index.items()}
+        )
+        self.bim.vocab = set(self.bim.inverted_index.keys())
+        self.bim._compute_idf_weights()
+
+        optimization_index = {
+            term: {int(doc_id): tf for doc_id, tf in postings.items()}
+            for term, postings in self.inverted_index.items()
+        }
+        int_doc_lengths = {
+            int(doc_id): length for doc_id, length in self.doc_lengths.items()
+        }
+        self.wand = WANDRetrieval(
+            optimization_index,
+            int_doc_lengths,
+            len(self.documents),
+            self.avg_doc_length,
+        )
+        self.maxscore = MaxScoreRetrieval(
+            optimization_index,
+            int_doc_lengths,
+            len(self.documents),
+            self.avg_doc_length,
+        )
 
         self.language_model = LanguageModelRetrieval(
             tokenizer=self.tokenize,

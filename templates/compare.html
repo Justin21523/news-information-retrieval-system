@@ -4,19 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>模型對比 - CNIRS</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <h1>🔍 CNIRS - 模型對比</h1>
             <p class="subtitle">比較不同檢索模型的效能與結果</p>
             <nav class="nav">
-                <a href="/" class="nav-link">搜尋</a>
-                <a href="/compare" class="nav-link active">模型對比</a>
-                <a href="/expand" class="nav-link">查詢擴展</a>
-                <a href="/about" class="nav-link">關於</a>
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link active">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link">排序診斷</a>
+                <a href="feedback" class="nav-link">回饋分析</a>
+                <a href="corpus" class="nav-link">語料庫</a>
+                <a href="guide" class="nav-link">導覽</a>
+                <a href="about" class="nav-link">關於</a>
             </nav>
         </header>
 
@@ -32,6 +42,9 @@
                         <label><input type="checkbox" name="models" value="tfidf" checked> TF-IDF</label>
                         <label><input type="checkbox" name="models" value="hybrid" checked> Hybrid</label>
                         <label><input type="checkbox" name="models" value="lm" checked> LM</label>
+                        <label><input type="checkbox" name="models" value="bim"> BIM</label>
+                        <label><input type="checkbox" name="models" value="wand_bm25"> WAND</label>
+                        <label><input type="checkbox" name="models" value="maxscore_bm25"> MaxScore</label>
                         <label><input type="checkbox" name="models" value="boolean"> Boolean</label>
                     </div>
                 </div>

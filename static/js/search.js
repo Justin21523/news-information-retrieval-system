@@ -55,7 +55,77 @@ let currentSearchMetadata = {};
 // Note: Filter options are loaded by facet.js
 window.addEventListener('DOMContentLoaded', () => {
     loadSystemStats();
+    initializeDemoActions();
+    initializeSearchFromUrl();
 });
+
+function initializeDemoActions() {
+    document.querySelectorAll('[data-demo-query]').forEach((button) => {
+        button.addEventListener('click', () => {
+            queryInput.value = button.dataset.demoQuery || '';
+            if (button.dataset.demoModel && modelSelect.querySelector(`option[value="${button.dataset.demoModel}"]`)) {
+                modelSelect.value = button.dataset.demoModel;
+                modelSelect.dispatchEvent(new Event('change'));
+            }
+            if (button.dataset.demoTopk) {
+                topkInput.value = button.dataset.demoTopk;
+            }
+            performSearch();
+        });
+    });
+}
+
+function initializeSearchFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get('q') || params.get('query');
+    const model = params.get('model');
+    const limit = params.get('limit') || params.get('top_k') || params.get('topk');
+    const shouldRun = params.get('run') === '1' || params.get('run') === 'true';
+
+    if (query) {
+        queryInput.value = query;
+    }
+    if (model && modelSelect.querySelector(`option[value="${model}"]`)) {
+        modelSelect.value = model;
+        modelSelect.dispatchEvent(new Event('change'));
+    }
+    if (limit) {
+        topkInput.value = limit;
+    }
+    applyFilterParams(params);
+    if (query && shouldRun) {
+        window.setTimeout(() => {
+            if (typeof window.performSearch === 'function') {
+                window.performSearch();
+            } else {
+                performSearch();
+            }
+        }, 350);
+    }
+}
+
+function applyFilterParams(params) {
+    const filterAliases = {
+        source: 'source',
+        category: 'category',
+        taxonomy: 'taxonomy_topic',
+        taxonomy_topic: 'taxonomy_topic',
+        content_type: 'content_type',
+        date_from: 'date_from',
+        date_to: 'date_to',
+        tags: 'tags'
+    };
+    const filterParams = {};
+    Object.entries(filterAliases).forEach(([key, targetKey]) => {
+        const value = params.get(key);
+        if (value) {
+            filterParams[targetKey] = value.includes(',') ? value.split(',').map((item) => item.trim()).filter(Boolean) : [value];
+        }
+    });
+    if (Object.keys(filterParams).length) {
+        window.pendingUrlFilters = filterParams;
+    }
+}
 
 // Show/hide Boolean operator select
 modelSelect.addEventListener('change', () => {

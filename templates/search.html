@@ -4,21 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNIRS - 中文新聞智能檢索系統</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/facet.css') }}">
+    <link rel="stylesheet" href="static/css/style.css">
+    <link rel="stylesheet" href="static/css/facet.css">
 </head>
 <body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <h1>🔍 CNIRS</h1>
             <p class="subtitle">Chinese News Intelligent Retrieval System<br>中文新聞智能檢索系統</p>
             <nav class="nav">
-                <a href="/" class="nav-link active">搜尋</a>
-                <a href="/compare" class="nav-link">模型對比</a>
-                <a href="/expand" class="nav-link">查詢擴展</a>
-                <a href="/evaluation" class="nav-link">評估分析</a>
-                <a href="/about" class="nav-link">關於</a>
+                <a href="./" class="nav-link active">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link">排序診斷</a>
+                <a href="feedback" class="nav-link">回饋分析</a>
+                <a href="corpus" class="nav-link">語料庫</a>
+                <a href="guide" class="nav-link">導覽</a>
+                <a href="about" class="nav-link">關於</a>
             </nav>
         </header>
 
@@ -63,6 +72,19 @@
             <main class="search-content">
                 <!-- Search Box -->
                 <div class="search-box">
+                    <div class="demo-guide-strip" aria-label="Demo guide quick actions">
+                        <div>
+                            <span class="demo-guide-kicker">Demo Guide</span>
+                            <strong>Try a complete explainable news search flow</strong>
+                            <p>Start with a real query, then inspect facets, ranking reasons, document detail, comparison, and evaluation.</p>
+                        </div>
+                        <div class="demo-guide-actions">
+                            <button type="button" class="demo-chip" data-demo-query="半導體 人工智慧" data-demo-model="hybrid" data-demo-topk="20">Hybrid: 半導體 AI</button>
+                            <button type="button" class="demo-chip" data-demo-query="台灣 經濟" data-demo-model="bm25" data-demo-topk="20">BM25: 台灣經濟</button>
+                            <button type="button" class="demo-chip" data-demo-query="美國 中國" data-demo-model="wand_bm25" data-demo-topk="20">WAND: 美中新聞</button>
+                            <a class="demo-chip demo-chip-link" href="guide">Open walkthrough</a>
+                        </div>
+                    </div>
                     <input type="text" id="query-input" placeholder="輸入查詢關鍵字... (例如: 人工智慧、颱風災害、台灣經濟)" autofocus>
 
                     <div class="search-options">
@@ -73,6 +95,9 @@
                                 <option value="bm25">BM25</option>
                                 <option value="tfidf">TF-IDF</option>
                                 <option value="boolean">Boolean</option>
+                                <option value="bim">BIM</option>
+                                <option value="wand_bm25">WAND BM25</option>
+                                <option value="maxscore_bm25">MaxScore BM25</option>
                                 <option value="fuzzy">Fuzzy</option>
                                 <option value="csoundex">CSoundex</option>
                                 <option value="bert">BERT (語義)</option>

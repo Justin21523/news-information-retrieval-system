@@ -64,6 +64,9 @@ class SearchService:
                     "bm25",
                     "hybrid",
                     "lm",
+                    "bim",
+                    "wand_bm25",
+                    "maxscore_bm25",
                     "fuzzy",
                     "csoundex",
                 ],
@@ -106,6 +109,7 @@ class SearchService:
 
         expanded_terms: list[str] = []
         component_scores: dict[str, dict[str, float]] = {}
+        ranking_features_by_doc: dict[str, dict[str, Any]] = {}
 
         if model == "boolean":
             ranked = self._search_boolean(query, query_terms, operator)
@@ -118,6 +122,20 @@ class SearchService:
             ranked, component_scores = self._search_hybrid(query, retrieval_top_k)
         elif model == "lm":
             ranked = self._search_lm(query, retrieval_top_k)
+        elif model == "bim":
+            ranked = self._search_bim(query, retrieval_top_k)
+        elif model == "wand_bm25":
+            ranked, optimization = self._search_optimized(query_terms, retrieval_top_k, "wand")
+            ranking_features_by_doc = {
+                str(doc_id): {"optimization": optimization} for doc_id, _ in ranked
+            }
+        elif model == "maxscore_bm25":
+            ranked, optimization = self._search_optimized(
+                query_terms, retrieval_top_k, "maxscore"
+            )
+            ranking_features_by_doc = {
+                str(doc_id): {"optimization": optimization} for doc_id, _ in ranked
+            }
         elif model == "fuzzy":
             expanded_terms = self._fuzzy_expansion(query_terms)
             ranked = self._search_bm25(
@@ -163,6 +181,7 @@ class SearchService:
                     expanded_terms=expanded_terms,
                     component_scores=doc_components,
                     field_boost=field_boosts.get(str(doc_key), {}),
+                    ranking_features=ranking_features_by_doc.get(str(doc_key), {}),
                 ).to_dict()
             )
 
@@ -303,6 +322,46 @@ class SearchService:
         ]
         scored.sort(key=lambda item: item[1], reverse=True)
         return scored[:top_k]
+
+    def _search_bim(self, query: str, top_k: int) -> list[tuple[str, float]]:
+        """Search with Binary Independence Model RSV ranking.
+
+        Complexity:
+            Time: O(q * p)
+            Space: O(r)
+        """
+        result = self.index.bim.search(query, topk=top_k)
+        return [
+            (str(doc_id), float(score))
+            for doc_id, score in zip(result.doc_ids, result.scores)
+        ]
+
+    def _search_optimized(
+        self, query_terms: list[str], top_k: int, algorithm: str
+    ) -> tuple[list[tuple[str, float]], dict[str, Any]]:
+        """Search with query optimization over BM25-style scoring.
+
+        Complexity:
+            Time: O(m log k) average
+            Space: O(k)
+        """
+        if algorithm == "wand":
+            result = self.index.wand.search(query_terms, topk=top_k)
+        elif algorithm == "maxscore":
+            result = self.index.maxscore.search(query_terms, topk=top_k)
+        else:
+            raise ValueError(f"Unknown optimization algorithm: {algorithm}")
+        ranked = [
+            (str(doc_id), float(score))
+            for doc_id, score in zip(result.doc_ids, result.scores)
+        ]
+        optimization = {
+            "algorithm": result.algorithm,
+            "num_scored_docs": result.num_scored_docs,
+            "num_candidate_docs": result.num_candidate_docs,
+            "speedup_ratio": result.speedup_ratio,
+        }
+        return ranked, optimization
 
     def _query_vector(self, query_terms: list[str]) -> dict[str, float]:
         """Build a normalized TF-IDF query vector.
@@ -455,6 +514,7 @@ class SearchService:
         expanded_terms: list[str] | None = None,
         component_scores: dict[str, float] | None = None,
         field_boost: dict[str, Any] | None = None,
+        ranking_features: dict[str, Any] | None = None,
     ) -> SearchResult:
         """Build a normalized search result.
 
@@ -473,8 +533,19 @@ class SearchService:
             "index_cache_used": self.index.cache_used,
             "field_boost": field_boost,
             "snippet_source": snippet_info["source"],
+            **(ranking_features or {}),
         }
         if model in {"bm25", "hybrid", "fuzzy", "csoundex"}:
+            bm25_explain = self.index.bm25.explain_score(query, doc_id)
+            ranking_features["bm25"] = (
+                bm25_explain if "error" not in bm25_explain else {}
+            )
+        if model == "bim":
+            bim_explain = self.index.bim.explain_score(query, doc_id)
+            ranking_features["bim"] = (
+                bim_explain if "error" not in bim_explain else {}
+            )
+        if model in {"wand_bm25", "maxscore_bm25"}:
             bm25_explain = self.index.bm25.explain_score(query, doc_id)
             ranking_features["bm25"] = (
                 bm25_explain if "error" not in bm25_explain else {}
@@ -984,6 +1055,16 @@ class SearchService:
                 ranked, _ = self._search_hybrid(query, len(self.documents_by_id))
             elif model == "lm":
                 ranked = self._search_lm(query, len(self.documents_by_id))
+            elif model == "bim":
+                ranked = self._search_bim(query, len(self.documents_by_id))
+            elif model == "wand_bm25":
+                ranked, _ = self._search_optimized(
+                    query_terms, len(self.documents_by_id), "wand"
+                )
+            elif model == "maxscore_bm25":
+                ranked, _ = self._search_optimized(
+                    query_terms, len(self.documents_by_id), "maxscore"
+                )
             else:
                 ranked = self._search_bm25(query, len(self.documents_by_id))
             doc_ids = {str(doc_id) for doc_id, _ in ranked}

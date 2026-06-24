@@ -15,6 +15,32 @@ queryInput.addEventListener('keypress', (event) => {
 
 compareBtn.addEventListener('click', performComparison);
 
+window.addEventListener('DOMContentLoaded', initializeCompareFromUrl);
+
+function initializeCompareFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get('q') || params.get('query');
+    const models = params.get('models');
+    const topK = params.get('top_k') || params.get('topk') || params.get('limit');
+    const shouldRun = params.get('run') === '1' || params.get('run') === 'true';
+
+    if (query) {
+        queryInput.value = query;
+    }
+    if (topK) {
+        topkInput.value = topK;
+    }
+    if (models) {
+        const selected = new Set(models.split(',').map((model) => model.trim()).filter(Boolean));
+        modelCheckboxes.forEach((checkbox) => {
+            checkbox.checked = selected.has(checkbox.value);
+        });
+    }
+    if (query && shouldRun) {
+        window.setTimeout(performComparison, 200);
+    }
+}
+
 function normalizeApiPayload(payload) {
     if (!payload) return payload;
     if (payload.ok === true && payload.data) {
@@ -202,6 +228,7 @@ function createPerformanceTable(modelEntries) {
                     <th>結果數</th>
                     <th>響應時間</th>
                     <th>平均分數</th>
+                    <th>Optimization</th>
                 </tr>
             </thead>
             <tbody>
@@ -211,12 +238,14 @@ function createPerformanceTable(modelEntries) {
                         ? results.reduce((sum, result) => sum + Number(result.score || 0), 0) / results.length
                         : 0;
                     const executionTime = modelData.execution_time ?? modelData.response_time ?? 0;
+                    const optimization = firstOptimization(results);
                     return `
                         <tr>
                             <td>${escapeHtml(modelData.model_info?.name || modelName.toUpperCase())}</td>
                             <td>${modelData.total_results || results.length}</td>
                             <td>${formatMs(executionTime)}</td>
                             <td>${formatScore(avgScore)}</td>
+                            <td>${optimization ? `${escapeHtml(optimization.algorithm)}: ${optimization.num_scored_docs}/${optimization.num_candidate_docs} scored, ${formatScore(optimization.speedup_ratio)}x` : '-'}</td>
                         </tr>
                     `;
                 }).join('')}
@@ -224,6 +253,14 @@ function createPerformanceTable(modelEntries) {
         </table>
     `;
     return section;
+}
+
+function firstOptimization(results) {
+    for (const result of results || []) {
+        const optimization = result.explanation?.ranking_features?.optimization;
+        if (optimization) return optimization;
+    }
+    return null;
 }
 
 function highlightQuery(text, query) {

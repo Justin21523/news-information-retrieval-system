@@ -31,7 +31,7 @@ let charts = {
 let currentEvalData = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadQuerySets();
+    loadQuerySets().then(initializeEvaluationFromUrl);
 });
 
 if (runEvalBtn) {
@@ -72,6 +72,41 @@ async function loadQuerySets() {
         `).join('');
     } catch (error) {
         console.warn('Unable to load evaluation query sets', error);
+    }
+}
+
+function initializeEvaluationFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get('q') || params.get('query');
+    const querySet = params.get('query_set') || params.get('set');
+    const models = params.get('models');
+    const topK = params.get('top_k') || params.get('topk') || params.get('limit');
+    const kValues = params.get('k_values') || params.get('k');
+    const shouldRun = params.get('run') === '1' || params.get('run') === 'true';
+
+    if (query && evalQuery) {
+        evalQuery.value = query;
+    }
+    if (querySet && evalQuerySet) {
+        const option = evalQuerySet.querySelector(`option[value="${querySet}"]`);
+        if (option) {
+            evalQuerySet.value = querySet;
+        }
+    }
+    if (topK && evalTopk) {
+        evalTopk.value = topK;
+    }
+    if (kValues && evalKValues) {
+        evalKValues.value = kValues;
+    }
+    if (models) {
+        const selected = new Set(models.split(',').map((model) => model.trim()).filter(Boolean));
+        document.querySelectorAll('.model-checkbox').forEach((checkbox) => {
+            checkbox.checked = selected.has(checkbox.value);
+        });
+    }
+    if (shouldRun) {
+        window.setTimeout(runEvaluation, 300);
     }
 }
 

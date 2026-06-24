@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corpus Dashboard - CNIRS</title>
+    <link rel="stylesheet" href="static/css/style.css">
+    <link rel="stylesheet" href="static/css/facet.css">
+</head>
+<body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
+    <div class="container">
+        <header class="header">
+            <h1>CNIRS Corpus Dashboard</h1>
+            <p class="subtitle">Large-corpus readiness, metadata quality, taxonomy facets, and IR pipeline visibility</p>
+            <nav class="nav">
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link">排序診斷</a>
+                <a href="feedback" class="nav-link">回饋分析</a>
+                <a href="corpus" class="nav-link active">語料庫</a>
+                <a href="guide" class="nav-link">導覽</a>
+                <a href="about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <main class="corpus-page">
+            <section id="corpus-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading corpus audit...</p>
+            </section>
+
+            <section id="corpus-error" class="no-results" style="display: none;"></section>
+
+            <section id="corpus-content" style="display: none;">
+                <div id="corpus-summary" class="stats-panel"></div>
+
+                <div class="dashboard-grid">
+                    <article class="dashboard-card dashboard-card-wide">
+                        <div class="dashboard-card-header">
+                            <h2>Demo Readiness</h2>
+                            <span id="readiness-status" class="status-pill"></span>
+                        </div>
+                        <div id="readiness-checks" class="readiness-list"></div>
+                    </article>
+
+                    <article class="dashboard-card">
+                        <h2>Source Distribution</h2>
+                        <div id="source-distribution" class="bar-list"></div>
+                    </article>
+
+                    <article class="dashboard-card">
+                        <h2>Taxonomy Distribution</h2>
+                        <div id="taxonomy-distribution" class="bar-list"></div>
+                    </article>
+
+                    <article class="dashboard-card">
+                        <h2>Date Coverage</h2>
+                        <div id="year-distribution" class="bar-list compact"></div>
+                    </article>
+
+                    <article class="dashboard-card">
+                        <h2>Index Cache</h2>
+                        <div id="index-cache" class="detail-list"></div>
+                    </article>
+
+                    <article class="dashboard-card dashboard-card-wide">
+                        <h2>Metadata Completeness</h2>
+                        <div id="metadata-completeness" class="completeness-grid"></div>
+                    </article>
+
+                    <article class="dashboard-card dashboard-card-wide">
+                        <h2>IR System Flow</h2>
+                        <div id="system-flow" class="flow-diagram"></div>
+                    </article>
+
+                    <article class="dashboard-card dashboard-card-wide">
+                        <div class="dashboard-card-header">
+                            <h2>Topic Explorer</h2>
+                            <span class="status-pill">Lightweight clustering</span>
+                        </div>
+                        <div class="topic-controls">
+                            <input type="text" id="topic-query" placeholder="Query for topic exploration, e.g. 半導體 人工智慧">
+                            <select id="topic-method">
+                                <option value="kmeans">K-means</option>
+                                <option value="hierarchical">HAC</option>
+                            </select>
+                            <input type="number" id="topic-clusters" value="5" min="2" max="12">
+                            <input type="number" id="topic-sample-size" value="120" min="10" max="200">
+                            <button id="run-topic-explorer" class="btn btn-primary">Analyze Topics</button>
+                        </div>
+                        <div id="topic-status" class="explain-muted"></div>
+                        <div id="topic-results" class="topic-results"></div>
+                    </article>
+
+                    <article class="dashboard-card dashboard-card-wide">
+                        <h2>External Data Policy</h2>
+                        <div id="external-sources" class="external-source-list"></div>
+                    </article>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="static/js/corpus.js"></script>
+</body>
+</html>

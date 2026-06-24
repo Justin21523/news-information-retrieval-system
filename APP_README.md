@@ -2,7 +2,7 @@
 
 ## 資訊檢索系統 Web 應用程式
 
-這是一個基於 Flask 的資訊檢索系統展示應用程式，整合了多種 IR 技術來檢索和分析中央社（CNA）新聞文章。
+這是一個基於 Flask 的資訊檢索系統展示應用程式，整合多種 IR 技術來檢索和分析統一新聞語料庫。最新操作流程請以 [README.md](README.md) 的 Portfolio News Search Demo 與 `/guide` 頁面為準；本文件保留 Web App 功能摘要。
 
 ## 功能特色 Features
 
@@ -20,6 +20,11 @@
 - TF-IDF 權重計算
 - 餘弦相似度排序
 - 相關性評分展示
+
+### 2.5 排序模型 Ranking Models
+- BM25 / TF-IDF / Hybrid RRF / Language Model
+- BIM / WAND BM25 / MaxScore BM25
+- 統一 result schema、component scores、field boosts、ranking explanation
 
 **範例查詢**:
 - `人工智慧發展`
@@ -41,6 +46,13 @@
 - **K-means**: Flat Clustering
 - 自動文檔組織
 
+### 6. Demo Guide / Evaluation / Feedback
+- `/guide`: 操作導覽與 IR pipeline 視覺化
+- `/compare`: 多模型排名比較
+- `/evaluation`: Demo qrels 指標與 PR curves
+- `/diagnostics`: BM25、TF-IDF、LM、Hybrid 排名診斷
+- `/feedback`: Click/relevance feedback analytics 與 weak-supervision LTR sandbox
+
 ## 系統架構 Architecture
 
 ```
@@ -59,7 +71,7 @@ Flask Web Application
 │   ├── Font Awesome Icons
 │   └── Responsive Design
 └── Dataset
-    └── 121 CNA news articles (data/processed/cna_mvp_cleaned.jsonl)
+    └── data/processed/unified_news_corpus.jsonl or configured IR_DATASET_PATH
 ```
 
 ## 安裝與執行 Installation & Running
@@ -71,10 +83,10 @@ pip install flask flask-cors
 
 ### 2. 確認資料集存在
 ```bash
-ls data/processed/cna_mvp_cleaned.jsonl
+ls data/processed/unified_news_corpus.jsonl
 ```
 
-應包含 121 篇中央社新聞文章。
+若沒有大型語料，系統會使用 `datasets/mini/` fallback fixture 啟動。
 
 ### 3. 啟動應用程式
 ```bash
@@ -83,6 +95,12 @@ python app.py
 
 ### 4. 開啟瀏覽器
 訪問: **http://localhost:5001**
+
+建議從 **http://localhost:5001/guide** 開始，或直接打開：
+
+```text
+http://localhost:5001/?q=半導體%20人工智慧&model=hybrid&run=1
+```
 
 ## API 端點 API Endpoints
 
@@ -345,12 +363,12 @@ python app.py
 ```
 
 ### 問題 3: 資料集不存在
-**錯誤訊息**: `FileNotFoundError: data/processed/cna_mvp_cleaned.jsonl`
+**錯誤訊息**: `FileNotFoundError: /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl`
 
 **解決方法**:
 ```bash
 # 檢查資料集是否存在
-ls data/processed/cna_mvp_cleaned.jsonl
+ls /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl
 
 # 如果不存在，執行資料清理
 python scripts/data/clean_dataset.py
@@ -379,8 +397,8 @@ python scripts/data/clean_dataset.py
 ## 相關文件 Related Documents
 
 - [專案路線圖](docs/PROJECT_ROADMAP.md) - 完整開發計畫
-- [模組測試報告](data/test_results/module_test_results_final.txt) - 測試結果
-- [資料集統計](data/stats/cna_mvp_stats.txt) - 資料分析
+- [模組測試報告](/mnt/c/data/information-retrieval/test_results/module_test_results_final.txt) - 測試結果
+- [資料集統計](/mnt/c/data/information-retrieval/stats/cna_mvp_stats.txt) - 資料分析
 - [CHANGELOG](docs/CHANGELOG.md) - 變更記錄
 
 ## 授權 License

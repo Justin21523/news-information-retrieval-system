@@ -16,6 +16,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "assets" / "evaluation"
+VIEWPORT = {"width": 1440, "height": 1100}
 
 
 def wait_for_server(base_url: str, timeout: float = 180.0) -> None:
@@ -73,9 +74,9 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
-            viewport={"width": 1440, "height": 1100},
+            viewport=VIEWPORT,
             record_video_dir=str(video_dir),
-            record_video_size={"width": 1440, "height": 1100},
+            record_video_size=VIEWPORT,
         )
         page = context.new_page()
         page.set_default_timeout(45000)
@@ -84,82 +85,91 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.wait_for_selector(".guide-page", timeout=45000)
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-guide.png", full_page=True)
-        page.screenshot(path=asset_dir / "demo-assistant-guide.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-guide.png")
+        capture_viewport(page, asset_dir / "demo-assistant-guide.png")
 
         page.goto(f"{base_url}/?q=半導體%20人工智慧&model=hybrid&run=1&tour=1&step=search", wait_until="networkidle")
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector(".search-box.demo-assistant-highlight", timeout=45000)
         page.wait_for_selector(".result-item, .results-list", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-assistant-search.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-search.png")
 
         page.goto(f"{base_url}/?q=台灣%20經濟&model=bm25&taxonomy_topic=business&run=1&tour=1&step=facets", wait_until="networkidle")
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector("#filter-sidebar.demo-assistant-highlight", timeout=45000)
         page.wait_for_selector(".result-item, .results-list", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-assistant-facets.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-facets.png")
 
         page.goto(f"{base_url}/", wait_until="networkidle")
         fill_search(page, "半導體")
         seed_feedback(page)
-        page.screenshot(path=asset_dir / "search-results.png", full_page=True)
+        capture_viewport(page, asset_dir / "search-results.png")
+        capture_scroll_sequence(page, asset_dir, "search-results", steps=2)
 
         run_facet_browse(page)
-        page.screenshot(path=asset_dir / "facet-browse.png", full_page=True)
+        capture_viewport(page, asset_dir / "facet-browse.png")
+        capture_scroll_sequence(page, asset_dir, "facet-browse", steps=2)
 
         open_document_detail(page)
-        page.screenshot(path=asset_dir / "document-detail.png", full_page=True)
+        capture_viewport(page, asset_dir / "document-detail.png")
+        capture_scroll_sequence(page, asset_dir, "document-detail", steps=2)
 
         page.goto(f"{base_url}/compare", wait_until="networkidle")
         fill_compare(page, "人工智慧")
-        page.screenshot(path=asset_dir / "model-compare.png", full_page=True)
+        capture_viewport(page, asset_dir / "model-compare.png")
+        capture_scroll_sequence(page, asset_dir, "model-compare", steps=2)
 
         page.goto(f"{base_url}/compare?q=美國%20中國&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1&tour=1&step=compare", wait_until="networkidle")
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector("#comparison-container .model-results", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-assistant-compare.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-compare.png")
 
         page.goto(f"{base_url}/corpus", wait_until="networkidle")
         page.wait_for_selector("#corpus-content", state="visible", timeout=45000)
-        page.screenshot(path=asset_dir / "corpus-dashboard.png", full_page=True)
+        capture_viewport(page, asset_dir / "corpus-dashboard.png")
+        capture_scroll_sequence(page, asset_dir, "corpus-dashboard", steps=2)
         run_topic_explorer(page)
-        page.screenshot(path=asset_dir / "topic-explorer.png", full_page=True)
+        capture_viewport(page, asset_dir / "topic-explorer.png")
+        capture_scroll_sequence(page, asset_dir, "topic-explorer", steps=2)
 
         page.goto(f"{base_url}/corpus?tour=1&step=topics&topic_query=半導體%20人工智慧&run_topic=1", wait_until="networkidle")
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector(".topic-card", timeout=60000)
-        page.screenshot(path=asset_dir / "demo-assistant-corpus.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-corpus.png")
 
         page.goto(f"{base_url}/evaluation", wait_until="networkidle")
         run_evaluation(page)
-        page.screenshot(path=asset_dir / "evaluation-dashboard.png", full_page=True)
+        capture_viewport(page, asset_dir / "evaluation-dashboard.png")
+        capture_scroll_sequence(page, asset_dir, "evaluation-dashboard", steps=3)
 
         page.goto(f"{base_url}/diagnostics", wait_until="networkidle")
         run_diagnostics(page)
-        page.screenshot(path=asset_dir / "ranking-diagnostics.png", full_page=True)
+        capture_viewport(page, asset_dir / "ranking-diagnostics.png")
+        capture_scroll_sequence(page, asset_dir, "ranking-diagnostics", steps=2)
 
         page.goto(f"{base_url}/analysis-graph?query=information%20retrieval&models=bm25,tfidf,hybrid,lm&top_k=6", wait_until="networkidle")
         run_analysis_graph(page)
-        page.screenshot(path=asset_dir / "analysis-graph.png", full_page=True)
+        capture_viewport(page, asset_dir / "analysis-graph.png")
 
         page.goto(f"{base_url}/analysis-graph?query=台灣%20經濟&models=bm25,tfidf,hybrid,lm&top_k=6&tour=1&step=analysis", wait_until="networkidle")
         run_analysis_graph(page)
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-assistant-analysis-graph.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-analysis-graph.png")
 
         page.goto(f"{base_url}/feedback", wait_until="networkidle")
         run_feedback_dashboard(page)
-        page.screenshot(path=asset_dir / "feedback-analytics.png", full_page=True)
+        capture_viewport(page, asset_dir / "feedback-analytics.png")
+        capture_scroll_sequence(page, asset_dir, "feedback-analytics", steps=3)
 
         page.goto(f"{base_url}/guide?tour=1&step=wrap", wait_until="networkidle")
         page.wait_for_selector("#demo-assistant-app", timeout=45000)
         page.wait_for_selector("#demo-assistant-coach", timeout=45000)
-        page.screenshot(path=asset_dir / "demo-assistant-wrap.png", full_page=True)
+        capture_viewport(page, asset_dir / "demo-assistant-wrap.png")
 
         page.close()
         context.close()
@@ -174,6 +184,46 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
     for leftover in video_dir.glob("*"):
         leftover.unlink(missing_ok=True)
     video_dir.rmdir()
+
+
+def capture_viewport(page, path: Path) -> None:
+    """Capture only the visible browser viewport.
+
+    Complexity:
+        Time: O(viewport pixels)
+        Space: O(viewport pixels)
+    """
+    page.screenshot(path=path, full_page=False)
+
+
+def capture_scroll_sequence(page, asset_dir: Path, stem: str, steps: int = 2) -> None:
+    """Capture long pages as multiple viewport-sized scroll positions.
+
+    Complexity:
+        Time: O(steps * viewport pixels)
+        Space: O(viewport pixels)
+    """
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(250)
+    dimensions = page.evaluate(
+        """() => ({
+            height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+            viewport: window.innerHeight
+        })"""
+    )
+    scrollable = max(0, int(dimensions["height"]) - int(dimensions["viewport"]))
+    if scrollable <= int(dimensions["viewport"]) * 0.35:
+        return
+
+    for index in range(2, steps + 2):
+        ratio = (index - 1) / steps
+        y = int(scrollable * ratio)
+        page.evaluate("(scrollY) => window.scrollTo(0, scrollY)", y)
+        page.wait_for_timeout(350)
+        capture_viewport(page, asset_dir / f"{stem}-scroll-{index:02d}.png")
+
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(200)
 
 
 def fill_search(page, query: str) -> None:

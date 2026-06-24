@@ -42,7 +42,8 @@ Direct demo links:
 
 ### Demo Media
 
-The UI verification script writes screenshots and a short browser recording to `docs/assets/evaluation/`:
+The UI verification script writes viewport-sized screenshots and a short browser recording to `docs/assets/evaluation/`.
+Long pages are captured as multiple scroll positions instead of one tall full-page image, so each artifact stays readable in a normal browser window.
 
 ```bash
 python scripts/verify_ui_playwright.py
@@ -60,14 +61,30 @@ Artifacts:
 - [Demo Assistant Analysis Graph](docs/assets/evaluation/demo-assistant-analysis-graph.png)
 - [Demo Assistant Wrap-up](docs/assets/evaluation/demo-assistant-wrap.png)
 - [Document Detail](docs/assets/evaluation/document-detail.png)
+- [Document Detail Scroll 2](docs/assets/evaluation/document-detail-scroll-02.png)
+- [Document Detail Scroll 3](docs/assets/evaluation/document-detail-scroll-03.png)
 - [Facet Browse](docs/assets/evaluation/facet-browse.png)
+- [Facet Browse Scroll 2](docs/assets/evaluation/facet-browse-scroll-02.png)
+- [Facet Browse Scroll 3](docs/assets/evaluation/facet-browse-scroll-03.png)
 - [Model Comparison](docs/assets/evaluation/model-compare.png)
+- [Model Comparison Scroll 2](docs/assets/evaluation/model-compare-scroll-02.png)
+- [Model Comparison Scroll 3](docs/assets/evaluation/model-compare-scroll-03.png)
 - [Corpus Dashboard](docs/assets/evaluation/corpus-dashboard.png)
+- [Corpus Dashboard Scroll 2](docs/assets/evaluation/corpus-dashboard-scroll-02.png)
+- [Corpus Dashboard Scroll 3](docs/assets/evaluation/corpus-dashboard-scroll-03.png)
 - [Corpus Topic Explorer](docs/assets/evaluation/topic-explorer.png)
 - [Evaluation Dashboard](docs/assets/evaluation/evaluation-dashboard.png)
+- [Evaluation Dashboard Scroll 2](docs/assets/evaluation/evaluation-dashboard-scroll-02.png)
+- [Evaluation Dashboard Scroll 3](docs/assets/evaluation/evaluation-dashboard-scroll-03.png)
+- [Evaluation Dashboard Scroll 4](docs/assets/evaluation/evaluation-dashboard-scroll-04.png)
 - [Ranking Diagnostics](docs/assets/evaluation/ranking-diagnostics.png)
+- [Ranking Diagnostics Scroll 2](docs/assets/evaluation/ranking-diagnostics-scroll-02.png)
+- [Ranking Diagnostics Scroll 3](docs/assets/evaluation/ranking-diagnostics-scroll-03.png)
 - [Analysis Graph](docs/assets/evaluation/analysis-graph.png)
 - [Feedback Analytics](docs/assets/evaluation/feedback-analytics.png)
+- [Feedback Analytics Scroll 2](docs/assets/evaluation/feedback-analytics-scroll-02.png)
+- [Feedback Analytics Scroll 3](docs/assets/evaluation/feedback-analytics-scroll-03.png)
+- [Feedback Analytics Scroll 4](docs/assets/evaluation/feedback-analytics-scroll-04.png)
 - [Demo Video](docs/assets/evaluation/cnirs-demo.webm)
 
 ### Runtime Configuration

@@ -82,6 +82,7 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
 
         page.goto(f"{base_url}/", wait_until="networkidle")
         fill_search(page, "半導體")
+        seed_feedback(page)
         page.screenshot(path=asset_dir / "search-results.png", full_page=True)
 
         open_document_detail(page)
@@ -98,6 +99,10 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.goto(f"{base_url}/diagnostics", wait_until="networkidle")
         run_diagnostics(page)
         page.screenshot(path=asset_dir / "ranking-diagnostics.png", full_page=True)
+
+        page.goto(f"{base_url}/feedback", wait_until="networkidle")
+        run_feedback_dashboard(page)
+        page.screenshot(path=asset_dir / "feedback-analytics.png", full_page=True)
 
         page.close()
         context.close()
@@ -153,6 +158,39 @@ def open_document_detail(page) -> None:
             continue
 
 
+def seed_feedback(page) -> None:
+    """Write demo feedback events for analytics screenshots.
+
+    Complexity:
+        Time: O(1)
+        Space: O(1)
+    """
+    page.evaluate(
+        """
+        async () => {
+            const base = {
+                query: '半導體',
+                model: 'hybrid',
+                doc_id: 1,
+                rank: 1,
+                score: 1.0,
+                metadata: { source: 'playwright_demo' }
+            };
+            await fetch('api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-IR-Session': 'playwright-demo' },
+                body: JSON.stringify({ ...base, event_type: 'click' })
+            });
+            await fetch('api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-IR-Session': 'playwright-demo' },
+                body: JSON.stringify({ ...base, event_type: 'relevance', relevance_grade: 3 })
+            });
+        }
+        """
+    )
+
+
 def fill_compare(page, query: str) -> None:
     """Run the model comparison flow.
 
@@ -194,6 +232,17 @@ def run_diagnostics(page) -> None:
     page.locator("#diag-doc-id").fill("1")
     page.locator("#run-diagnostics-btn").click()
     page.wait_for_selector(".diagnostics-card", timeout=45000)
+
+
+def run_feedback_dashboard(page) -> None:
+    """Load the feedback analytics dashboard.
+
+    Complexity:
+        Time: O(request)
+        Space: O(1)
+    """
+    page.wait_for_selector(".feedback-dashboard", timeout=45000)
+    page.wait_for_selector(".feedback-summary-card", timeout=45000)
 
 
 def parse_args() -> argparse.Namespace:

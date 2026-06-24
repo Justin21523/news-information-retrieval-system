@@ -522,6 +522,67 @@ def test_feedback_api_records_click_and_stats(tmp_path):
     assert stats["data"]["stats"]["total_clicks"] >= 1
 
 
+def test_feedback_analytics_endpoint_summarizes_search_and_feedback(tmp_path):
+    """Feedback analytics aggregates search logs, CTR, and zero-result queries."""
+    client = make_test_app(tmp_path).test_client()
+
+    client.post("/api/search", json={"query": "information retrieval", "model": "bm25"})
+    client.post("/api/search", json={"query": "ai", "model": "bm25"})
+    client.post(
+        "/api/feedback",
+        json={
+            "event_type": "click",
+            "query": "information retrieval",
+            "model": "bm25",
+            "doc_id": 0,
+            "rank": 1,
+            "score": 1.0,
+        },
+    )
+    response = client.get("/api/feedback/analytics?days=365&limit=10")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    summary = payload["data"]["summary"]
+    assert summary["total_searches"] >= 2
+    assert summary["total_clicks"] >= 1
+    assert summary["ctr"] > 0
+    assert any(item["query"] == "ai" for item in payload["data"]["zero_result_queries"])
+    assert payload["data"]["model_metrics"]
+
+
+def test_feedback_features_endpoint_exports_ltr_rows(tmp_path):
+    """LTR feature preview joins feedback rows with document metadata and diagnostics."""
+    client = make_test_app(tmp_path).test_client()
+
+    client.post(
+        "/api/feedback",
+        json={
+            "event_type": "relevance",
+            "query": "information retrieval",
+            "model": "bm25",
+            "doc_id": 0,
+            "rank": 1,
+            "score": 1.0,
+            "relevance_grade": 3,
+        },
+    )
+    response = client.get("/api/feedback/features?limit=10")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["feature_set"] == "feedback_ltr_v1"
+    assert payload["data"]["rows"]
+    row = payload["data"]["rows"][0]
+    assert row["query"] == "information retrieval"
+    assert row["label"] == 1.0
+    assert "field_boost" in row["features"]
+    assert "bm25_score" in row["features"]
+    assert row["metadata"]["title"]
+
+
 def test_feedback_api_validates_relevance_grade(tmp_path):
     """Invalid relevance feedback returns a structured error."""
     client = make_test_app(tmp_path).test_client()
@@ -557,6 +618,9 @@ def test_ranking_diagnostics_endpoint_returns_term_breakdown(tmp_path):
     assert data["query_terms"]
     assert data["document"]["doc_id"] == 0
     assert set(data["models"]) == {"bm25", "tfidf", "lm"}
+    assert data["query_coverage"]["coverage_ratio"] >= 0
+    assert "title" in data["field_contributions"]["fields"]
+    assert data["field_match_matrix"]
     assert data["models"]["bm25"]["terms"]
     assert data["models"]["tfidf"]["terms"]
     assert data["models"]["lm"]["terms"]

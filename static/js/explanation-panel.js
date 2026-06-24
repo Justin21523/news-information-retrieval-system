@@ -16,6 +16,10 @@
         return number.toFixed(4);
     }
 
+    function formatPercent(value) {
+        return `${(Number(value || 0) * 100).toFixed(1)}%`;
+    }
+
     function chip(label, value, className = '') {
         if (value === undefined || value === null || value === '') return '';
         return `<span class="explain-chip ${className}"><strong>${escapeHtml(label)}</strong>${escapeHtml(value)}</span>`;
@@ -162,7 +166,11 @@
     function renderDiagnostics(data) {
         const models = Object.entries(data.models || {});
         if (!models.length) return '<span class="explain-muted">No diagnostics available</span>';
-        return models.map(([model, info]) => `
+        return `
+            ${renderCoverage(data.query_coverage || {})}
+            ${renderFieldContributions(data.field_contributions || {})}
+            ${renderFieldMatrix(data.field_match_matrix || [])}
+            ${models.map(([model, info]) => `
             <div class="diagnostic-model">
                 <div class="diagnostic-model-title">${escapeHtml(model.toUpperCase())} ${chip('total', formatScore(info.total_score || 0), 'score-chip')}</div>
                 ${renderDiagnosticTerms(info.terms || [])}
@@ -171,7 +179,58 @@
                     ${renderDiagnosticTerms(component.terms || [])}
                 `).join('') : ''}
             </div>
-        `).join('');
+            `).join('')}
+        `;
+    }
+
+    function renderCoverage(coverage) {
+        return `
+            <div class="diagnostic-model">
+                <div class="diagnostic-model-title">Field-Aware Signals ${chip('coverage', formatPercent(coverage.coverage_ratio || 0), 'score-chip')}</div>
+                <div class="explain-chip-row">
+                    ${chip('matched', (coverage.matched_terms || []).join(', ') || '-', 'feature-chip')}
+                    ${chip('missing', (coverage.missing_terms || []).join(', ') || '-', 'feature-chip')}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderFieldContributions(fieldContributions) {
+        const fields = fieldContributions.fields || {};
+        if (!Object.keys(fields).length) return '';
+        return `
+            <table class="diagnostic-table">
+                <thead><tr><th>Field</th><th>Weight</th><th>Matches</th><th>Boost</th></tr></thead>
+                <tbody>
+                    ${Object.entries(fields).map(([field, info]) => `
+                        <tr>
+                            <td>${escapeHtml(field)}</td>
+                            <td>${formatScore(info.weight)}</td>
+                            <td>${escapeHtml((info.matched_terms || []).join(', ') || '-')}</td>
+                            <td>${formatScore(info.boost)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    function renderFieldMatrix(rows) {
+        if (!rows.length) return '';
+        const fields = ['title', 'tags', 'category', 'content'];
+        return `
+            <table class="diagnostic-table field-heatmap">
+                <thead><tr><th>Term</th>${fields.map(field => `<th>${escapeHtml(field)}</th>`).join('')}</tr></thead>
+                <tbody>
+                    ${rows.map(row => `
+                        <tr>
+                            <td>${escapeHtml(row.term)}</td>
+                            ${fields.map(field => `<td class="${row[field] ? 'heat-on' : 'heat-off'}">${row[field] ? 'match' : '-'}</td>`).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
     }
 
     function renderDiagnosticTerms(terms) {
@@ -292,6 +351,7 @@
     window.ExplanationPanel = {
         escapeHtml,
         formatScore,
+        formatPercent,
         renderResultPanel,
         renderDocumentPanel,
         renderRelatedReason,

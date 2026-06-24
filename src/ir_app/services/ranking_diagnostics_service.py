@@ -42,6 +42,7 @@ class RankingDiagnosticsService:
         model_ids = self._models(models)
         internal_doc_id = int(doc["doc_id"])
         query_terms = self.search_service.index.tokenize(query)
+        field_contributions = self._field_contributions(doc, query_terms)
         diagnostics = {}
         for model in model_ids:
             if model == "bm25":
@@ -56,6 +57,9 @@ class RankingDiagnosticsService:
             "query": query,
             "query_terms": query_terms,
             "document": self.document_service.to_api_document(doc),
+            "query_coverage": self._query_coverage(field_contributions, query_terms),
+            "field_contributions": field_contributions,
+            "field_match_matrix": self._field_match_matrix(field_contributions, query_terms),
             "models": diagnostics,
         }
 
@@ -181,4 +185,83 @@ class RankingDiagnosticsService:
                 row["score"] = row["log_prob"]
             rows.append(row)
         rows.sort(key=lambda item: abs(float(item.get("score", 0.0))), reverse=True)
+        return rows
+
+    def _field_contributions(
+        self,
+        doc: dict[str, Any],
+        query_terms: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Return field-aware match and boost diagnostics.
+
+        Complexity:
+            Time: O(f * q)
+            Space: O(f * q)
+        """
+        doc_key = str(doc["doc_id"])
+        raw_boost = self.search_service._field_boost(doc_key, query_terms)
+        weights = {
+            "title": 0.45,
+            "tags": 0.25,
+            "category": 0.18,
+            "content": 0.06,
+        }
+        fields: dict[str, dict[str, Any]] = {}
+        for field, weight in weights.items():
+            matched_terms = list(dict.fromkeys(raw_boost.get(field, [])))
+            fields[field] = {
+                "weight": weight,
+                "matched_terms": matched_terms,
+                "match_count": len(matched_terms),
+                "boost": round(weight * min(len(matched_terms), 3), 6),
+            }
+        return {
+            "total_boost": float(raw_boost.get("boost", 0.0)),
+            "fields": fields,
+        }
+
+    def _query_coverage(
+        self,
+        field_contributions: dict[str, Any],
+        query_terms: list[str],
+    ) -> dict[str, Any]:
+        """Return query term coverage across ranked fields.
+
+        Complexity:
+            Time: O(f * q)
+            Space: O(q)
+        """
+        matched: set[str] = set()
+        for field in field_contributions.get("fields", {}).values():
+            matched.update(field.get("matched_terms", []))
+        unique_terms = list(dict.fromkeys(query_terms))
+        missing = [term for term in unique_terms if term not in matched]
+        return {
+            "matched_terms": [term for term in unique_terms if term in matched],
+            "missing_terms": missing,
+            "coverage_ratio": round(
+                (len(unique_terms) - len(missing)) / len(unique_terms), 6
+            )
+            if unique_terms
+            else 0.0,
+        }
+
+    def _field_match_matrix(
+        self,
+        field_contributions: dict[str, Any],
+        query_terms: list[str],
+    ) -> list[dict[str, Any]]:
+        """Return query-term by field match matrix.
+
+        Complexity:
+            Time: O(f * q)
+            Space: O(f * q)
+        """
+        fields = field_contributions.get("fields", {})
+        rows = []
+        for term in list(dict.fromkeys(query_terms)):
+            row = {"term": term}
+            for field, values in fields.items():
+                row[field] = term in values.get("matched_terms", [])
+            rows.append(row)
         return rows

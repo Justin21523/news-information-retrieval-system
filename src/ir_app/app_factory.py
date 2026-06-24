@@ -21,8 +21,10 @@ from src.ir_app.services import (
     EvaluationCacheService,
     EvaluationJobService,
     EvaluationService,
+    FeedbackAnalyticsService,
     FeedbackService,
     FeatureUnavailableError,
+    LearningToRankFeatureService,
     RankingDiagnosticsService,
     RetrievalOrchestrator,
     SearchLogService,
@@ -61,8 +63,15 @@ def create_app(settings: Settings | None = None) -> Flask:
     evaluation_job_service = EvaluationJobService(evaluation_service)
     search_log_service = SearchLogService(settings.project_root)
     feedback_service = FeedbackService(settings.project_root)
+    feedback_analytics_service = FeedbackAnalyticsService(feedback_service)
     ranking_diagnostics_service = RankingDiagnosticsService(
         document_service, search_service
+    )
+    ltr_feature_service = LearningToRankFeatureService(
+        feedback_service,
+        document_service,
+        search_service,
+        ranking_diagnostics_service,
     )
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
@@ -73,7 +82,9 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.config["EVALUATION_JOB_SERVICE"] = evaluation_job_service
     app.config["SEARCH_LOG_SERVICE"] = search_log_service
     app.config["FEEDBACK_SERVICE"] = feedback_service
+    app.config["FEEDBACK_ANALYTICS_SERVICE"] = feedback_analytics_service
     app.config["RANKING_DIAGNOSTICS_SERVICE"] = ranking_diagnostics_service
+    app.config["LTR_FEATURE_SERVICE"] = ltr_feature_service
 
     register_page_routes(app, settings)
     register_api_routes(
@@ -86,7 +97,9 @@ def create_app(settings: Settings | None = None) -> Flask:
         evaluation_job_service,
         search_log_service,
         feedback_service,
+        feedback_analytics_service,
         ranking_diagnostics_service,
+        ltr_feature_service,
     )
     return app
 
@@ -131,6 +144,10 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def diagnostics_page():
         return render_if_exists("diagnostics.html")
 
+    @app.route("/feedback")
+    def feedback_page():
+        return render_if_exists("feedback.html")
+
     @app.route("/pat_tree")
     def pat_tree_page():
         return render_if_exists("pat_tree.html")
@@ -146,7 +163,9 @@ def register_api_routes(
     evaluation_job_service: EvaluationJobService,
     search_log_service: SearchLogService,
     feedback_service: FeedbackService,
+    feedback_analytics_service: FeedbackAnalyticsService,
     ranking_diagnostics_service: RankingDiagnosticsService,
+    ltr_feature_service: LearningToRankFeatureService,
 ) -> None:
     """Register API routes.
 
@@ -486,6 +505,19 @@ def register_api_routes(
     def feedback_stats():
         data = {"stats": feedback_service.stats()}
         return api_success(data, stats=data["stats"])
+
+    @app.get("/api/feedback/analytics")
+    def feedback_analytics():
+        days = request.args.get("days", 30)
+        limit = request.args.get("limit", 20)
+        data = feedback_analytics_service.analytics(int(days), int(limit))
+        return api_success(data, **data)
+
+    @app.get("/api/feedback/features")
+    def feedback_features():
+        limit = request.args.get("limit", 200)
+        data = ltr_feature_service.features(int(limit))
+        return api_success(data, **data)
 
     @app.post("/api/diagnostics/ranking")
     def ranking_diagnostics():

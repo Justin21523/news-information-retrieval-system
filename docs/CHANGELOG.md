@@ -8,6 +8,17 @@
 ---
 
 ## [Unreleased]
+### [2026-06-24] Feedback Analytics 與 LTR Feature Foundation
+
+#### ✨ 新增
+- 新增 `/feedback` dashboard，展示 CTR、zero-result queries、model metrics、relevance labels 與 recent feedback。
+- 新增 `/api/feedback/analytics` 與 `/api/feedback/features`。
+- 新增 `scripts/export_ltr_features.py`，可由 SQLite feedback/search logs 匯出 LTR JSONL feature rows。
+- Ranking diagnostics 新增 query coverage、field contributions 與 field match heatmap。
+
+#### 🧪 測試
+- 新增 feedback analytics、LTR feature preview、ranking diagnostics field signals 測試。
+
 ### [2026-06-24] Async Evaluation、Feedback API 與 Ranking Diagnostics
 
 #### ✨ 新增

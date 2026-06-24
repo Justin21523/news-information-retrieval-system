@@ -67,7 +67,62 @@ function renderDiagnostics(data) {
                 <span class="explain-chip"><strong>query terms</strong>${escapeHtml((data.query_terms || []).join(', '))}</span>
             </div>
         </section>
+        <section class="diagnostics-card">
+            <h3>Field-Aware Ranking Signals</h3>
+            ${renderCoverage(data.query_coverage || {})}
+            ${renderFieldContributions(data.field_contributions || {})}
+            ${renderFieldMatrix(data.field_match_matrix || [])}
+        </section>
         <div class="diagnostics-card-grid">${modelCards}</div>
+    `;
+}
+
+function renderCoverage(coverage) {
+    return `
+        <div class="explain-chip-row">
+            <span class="explain-chip score-chip"><strong>coverage</strong>${formatPercent(coverage.coverage_ratio || 0)}</span>
+            <span class="explain-chip"><strong>matched</strong>${escapeHtml((coverage.matched_terms || []).join(', ') || '-')}</span>
+            <span class="explain-chip"><strong>missing</strong>${escapeHtml((coverage.missing_terms || []).join(', ') || '-')}</span>
+        </div>
+    `;
+}
+
+function renderFieldContributions(fieldContributions) {
+    const fields = fieldContributions.fields || {};
+    if (!Object.keys(fields).length) return '<p class="explain-muted">No field contributions.</p>';
+    return `
+        <table class="diagnostic-table">
+            <thead><tr><th>Field</th><th>Weight</th><th>Matches</th><th>Boost</th></tr></thead>
+            <tbody>
+                ${Object.entries(fields).map(([field, info]) => `
+                    <tr>
+                        <td>${escapeHtml(field)}</td>
+                        <td>${formatScore(info.weight)}</td>
+                        <td>${escapeHtml((info.matched_terms || []).join(', ') || '-')}</td>
+                        <td>${formatScore(info.boost)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderFieldMatrix(rows) {
+    if (!rows.length) return '';
+    const fields = ['title', 'tags', 'category', 'content'];
+    return `
+        <h4>Field Match Heatmap</h4>
+        <table class="diagnostic-table field-heatmap">
+            <thead><tr><th>Term</th>${fields.map(field => `<th>${escapeHtml(field)}</th>`).join('')}</tr></thead>
+            <tbody>
+                ${rows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row.term)}</td>
+                        ${fields.map(field => `<td class="${row[field] ? 'heat-on' : 'heat-off'}">${row[field] ? 'match' : '-'}</td>`).join('')}
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
     `;
 }
 
@@ -109,6 +164,10 @@ function getIrSessionId() {
 function formatScore(value) {
     const number = Number(value || 0);
     return Number.isFinite(number) ? number.toFixed(4) : '0.0000';
+}
+
+function formatPercent(value) {
+    return `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
 function escapeHtml(value) {

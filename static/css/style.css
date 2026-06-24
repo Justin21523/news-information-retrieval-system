@@ -499,6 +499,16 @@ body {
     font-weight: 700;
 }
 
+.diagnostic-table .heat-on {
+    background: #dcfce7;
+    color: #166534;
+    font-weight: 700;
+}
+
+.diagnostic-table .heat-off {
+    color: var(--text-secondary);
+}
+
 .diagnostics-page-results {
     margin-top: 24px;
 }
@@ -534,6 +544,131 @@ body {
     display: grid;
     gap: 18px;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.feedback-control-panel {
+    align-items: flex-end;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.feedback-dashboard {
+    display: grid;
+    gap: 20px;
+}
+
+.feedback-empty-state {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    color: #9a3412;
+    padding: 16px 18px;
+}
+
+.feedback-summary-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.feedback-summary-card,
+.feedback-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.feedback-summary-card {
+    padding: 16px;
+}
+
+.feedback-summary-card span {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.86rem;
+    margin-bottom: 8px;
+}
+
+.feedback-summary-card strong {
+    color: var(--text-primary);
+    display: block;
+    font-size: 1.55rem;
+}
+
+.feedback-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.feedback-card {
+    overflow-x: auto;
+    padding: 18px;
+}
+
+.feedback-card h2 {
+    color: var(--text-primary);
+    font-size: 1.05rem;
+    margin: 0 0 14px;
+}
+
+.feedback-card-wide {
+    grid-column: 1 / -1;
+}
+
+.feedback-list {
+    display: grid;
+    gap: 10px;
+}
+
+.feedback-list-item {
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 0;
+}
+
+.feedback-list-item strong {
+    color: var(--text-primary);
+}
+
+.feedback-list-item span {
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.relevance-bars {
+    display: grid;
+    gap: 10px;
+}
+
+.relevance-bar-row {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 70px 1fr 42px;
+}
+
+.relevance-bar {
+    background: #e2e8f0;
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+}
+
+.relevance-bar i {
+    background: #2563eb;
+    display: block;
+    height: 100%;
 }
 
 .explain-chip {

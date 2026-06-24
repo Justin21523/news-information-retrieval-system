@@ -436,6 +436,106 @@ body {
     gap: 6px;
 }
 
+.btn-mini {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 10px;
+}
+
+.btn-mini:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.feedback-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.diagnostics-output {
+    margin-top: 10px;
+}
+
+.diagnostic-model {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 10px;
+    padding: 10px;
+}
+
+.diagnostic-model-title,
+.diagnostic-submodel {
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.diagnostic-submodel {
+    color: var(--text-secondary);
+    margin-top: 12px;
+}
+
+.diagnostic-table {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-top: 8px;
+    width: 100%;
+}
+
+.diagnostic-table th,
+.diagnostic-table td {
+    border-bottom: 1px solid var(--border-color);
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.diagnostic-table th {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.diagnostics-page-results {
+    margin-top: 24px;
+}
+
+#diag-query,
+#diag-doc-id {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    padding: 10px 14px;
+}
+
+#diag-query {
+    margin-bottom: 14px;
+    width: 100%;
+}
+
+#diag-doc-id {
+    min-width: 160px;
+}
+
+.diagnostics-document,
+.diagnostics-card {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+    overflow-x: auto;
+    padding: 18px;
+}
+
+.diagnostics-card-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .explain-chip {
     display: inline-flex;
     align-items: center;

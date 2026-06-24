@@ -9,6 +9,7 @@ from typing import Any
 
 from src.ir.eval.metrics import Metrics
 from src.ir_app.services.document_service import DocumentService
+from src.ir_app.services.evaluation_cache_service import EvaluationCacheService
 from src.ir_app.services.retrieval_orchestrator import RetrievalOrchestrator
 
 
@@ -25,6 +26,7 @@ class EvaluationService:
         document_service: DocumentService,
         retrieval_orchestrator: RetrievalOrchestrator,
         qrels_path: Path | None = None,
+        cache_service: EvaluationCacheService | None = None,
     ):
         self.document_service = document_service
         self.retrieval_orchestrator = retrieval_orchestrator
@@ -35,6 +37,7 @@ class EvaluationService:
             / "evaluation"
             / "demo_qrels.json"
         )
+        self.cache_service = cache_service
         self.metrics = Metrics()
         self._qrels_payload = self._load_qrels()
 
@@ -45,8 +48,18 @@ class EvaluationService:
             Time: O(m * q * search)
             Space: O(m * q * k)
         """
-        started = time.perf_counter()
         payload = payload or {}
+        cache_key = self.cache_key(payload)
+        if self.cache_service and not payload.get("force_refresh"):
+            cached = self.cache_service.get(cache_key)
+            if cached:
+                data = cached["data"]
+                meta = {**cached.get("meta", {}), "cached": True, "cache_key": cache_key}
+                data["cached"] = True
+                data["cache_key"] = cache_key
+                return data, meta
+
+        started = time.perf_counter()
         query_set_id = payload.get("query_set") or self.default_query_set_id()
         query_set = self.query_set(query_set_id)
         query_overrides = payload.get("queries") or None
@@ -167,8 +180,43 @@ class EvaluationService:
                 "dataset_hash": self.document_service.dataset_hash,
                 "qrels_path": str(self.qrels_path),
             },
+            "cached": False,
+            "cache_key": cache_key,
         }
-        return data, {"execution_time": time.perf_counter() - started}
+        meta = {
+            "execution_time": time.perf_counter() - started,
+            "cached": False,
+            "cache_key": cache_key,
+        }
+        if self.cache_service:
+            self.cache_service.set(cache_key, data, meta)
+        return data, meta
+
+    def cache_key(self, payload: dict[str, Any] | None = None) -> str:
+        """Return the cache key for one evaluation payload.
+
+        Complexity:
+            Time: O(n)
+            Space: O(n)
+        """
+        if not self.cache_service:
+            return ""
+        return self.cache_service.make_key(
+            payload or {},
+            self.document_service.dataset_hash,
+            self.qrels_path,
+        )
+
+    def cached_result(self, cache_key: str) -> dict[str, Any] | None:
+        """Return a cached result by key.
+
+        Complexity:
+            Time: O(n)
+            Space: O(n)
+        """
+        if not self.cache_service or not cache_key:
+            return None
+        return self.cache_service.get(cache_key)
 
     def default_query_set_id(self) -> str:
         """Return the best default query set for the loaded corpus.

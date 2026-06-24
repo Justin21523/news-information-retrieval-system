@@ -1,5 +1,7 @@
 """Smoke tests for the Flask IR application layer."""
 
+import time
+
 from src.ir_app import create_app
 from src.ir_app.config import Settings
 from src.ir_app.services.search_log_service import SearchLogService
@@ -442,6 +444,122 @@ def test_evaluate_endpoint_computes_demo_metrics_and_breakdown(tmp_path):
     assert "bm25" in first_query["models"]
     assert first_query["models"]["bm25"]["top_results"]
     assert payload["meta"]["execution_time"] >= 0
+
+
+def test_evaluate_endpoint_uses_cache_on_repeated_request(tmp_path):
+    """Repeated evaluation requests return a cache hit for the same payload."""
+    client = make_test_app(tmp_path).test_client()
+    request_payload = {
+        "query_set": "mini_ir",
+        "models": ["bm25"],
+        "top_k": 5,
+        "k_values": [5],
+    }
+
+    first = client.post("/api/evaluate", json=request_payload).get_json()
+    second = client.post("/api/evaluate", json=request_payload).get_json()
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first["data"]["cache_key"] == second["data"]["cache_key"]
+    assert second["data"]["cached"] is True
+    assert second["meta"]["cached"] is True
+
+
+def test_evaluation_job_endpoint_returns_completed_result(tmp_path):
+    """Async evaluation jobs expose status and final result payloads."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/evaluate/jobs",
+        json={
+            "query_set": "mini_ir",
+            "models": ["bm25"],
+            "top_k": 5,
+            "k_values": [5],
+            "force_refresh": True,
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code in {200, 202}
+    assert payload["ok"] is True
+    job = payload["data"]
+    if job["status"] != "completed":
+        for _ in range(50):
+            poll = client.get(f"/api/evaluate/jobs/{job['job_id']}").get_json()
+            if poll["data"]["status"] == "completed":
+                job = poll["data"]
+                break
+            time.sleep(0.02)
+    assert job["status"] == "completed"
+    assert job["result"]["results"]["bm25"]["available"] is True
+
+
+def test_feedback_api_records_click_and_stats(tmp_path):
+    """Feedback API stores click events and exposes aggregate stats."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/feedback",
+        json={
+            "event_type": "click",
+            "query": "information retrieval",
+            "model": "bm25",
+            "doc_id": 0,
+            "rank": 1,
+            "score": 1.23,
+        },
+        headers={"X-IR-Session": "test-session"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["event_type"] == "click"
+
+    stats = client.get("/api/feedback/stats").get_json()
+    assert stats["data"]["stats"]["total_clicks"] >= 1
+
+
+def test_feedback_api_validates_relevance_grade(tmp_path):
+    """Invalid relevance feedback returns a structured error."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/feedback",
+        json={"event_type": "relevance", "doc_id": 0, "relevance_grade": 5},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "INVALID_FEEDBACK"
+
+
+def test_ranking_diagnostics_endpoint_returns_term_breakdown(tmp_path):
+    """Ranking diagnostics expose BM25, TF-IDF, and LM term contribution rows."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/diagnostics/ranking",
+        json={
+            "query": "information retrieval",
+            "doc_id": 0,
+            "models": ["bm25", "tfidf", "lm"],
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["query_terms"]
+    assert data["document"]["doc_id"] == 0
+    assert set(data["models"]) == {"bm25", "tfidf", "lm"}
+    assert data["models"]["bm25"]["terms"]
+    assert data["models"]["tfidf"]["terms"]
+    assert data["models"]["lm"]["terms"]
 
 
 def test_search_log_service_writes_jsonl_event(tmp_path):

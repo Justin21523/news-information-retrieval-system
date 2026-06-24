@@ -8,6 +8,21 @@
 ---
 
 ## [Unreleased]
+### [2026-06-24] Async Evaluation、Feedback API 與 Ranking Diagnostics
+
+#### ✨ 新增
+- 新增 evaluation disk cache 與 in-process async job API：`/api/evaluate/jobs`、`/api/evaluate/jobs/<job_id>`。
+- 新增 SQLite feedback foundation：`/api/feedback`、`/api/feedback/stats`，支援 click 與 0-3 relevance labels。
+- 新增 ranking diagnostics backend：`/api/diagnostics/ranking`，提供 BM25、TF-IDF、LM term-level contribution。
+- 新增 `/diagnostics` dashboard 與 result explanation panel 內的 lazy-loaded diagnostics/feedback controls。
+
+#### 🔧 改善
+- `/api/evaluate` 先查 cache，同 payload、dataset hash、qrels hash 下可直接回 cached result。
+- Playwright verification 增加 ranking diagnostics screenshot。
+
+#### 🧪 測試
+- 新增 evaluation cache、async job、feedback validation/statistics、ranking diagnostics API 測試。
+
 ### [2026-06-24] Evaluation Dashboard Backend 與 Demo 驗證素材
 
 #### ✨ 新增

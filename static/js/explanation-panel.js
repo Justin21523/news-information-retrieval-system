@@ -78,9 +78,12 @@
         const expanded = explanation.expanded_terms || [];
         const title = options.title || 'Why this result?';
         const open = options.open ? ' open' : '';
+        const query = options.query || '';
+        const docId = result?.doc_id ?? '';
+        const model = result?.model || '';
 
         return `
-            <details class="explain-panel result-explanation"${open}>
+            <details class="explain-panel result-explanation" data-doc-id="${escapeHtml(docId)}" data-query="${escapeHtml(query)}" data-model="${escapeHtml(model)}"${open}>
                 <summary>${escapeHtml(title)}</summary>
                 <div class="explain-section">
                     <div class="explain-section-title">Matched Terms</div>
@@ -107,9 +110,127 @@
                     <div class="explain-section-title">Ranking Features</div>
                     <div class="explain-chip-row">${rankFeatureSummary(features)}</div>
                 </div>
+                <div class="explain-section">
+                    <div class="explain-section-title">Ranking Diagnostics</div>
+                    <button class="btn-mini diagnostics-btn" type="button" onclick="window.ExplanationPanel.loadDiagnostics(this)">Load diagnostics</button>
+                    <div class="diagnostics-output"></div>
+                </div>
+                <div class="explain-section">
+                    <div class="explain-section-title">Feedback</div>
+                    <div class="feedback-controls">
+                        <button class="btn-mini" type="button" onclick="window.ExplanationPanel.sendFeedback(this, 'click')">Track click</button>
+                        <button class="btn-mini" type="button" onclick="window.ExplanationPanel.sendFeedback(this, 'relevance', 3)">Relevant</button>
+                        <button class="btn-mini" type="button" onclick="window.ExplanationPanel.sendFeedback(this, 'relevance', 0)">Not relevant</button>
+                    </div>
+                    <div class="feedback-status explain-muted"></div>
+                </div>
                 ${explanation.relation_reason ? renderRelatedReason(result, { embedded: true }) : ''}
             </details>
         `;
+    }
+
+    async function loadDiagnostics(button) {
+        const panel = button.closest('.explain-panel');
+        const output = panel?.querySelector('.diagnostics-output');
+        if (!panel || !output) return;
+        const query = panel.dataset.query || '';
+        const docId = panel.dataset.docId || '';
+        output.innerHTML = '<span class="explain-muted">Loading diagnostics...</span>';
+        try {
+            const response = await fetch('api/diagnostics/ranking', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-IR-Session': getSessionId()
+                },
+                body: JSON.stringify({
+                    query,
+                    doc_id: docId,
+                    models: ['bm25', 'tfidf', 'lm']
+                })
+            });
+            const payload = await response.json();
+            if (!payload.ok && !payload.success) {
+                throw new Error(payload.error?.message || 'Diagnostics failed');
+            }
+            output.innerHTML = renderDiagnostics(payload.data || payload);
+        } catch (error) {
+            output.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+        }
+    }
+
+    function renderDiagnostics(data) {
+        const models = Object.entries(data.models || {});
+        if (!models.length) return '<span class="explain-muted">No diagnostics available</span>';
+        return models.map(([model, info]) => `
+            <div class="diagnostic-model">
+                <div class="diagnostic-model-title">${escapeHtml(model.toUpperCase())} ${chip('total', formatScore(info.total_score || 0), 'score-chip')}</div>
+                ${renderDiagnosticTerms(info.terms || [])}
+                ${info.components ? Object.entries(info.components).map(([name, component]) => `
+                    <div class="diagnostic-submodel">${escapeHtml(name.toUpperCase())}</div>
+                    ${renderDiagnosticTerms(component.terms || [])}
+                `).join('') : ''}
+            </div>
+        `).join('');
+    }
+
+    function renderDiagnosticTerms(terms) {
+        if (!terms.length) return '<span class="explain-muted">No term contributions</span>';
+        return `
+            <table class="diagnostic-table">
+                <thead><tr><th>Term</th><th>TF</th><th>IDF/P(C)</th><th>Contribution</th></tr></thead>
+                <tbody>
+                    ${terms.slice(0, 8).map(term => `
+                        <tr>
+                            <td>${escapeHtml(term.term)}</td>
+                            <td>${escapeHtml(term.tf ?? 0)}</td>
+                            <td>${escapeHtml(term.idf ?? term.p_collection ?? '')}</td>
+                            <td>${formatScore(term.score ?? term.log_prob ?? 0)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    async function sendFeedback(button, eventType, relevanceGrade = null) {
+        const panel = button.closest('.explain-panel');
+        const status = panel?.querySelector('.feedback-status');
+        if (!panel) return;
+        try {
+            const response = await fetch('api/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-IR-Session': getSessionId()
+                },
+                body: JSON.stringify({
+                    event_type: eventType,
+                    query: panel.dataset.query || '',
+                    model: panel.dataset.model || '',
+                    doc_id: panel.dataset.docId || '',
+                    relevance_grade: relevanceGrade,
+                    metadata: { source: 'explanation_panel' }
+                })
+            });
+            const payload = await response.json();
+            if (!payload.ok && !payload.success) {
+                throw new Error(payload.error?.message || 'Feedback failed');
+            }
+            if (status) status.textContent = 'Feedback saved';
+        } catch (error) {
+            if (status) status.textContent = error.message;
+        }
+    }
+
+    function getSessionId() {
+        const key = 'cnirs_session_id';
+        let value = localStorage.getItem(key);
+        if (!value) {
+            value = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+            localStorage.setItem(key, value);
+        }
+        return value;
     }
 
     function renderDocumentPanel(explanation, taxonomy = {}) {
@@ -175,6 +296,8 @@
         renderDocumentPanel,
         renderRelatedReason,
         renderModelBadge,
+        loadDiagnostics,
+        sendFeedback,
         scoreChips,
     };
 })();

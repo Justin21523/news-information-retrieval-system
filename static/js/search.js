@@ -262,7 +262,7 @@ function displayResults(data) {
         }
 
         const explanationHtml = window.ExplanationPanel
-            ? window.ExplanationPanel.renderResultPanel(result)
+            ? window.ExplanationPanel.renderResultPanel(result, { query: data.query })
             : '';
         const snippetHtml = result.highlighted_snippet || highlightQuery(displayText, data.query);
 

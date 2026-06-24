@@ -177,7 +177,7 @@ function createResultItem(result, query) {
         <div class="model-result-title">${result.rank}. ${highlightQuery(result.title || '', query)}</div>
         <div class="model-result-score">Score: ${formatScore(result.score)}</div>
         <div class="model-result-snippet">${result.highlighted_snippet || escapeHtml(result.snippet || '')}</div>
-        ${window.ExplanationPanel ? window.ExplanationPanel.renderResultPanel(result, { title: 'Why this rank?' }) : ''}
+        ${window.ExplanationPanel ? window.ExplanationPanel.renderResultPanel(result, { title: 'Why this rank?', query }) : ''}
     `;
     item.addEventListener('click', (event) => {
         if (event.target.closest('.explain-panel') || event.target.tagName === 'A' || event.target.tagName === 'BUTTON') {

@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "docs" / "assets" / "evaluation"
 
 
-def wait_for_server(base_url: str, timeout: float = 90.0) -> None:
+def wait_for_server(base_url: str, timeout: float = 180.0) -> None:
     """Wait until the Flask server answers HTTP requests.
 
     Complexity:
@@ -94,6 +94,10 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.goto(f"{base_url}/evaluation", wait_until="networkidle")
         run_evaluation(page)
         page.screenshot(path=asset_dir / "evaluation-dashboard.png", full_page=True)
+
+        page.goto(f"{base_url}/diagnostics", wait_until="networkidle")
+        run_diagnostics(page)
+        page.screenshot(path=asset_dir / "ranking-diagnostics.png", full_page=True)
 
         page.close()
         context.close()
@@ -179,6 +183,19 @@ def run_evaluation(page) -> None:
     page.wait_for_selector("#comparison-table table", timeout=180000)
 
 
+def run_diagnostics(page) -> None:
+    """Run the ranking diagnostics dashboard flow.
+
+    Complexity:
+        Time: O(request)
+        Space: O(1)
+    """
+    page.locator("#diag-query").fill("半導體")
+    page.locator("#diag-doc-id").fill("1")
+    page.locator("#run-diagnostics-btn").click()
+    page.wait_for_selector(".diagnostics-card", timeout=45000)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments.
 
@@ -209,6 +226,17 @@ def main() -> None:
         wait_for_server(args.base_url)
         run_verification(args.base_url.rstrip("/"), args.asset_dir)
         print(f"Artifacts written to {args.asset_dir}")
+    except Exception:
+        if server is not None and server.stdout is not None:
+            server.terminate()
+            try:
+                output, _ = server.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                output, _ = server.communicate(timeout=5)
+            print(output[-4000:])
+            server = None
+        raise
     finally:
         if server is not None:
             server.terminate()

@@ -18,8 +18,12 @@ from src.ir_app.schemas import api_error, api_success
 from src.ir_app.services import (
     DocumentDetailService,
     DocumentService,
+    EvaluationCacheService,
+    EvaluationJobService,
     EvaluationService,
+    FeedbackService,
     FeatureUnavailableError,
+    RankingDiagnosticsService,
     RetrievalOrchestrator,
     SearchLogService,
     SearchService,
@@ -48,14 +52,28 @@ def create_app(settings: Settings | None = None) -> Flask:
     search_service = SearchService(settings, document_service)
     document_detail_service = DocumentDetailService(document_service, search_service)
     retrieval_orchestrator = RetrievalOrchestrator(search_service)
-    evaluation_service = EvaluationService(document_service, retrieval_orchestrator)
+    evaluation_cache_service = EvaluationCacheService(settings.project_root)
+    evaluation_service = EvaluationService(
+        document_service,
+        retrieval_orchestrator,
+        cache_service=evaluation_cache_service,
+    )
+    evaluation_job_service = EvaluationJobService(evaluation_service)
     search_log_service = SearchLogService(settings.project_root)
+    feedback_service = FeedbackService(settings.project_root)
+    ranking_diagnostics_service = RankingDiagnosticsService(
+        document_service, search_service
+    )
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
     app.config["DOCUMENT_DETAIL_SERVICE"] = document_detail_service
     app.config["RETRIEVAL_ORCHESTRATOR"] = retrieval_orchestrator
+    app.config["EVALUATION_CACHE_SERVICE"] = evaluation_cache_service
     app.config["EVALUATION_SERVICE"] = evaluation_service
+    app.config["EVALUATION_JOB_SERVICE"] = evaluation_job_service
     app.config["SEARCH_LOG_SERVICE"] = search_log_service
+    app.config["FEEDBACK_SERVICE"] = feedback_service
+    app.config["RANKING_DIAGNOSTICS_SERVICE"] = ranking_diagnostics_service
 
     register_page_routes(app, settings)
     register_api_routes(
@@ -65,7 +83,10 @@ def create_app(settings: Settings | None = None) -> Flask:
         retrieval_orchestrator,
         document_detail_service,
         evaluation_service,
+        evaluation_job_service,
         search_log_service,
+        feedback_service,
+        ranking_diagnostics_service,
     )
     return app
 
@@ -106,6 +127,10 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def evaluation_page():
         return render_if_exists("evaluation.html")
 
+    @app.route("/diagnostics")
+    def diagnostics_page():
+        return render_if_exists("diagnostics.html")
+
     @app.route("/pat_tree")
     def pat_tree_page():
         return render_if_exists("pat_tree.html")
@@ -118,7 +143,10 @@ def register_api_routes(
     retrieval_orchestrator: RetrievalOrchestrator,
     document_detail_service: DocumentDetailService,
     evaluation_service: EvaluationService,
+    evaluation_job_service: EvaluationJobService,
     search_log_service: SearchLogService,
+    feedback_service: FeedbackService,
+    ranking_diagnostics_service: RankingDiagnosticsService,
 ) -> None:
     """Register API routes.
 
@@ -179,6 +207,14 @@ def register_api_routes(
             payload,
             data,
             meta["execution_time"],
+        )
+        feedback_service.log_search_event(
+            "/api/search",
+            payload,
+            data,
+            meta["execution_time"],
+            document_service.dataset_hash,
+            _session_id(),
         )
         return api_success(
             data,
@@ -368,6 +404,14 @@ def register_api_routes(
             data,
             meta["execution_time"],
         )
+        feedback_service.log_search_event(
+            request.path,
+            payload,
+            data,
+            meta["execution_time"],
+            document_service.dataset_hash,
+            _session_id(),
+        )
         return api_success(
             data,
             meta,
@@ -397,7 +441,29 @@ def register_api_routes(
             data,
             meta["execution_time"],
         )
+        feedback_service.log_search_event(
+            "/api/evaluate",
+            payload,
+            data,
+            meta["execution_time"],
+            document_service.dataset_hash,
+            _session_id(),
+        )
         return api_success(data, meta, **data)
+
+    @app.post("/api/evaluate/jobs")
+    def start_evaluation_job():
+        payload = request.get_json(silent=True) or {}
+        data = evaluation_job_service.submit(payload)
+        status_code = 200 if data["status"] == "completed" else 202
+        return api_success(data, {"status": data["status"]}), status_code
+
+    @app.get("/api/evaluate/jobs/<job_id>")
+    def evaluation_job(job_id: str):
+        data = evaluation_job_service.get(job_id)
+        if not data:
+            return api_error("JOB_NOT_FOUND", f"Evaluation job not found: {job_id}", 404)
+        return api_success(data, {"status": data["status"]})
 
     @app.get("/api/evaluation/query_sets")
     def evaluation_query_sets():
@@ -405,6 +471,43 @@ def register_api_routes(
             "query_sets": evaluation_service.query_sets(),
             "default_query_set": evaluation_service.default_query_set_id(),
         }
+        return api_success(data, **data)
+
+    @app.post("/api/feedback")
+    def feedback():
+        payload = request.get_json(silent=True) or {}
+        try:
+            data = feedback_service.record_feedback(payload, _session_id())
+        except (TypeError, ValueError) as exc:
+            return api_error("INVALID_FEEDBACK", str(exc), 400)
+        return api_success(data, **data)
+
+    @app.get("/api/feedback/stats")
+    def feedback_stats():
+        data = {"stats": feedback_service.stats()}
+        return api_success(data, stats=data["stats"])
+
+    @app.post("/api/diagnostics/ranking")
+    def ranking_diagnostics():
+        payload = request.get_json(silent=True) or {}
+        query = (payload.get("query") or "").strip()
+        doc_id = payload.get("doc_id")
+        if doc_id is None:
+            doc_id = payload.get("article_id")
+        if not query:
+            return api_error("QUERY_REQUIRED", "Query is required", 400)
+        if doc_id is None:
+            return api_error("DOC_ID_REQUIRED", "doc_id is required", 400)
+        try:
+            data = ranking_diagnostics_service.explain(
+                query,
+                doc_id,
+                payload.get("models") or ["bm25", "tfidf", "lm"],
+            )
+        except LookupError as exc:
+            return api_error("DOCUMENT_NOT_FOUND", str(exc), 404)
+        except ValueError as exc:
+            return api_error("INVALID_DIAGNOSTICS_REQUEST", str(exc), 400)
         return api_success(data, **data)
 
     @app.get("/api/algorithms")
@@ -432,6 +535,15 @@ def register_api_routes(
         if value is None:
             return default
         return value.lower() in {"1", "true", "yes", "on"}
+
+    def _session_id() -> str | None:
+        """Read the optional frontend session identifier.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
+        return request.headers.get("X-IR-Session") or request.headers.get("X-Session-ID")
 
 
 def run() -> None:

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Diagnostics - CNIRS</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Ranking Diagnostics</h1>
+            <p class="subtitle">BM25 / TF-IDF / LM term contribution analysis</p>
+            <nav class="nav">
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link active">Ranking Diagnostics</a>
+            </nav>
+        </header>
+
+        <section class="search-box">
+            <input type="text" id="diag-query" placeholder="Query, e.g. 半導體 or information retrieval" value="information retrieval">
+            <div class="search-options">
+                <div class="option-group">
+                    <label for="diag-doc-id">Document ID:</label>
+                    <input type="text" id="diag-doc-id" value="0">
+                </div>
+                <div class="option-group">
+                    <label>Models:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" class="diag-model" value="bm25" checked> BM25</label>
+                        <label><input type="checkbox" class="diag-model" value="tfidf" checked> TF-IDF</label>
+                        <label><input type="checkbox" class="diag-model" value="lm" checked> LM</label>
+                    </div>
+                </div>
+                <button id="run-diagnostics-btn" class="btn btn-primary">Run Diagnostics</button>
+            </div>
+        </section>
+
+        <div id="diagnostics-loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Building ranking diagnostics...</p>
+        </div>
+
+        <section id="diagnostics-results" class="diagnostics-page-results"></section>
+    </div>
+
+    <script src="static/js/explanation-panel.js"></script>
+    <script src="static/js/diagnostics.js"></script>
+</body>
+</html>

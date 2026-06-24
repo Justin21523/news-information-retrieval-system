@@ -103,9 +103,12 @@ async function runEvaluation() {
     runEvalBtn.disabled = true;
 
     try {
-        const response = await fetch('api/evaluate', {
+        const response = await fetch('api/evaluate/jobs', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-IR-Session': getIrSessionId()
+            },
             body: JSON.stringify(body)
         });
         const payload = await response.json();
@@ -114,7 +117,8 @@ async function runEvaluation() {
             alert(`評估錯誤: ${message}`);
             return;
         }
-        const data = normalizeApiPayload(payload);
+        const job = normalizeApiPayload(payload);
+        const data = job.result || await pollEvaluationJob(job.job_id);
         currentEvalData = data;
         displayEvaluation(data);
     } catch (error) {
@@ -124,6 +128,34 @@ async function runEvaluation() {
         evalLoading.style.display = 'none';
         runEvalBtn.disabled = false;
     }
+}
+
+async function pollEvaluationJob(jobId) {
+    if (!jobId) {
+        throw new Error('Evaluation job id is missing');
+    }
+    for (let attempt = 0; attempt < 180; attempt += 1) {
+        await sleep(1000);
+        const response = await fetch(`api/evaluate/jobs/${encodeURIComponent(jobId)}`, {
+            headers: { 'X-IR-Session': getIrSessionId() }
+        });
+        const payload = await response.json();
+        if (!payload.ok && !payload.success) {
+            throw new Error(payload.error?.message || 'Evaluation job failed');
+        }
+        const job = normalizeApiPayload(payload);
+        if (job.status === 'completed') {
+            return job.result;
+        }
+        if (job.status === 'failed') {
+            throw new Error(job.error?.message || 'Evaluation job failed');
+        }
+        const statusText = evalLoading.querySelector('p');
+        if (statusText) {
+            statusText.textContent = `評估計算中... (${job.status})`;
+        }
+    }
+    throw new Error('Evaluation job timed out');
 }
 
 function displayEvaluation(data) {
@@ -152,6 +184,7 @@ function displayEvaluationMeta(data) {
             <div><span>Corpus</span><strong>${formatNumber(dataset.total_documents || 0)} docs</strong></div>
             <div><span>Qrels Coverage</span><strong>${formatPercent(coverage.coverage || 0)}</strong></div>
             <div><span>Resolved Judgments</span><strong>${coverage.resolved || 0}/${coverage.judgments || 0}</strong></div>
+            <div><span>Cache</span><strong>${data.cached ? 'hit' : 'miss'}</strong></div>
         </div>
     `;
 }
@@ -447,6 +480,20 @@ function parseKValues(value, topK) {
 
 function normalizeApiPayload(payload) {
     return payload.data || payload;
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getIrSessionId() {
+    const key = 'cnirs_session_id';
+    let value = localStorage.getItem(key);
+    if (!value) {
+        value = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem(key, value);
+    }
+    return value;
 }
 
 function metricAt(series, k) {

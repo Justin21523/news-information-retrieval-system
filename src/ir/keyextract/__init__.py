@@ -22,9 +22,33 @@ License: Educational Use
 """
 
 from .textrank import TextRankExtractor
-from .yake_extractor import YAKEExtractor
-from .rake_extractor import RAKEExtractor
-from .keybert_extractor import KeyBERTExtractor
+
+
+def _unavailable_class(name, package):
+    """Create a placeholder for unavailable optional extractors."""
+
+    class UnavailableExtractor:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"{name} requires optional dependency: {package}")
+
+    UnavailableExtractor.__name__ = name
+    return UnavailableExtractor
+
+
+try:
+    from .yake_extractor import YAKEExtractor
+except Exception:
+    YAKEExtractor = _unavailable_class("YAKEExtractor", "yake")
+
+try:
+    from .rake_extractor import RAKEExtractor
+except Exception:
+    RAKEExtractor = _unavailable_class("RAKEExtractor", "rake-nltk")
+
+try:
+    from .keybert_extractor import KeyBERTExtractor
+except Exception:
+    KeyBERTExtractor = _unavailable_class("KeyBERTExtractor", "keybert")
 
 __all__ = [
     'TextRankExtractor',

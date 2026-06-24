@@ -11,11 +11,27 @@ License: Educational Use
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.text.ner_extractor import NERExtractor, Entity
+
+
+def _ckip_ner_available():
+    try:
+        tokenizer = ChineseTokenizer(engine='ckip')
+        return tokenizer.engine == 'ckip'
+    except Exception:
+        return False
+
+
+requires_ckip_ner = pytest.mark.skipif(
+    not _ckip_ner_available(),
+    reason='CKIP NER model is unavailable in this environment',
+)
 
 
 def print_test_header(test_name):
@@ -35,6 +51,7 @@ def print_fail(message="失敗"):
     print(f"✗ {message}")
 
 
+@requires_ckip_ner
 def test_tokenizer_ner_basic():
     """測試 ChineseTokenizer 的 NER 功能"""
     print_test_header("ChineseTokenizer NER 基本功能")
@@ -54,6 +71,7 @@ def test_tokenizer_ner_basic():
         print(f"    - {text} ({etype}) [{start}:{end}]")
 
 
+@requires_ckip_ner
 def test_tokenizer_ner_batch():
     """測試批次 NER 提取"""
     print_test_header("ChineseTokenizer 批次 NER 提取")
@@ -95,6 +113,7 @@ def test_ner_extractor_initialization():
     print(f"  - 設備: CPU")
 
 
+@requires_ckip_ner
 def test_ner_extractor_extract():
     """測試 NERExtractor 提取功能"""
     print_test_header("NERExtractor 實體提取")
@@ -115,6 +134,7 @@ def test_ner_extractor_extract():
         print(f"    - {entity}")
 
 
+@requires_ckip_ner
 def test_ner_filter_by_type():
     """測試按類型過濾實體"""
     print_test_header("按類型過濾實體")
@@ -139,6 +159,7 @@ def test_ner_filter_by_type():
         print(f"      {o.text}")
 
 
+@requires_ckip_ner
 def test_ner_filter_by_text():
     """測試按文本過濾實體"""
     print_test_header("按文本過濾實體")
@@ -158,6 +179,7 @@ def test_ner_filter_by_text():
         print(f"      {e.text}")
 
 
+@requires_ckip_ner
 def test_ner_statistics():
     """測試實體統計"""
     print_test_header("實體統計功能")
@@ -181,6 +203,7 @@ def test_ner_statistics():
         print(f"    - {etype}: {count}")
 
 
+@requires_ckip_ner
 def test_ner_most_common():
     """測試最常見實體"""
     print_test_header("最常見實體")
@@ -200,6 +223,7 @@ def test_ner_most_common():
         print(f"    - {entity_text}: {count} 次")
 
 
+@requires_ckip_ner
 def test_ner_group_by_type():
     """測試按類型分組"""
     print_test_header("按類型分組實體")
@@ -222,6 +246,7 @@ def test_ner_group_by_type():
             print(f"        {e.text}")
 
 
+@requires_ckip_ner
 def test_ner_batch_processing():
     """測試批次處理"""
     print_test_header("批次處理多篇文本")
@@ -289,6 +314,7 @@ def test_ner_empty_text():
     print_pass("空文本處理正常")
 
 
+@requires_ckip_ner
 def test_ner_integration():
     """測試完整工作流程"""
     print_test_header("NER 完整工作流程整合測試")

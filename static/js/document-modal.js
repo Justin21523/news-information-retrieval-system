@@ -1,6 +1,22 @@
 // CNIRS - Enhanced Document Details Modal
 // Shared module for displaying document details with summary and keyword extraction
 
+
+function normalizeApiPayload(data) {
+    if (!data) return data;
+    if (data.ok === true && data.data) {
+        return { ...data.data, success: true, meta: data.meta || {}, raw: data };
+    }
+    return data;
+}
+
+function apiErrorMessage(data, fallback = 'Unknown error') {
+    if (!data) return fallback;
+    if (typeof data.error === 'string') return data.error;
+    if (data.error && data.error.message) return data.error.message;
+    return data.message || fallback;
+}
+
 // Current document data
 let currentDocData = null;
 
@@ -68,14 +84,14 @@ async function openDocumentModal(docId) {
 
     try {
         // Fetch document details
-        const response = await fetch(`/api/document/${docId}?include_similar=true&top_k=5`);
-        const data = await response.json();
+        const response = await fetch(`api/document/${docId}?include_similar=true&top_k=5`);
+        const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
             currentDocData = data;
             displayDocumentDetails(data);
         } else {
-            contentArea.innerHTML = `<div class="error">載入失敗: ${data.error}</div>`;
+            contentArea.innerHTML = `<div class="error">載入失敗: ${apiErrorMessage(data)}</div>`;
             contentArea.style.display = 'block';
         }
     } catch (error) {
@@ -236,7 +252,7 @@ async function generateSummary(docId) {
     timeDiv.textContent = '';
 
     try {
-        const response = await fetch('/api/summarize', {
+        const response = await fetch('api/summarize', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -248,13 +264,13 @@ async function generateSummary(docId) {
             })
         });
 
-        const data = await response.json();
+        const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
             contentDiv.innerHTML = `<div class="summary-text">${data.summary}</div>`;
             timeDiv.textContent = `⏱️ 處理時間: ${(data.processing_time * 1000).toFixed(2)} ms`;
         } else {
-            contentDiv.innerHTML = `<div class="error">摘要生成失敗: ${data.error}</div>`;
+            contentDiv.innerHTML = `<div class="error">摘要生成失敗: ${apiErrorMessage(data)}</div>`;
         }
     } catch (error) {
         console.error('Summary generation error:', error);
@@ -282,7 +298,7 @@ async function extractKeywords(docId) {
     timeDiv.textContent = '';
 
     try {
-        const response = await fetch('/api/extract_keywords', {
+        const response = await fetch('api/extract_keywords', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -294,7 +310,7 @@ async function extractKeywords(docId) {
             })
         });
 
-        const data = await response.json();
+        const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
             const methodNames = {
@@ -317,7 +333,7 @@ async function extractKeywords(docId) {
             contentDiv.innerHTML = keywordsHTML;
             timeDiv.textContent = `⏱️ 處理時間: ${(data.processing_time * 1000).toFixed(2)} ms`;
         } else {
-            contentDiv.innerHTML = `<div class="error">關鍵詞提取失敗: ${data.error}</div>`;
+            contentDiv.innerHTML = `<div class="error">關鍵詞提取失敗: ${apiErrorMessage(data)}</div>`;
         }
     } catch (error) {
         console.error('Keyword extraction error:', error);

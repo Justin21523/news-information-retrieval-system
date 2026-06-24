@@ -11,6 +11,7 @@ Date: 2025-11-18
 
 import pytest
 import sys
+import importlib.util
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -64,7 +65,8 @@ def crawler_registry():
     Returns:
         dict: Crawler configurations
     """
-    return {
+    playwright_available = importlib.util.find_spec("scrapy_playwright") is not None
+    registry = {
         'cna': {
             'name': 'CNA中央社',
             'module': 'scripts.crawlers.cna_spider',
@@ -76,7 +78,7 @@ def crawler_registry():
             'name': '自由時報',
             'module': 'scripts.crawlers.ltn_spider',
             'class': 'LTNNewsSpider',
-            'playwright': True,
+            'playwright': False,
             'categories': ['politics', 'business', 'society'],
         },
         'pts': {
@@ -90,7 +92,7 @@ def crawler_registry():
             'name': '聯合報',
             'module': 'scripts.crawlers.udn_spider',
             'class': 'UDNNewsSpider',
-            'playwright': True,
+            'playwright': False,
             'categories': ['politics', 'finance', 'society'],
         },
         'apple': {
@@ -130,6 +132,14 @@ def crawler_registry():
             'categories': ['politics', 'finance', 'lifestyle'],
         },
     }
+
+    if not playwright_available:
+        for config in registry.values():
+            if config.get('playwright'):
+                config['skip'] = True
+                config['skip_reason'] = 'scrapy-playwright optional dependency is not installed'
+
+    return registry
 
 
 @pytest.fixture

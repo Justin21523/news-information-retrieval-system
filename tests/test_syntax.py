@@ -11,10 +11,16 @@ License: Educational Use
 """
 
 import sys
+import importlib.util
 from pathlib import Path
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+if importlib.util.find_spec("supar") is None:
+    pytest.skip("SuPar optional dependency is not installed", allow_module_level=True)
 
 from src.ir.syntax import DependencyParser, SVOExtractor, SyntaxAnalyzer
 

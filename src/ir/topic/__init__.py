@@ -25,8 +25,26 @@ Author: Information Retrieval System
 License: Educational Use
 """
 
-from .bertopic_model import BERTopicModel
-from .lda_model import LDAModel
+def _unavailable_class(name, package):
+    """Create a placeholder for unavailable optional topic models."""
+
+    class UnavailableTopicModel:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"{name} requires optional dependency: {package}")
+
+    UnavailableTopicModel.__name__ = name
+    return UnavailableTopicModel
+
+
+try:
+    from .bertopic_model import BERTopicModel
+except Exception:
+    BERTopicModel = _unavailable_class("BERTopicModel", "bertopic")
+
+try:
+    from .lda_model import LDAModel
+except Exception:
+    LDAModel = _unavailable_class("LDAModel", "gensim")
 
 __all__ = [
     'BERTopicModel',

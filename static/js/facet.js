@@ -8,6 +8,22 @@
  * - Integrated date range filters
  */
 
+
+function normalizeApiPayload(data) {
+    if (!data) return data;
+    if (data.ok === true && data.data) {
+        return { ...data.data, success: true, meta: data.meta || {}, raw: data };
+    }
+    return data;
+}
+
+function apiErrorMessage(data, fallback = 'Unknown error') {
+    if (!data) return fallback;
+    if (typeof data.error === 'string') return data.error;
+    if (data.error && data.error.message) return data.error.message;
+    return data.message || fallback;
+}
+
 // Global state
 const FacetState = {
     currentQuery: '',
@@ -128,16 +144,16 @@ async function preloadAllFacets() {
     console.log('Preloading all facets...');
 
     try {
-        const response = await fetch('/api/all_facets');
+        const response = await fetch('api/all_facets');
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = normalizeApiPayload(await response.json());
 
         if (!data.success) {
-            throw new Error(data.error || 'Unknown error');
+            throw new Error(apiErrorMessage(data));
         }
 
         FacetState.facets = data.facets;
@@ -202,7 +218,7 @@ async function performFacetedSearch() {
  * Load facets based on search results
  */
 async function loadSearchFacets(query, model, topK) {
-    const response = await fetch('/api/facets', {
+    const response = await fetch('api/facets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -216,10 +232,10 @@ async function loadSearchFacets(query, model, topK) {
         throw new Error(`HTTP ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = normalizeApiPayload(await response.json());
 
     if (!data.success) {
-        throw new Error(data.error || 'Unknown error');
+        throw new Error(apiErrorMessage(data));
     }
 
     FacetState.facets = data.facets;
@@ -427,7 +443,7 @@ async function performFilteredSearch(query, model, topK) {
     showLoading(true);
 
     try {
-        const response = await fetch('/api/search/faceted', {
+        const response = await fetch('api/search/faceted', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -442,10 +458,10 @@ async function performFilteredSearch(query, model, topK) {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = normalizeApiPayload(await response.json());
 
         if (!data.success) {
-            throw new Error(data.error || 'Unknown error');
+            throw new Error(apiErrorMessage(data));
         }
 
         FacetState.searchResults = data.results;

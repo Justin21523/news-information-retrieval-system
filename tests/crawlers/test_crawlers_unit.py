@@ -35,6 +35,9 @@ class TestCrawlerInitialization:
         if config.get('skip'):
             pytest.skip(f"Crawler {crawler_name} marked as skip")
 
+        if config.get('skip'):
+            pytest.skip(config.get('skip_reason', f"Crawler {crawler_name} marked as skip"))
+
         # Import spider class
         module = importlib.import_module(config['module'])
         spider_class = getattr(module, config['class'])
@@ -54,17 +57,23 @@ class TestCrawlerInitialization:
         """Test crawler initialization with custom parameters."""
         config = crawler_registry[crawler_name]
 
+        if config.get('skip'):
+            pytest.skip(config.get('skip_reason', f"Crawler {crawler_name} marked as skip"))
+
         # Import spider class
         module = importlib.import_module(config['module'])
         spider_class = getattr(module, config['class'])
 
+        # Pick a valid category for each crawler.
+        category = config.get('categories', ['all'])[0]
+
         # Initialize with parameters
         spider = spider_class(
-            category='politics',
+            category=category,
             days=3,
         )
 
-        assert spider.category == 'politics'
+        assert spider.category == category
         assert hasattr(spider, 'start_date')
         assert hasattr(spider, 'end_date')
 
@@ -200,6 +209,9 @@ class TestCrawlerConfiguration:
         """Test crawler has custom settings defined."""
         config = crawler_registry[crawler_name]
 
+        if config.get('skip'):
+            pytest.skip(config.get('skip_reason', f"Crawler {crawler_name} marked as skip"))
+
         module = importlib.import_module(config['module'])
         spider_class = getattr(module, config['class'])
 
@@ -246,6 +258,46 @@ class TestCrawlerConfiguration:
 
             # Check browser type
             assert settings['PLAYWRIGHT_BROWSER_TYPE'] == 'chromium'
+
+
+class TestPlaywrightMeta:
+    """Test BasePlaywrightSpider request meta helpers."""
+
+    @pytest.mark.unit
+    def test_get_playwright_meta_uses_goto_kwargs(self):
+        """Ensure scrapy-playwright meta keys are correct."""
+        from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider
+
+        class DummySpider(BasePlaywrightSpider):
+            name = "dummy_playwright_meta"
+
+        spider = DummySpider()
+        meta = spider.get_playwright_meta()
+
+        assert meta.get('playwright') is True
+        assert 'playwright_context_kwargs' in meta
+        assert 'playwright_page_goto_kwargs' in meta
+        assert 'playwright_page_kwargs' not in meta  # scrapy-playwright does not read this key
+
+    @pytest.mark.unit
+    def test_get_playwright_meta_wait_selector_injects_page_method(self):
+        """Ensure wait_selector is converted into a wait_for_selector PageMethod."""
+        from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider
+        playwright_page = pytest.importorskip('scrapy_playwright.page')
+        PageMethod = playwright_page.PageMethod
+
+        class DummySpider(BasePlaywrightSpider):
+            name = "dummy_playwright_wait_selector"
+
+        spider = DummySpider()
+        meta = spider.get_playwright_meta(wait_selector='div.content', wait_selector_timeout=12345)
+
+        methods = meta.get('playwright_page_methods')
+        assert isinstance(methods, list) and methods, "Expected at least one PageMethod"
+        assert isinstance(methods[0], PageMethod)
+        assert methods[0].method == 'wait_for_selector'
+        assert methods[0].args == ('div.content',)
+        assert methods[0].kwargs.get('timeout') == 12345
 
 
 # ========== Run Tests ==========

@@ -24,6 +24,28 @@ const exportCsvBtn = document.getElementById('export-csv-btn');
 
 // Note: Filter state is now managed by facet.js
 
+
+function normalizeApiPayload(data) {
+    if (!data) return data;
+    if (data.ok === true && data.data) {
+        return {
+            ...data.data,
+            success: true,
+            response_time: data.data.response_time ?? data.meta?.execution_time,
+            meta: data.meta || {},
+            raw: data
+        };
+    }
+    return data;
+}
+
+function apiErrorMessage(data, fallback = 'Unknown error') {
+    if (!data) return fallback;
+    if (typeof data.error === 'string') return data.error;
+    if (data.error && data.error.message) return data.error.message;
+    return data.message || fallback;
+}
+
 // Current search state (for export)
 let currentSearchResults = null;
 let currentSearchQuery = '';
@@ -69,8 +91,8 @@ window.performSearch = performSearch;
  */
 async function loadSystemStats() {
     try {
-        const response = await fetch('/api/stats');
-        const data = await response.json();
+        const response = await fetch('api/stats');
+        const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
             displayStats(data.stats);
@@ -137,7 +159,7 @@ async function performSearch() {
             requestBody.filters = filters;
         }
 
-        const response = await fetch('/api/search', {
+        const response = await fetch('api/search', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -145,12 +167,12 @@ async function performSearch() {
             body: JSON.stringify(requestBody)
         });
 
-        const data = await response.json();
+        const data = normalizeApiPayload(await response.json());
 
         if (data.success) {
             displayResults(data);
         } else {
-            alert('搜尋錯誤: ' + data.error);
+            alert('搜尋錯誤: ' + apiErrorMessage(data));
         }
     } catch (error) {
         console.error('Search error:', error);
@@ -165,6 +187,7 @@ async function performSearch() {
  * Display search results
  */
 function displayResults(data) {
+    data = normalizeApiPayload(data);
     // Safety check: ensure data has required properties
     if (!data || !data.results) {
         console.error('displayResults: Invalid data structure', data);
@@ -310,7 +333,7 @@ async function exportResults(format) {
     exportCsvBtn.disabled = true;
 
     try {
-        const response = await fetch('/api/export', {
+        const response = await fetch('api/export', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

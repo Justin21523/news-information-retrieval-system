@@ -131,9 +131,21 @@ class ChineseTokenizer:
         self._ner = None  # NER chunker
 
         if self.engine == 'ckip':
-            # CKIP initialization loads transformer weights and can be slow.
-            # We do it once per tokenizer instance.
-            self._init_ckip()
+            # CKIP initialization loads transformer weights and may fail in
+            # low-resource deployments or unwritable Hugging Face caches.
+            try:
+                self._init_ckip()
+            except Exception as exc:
+                self.logger.warning(
+                    "CKIP initialization failed (%s). Falling back to Jieba.",
+                    exc,
+                )
+                self.engine = 'jieba'
+                self.use_pos = False
+                self._ws = None
+                self._pos = None
+                self._ner = None
+                self._init_jieba(custom_dict_path)
         else:
             # Jieba initialization is lightweight; we also optionally load a
             # custom dictionary to improve segmentation for domain terms.

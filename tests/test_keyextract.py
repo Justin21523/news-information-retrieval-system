@@ -11,12 +11,24 @@ License: Educational Use
 """
 
 import sys
+import importlib.util
 from pathlib import Path
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.ir.keyextract import TextRankExtractor, YAKEExtractor, RAKEExtractor
+
+YAKE_AVAILABLE = importlib.util.find_spec("yake") is not None
+RAKE_AVAILABLE = importlib.util.find_spec("rake_nltk") is not None
+requires_yake = pytest.mark.skipif(not YAKE_AVAILABLE, reason="YAKE optional dependency is not installed")
+requires_rake = pytest.mark.skipif(not RAKE_AVAILABLE, reason="RAKE optional dependency is not installed")
+requires_keyword_optionals = pytest.mark.skipif(
+    not (YAKE_AVAILABLE and RAKE_AVAILABLE),
+    reason="YAKE and RAKE optional dependencies are not installed",
+)
 
 
 def print_test_header(test_name):
@@ -232,6 +244,7 @@ def test_textrank_ner_boost():
 # YAKE 測試
 # ============================================================================
 
+@requires_yake
 def test_yake_initialization():
     """測試 YAKE 初始化"""
     print_test_header("YAKE 初始化")
@@ -250,6 +263,7 @@ def test_yake_initialization():
     print(f"  - 最大 n-gram: {extractor.max_ngram_size}")
 
 
+@requires_yake
 def test_yake_extract():
     """測試 YAKE 提取"""
     print_test_header("YAKE 關鍵詞提取")
@@ -264,6 +278,7 @@ def test_yake_extract():
         print(f"  {i}. {kw.word:15s}  score={kw.score:.4f}")
 
 
+@requires_yake
 def test_yake_english():
     """測試 YAKE 英文"""
     print_test_header("YAKE 英文文本")
@@ -282,6 +297,7 @@ def test_yake_english():
 # RAKE 測試
 # ============================================================================
 
+@requires_rake
 def test_rake_initialization():
     """測試 RAKE 初始化"""
     print_test_header("RAKE 初始化")
@@ -300,6 +316,7 @@ def test_rake_initialization():
     print(f"  - 排序指標: {extractor.ranking_metric}")
 
 
+@requires_rake
 def test_rake_extract():
     """測試 RAKE 提取"""
     print_test_header("RAKE 關鍵詞提取")
@@ -318,6 +335,7 @@ def test_rake_extract():
 # 整合測試
 # ============================================================================
 
+@requires_keyword_optionals
 def test_multiple_extractors():
     """測試多種提取器比較"""
     print_test_header("多種提取器比較")

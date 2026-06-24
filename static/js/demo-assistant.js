@@ -107,7 +107,7 @@
             localStorage.setItem(ACTIVE_KEY, '1');
             localStorage.setItem(SEEN_KEY, '1');
             localStorage.setItem(STEP_KEY, 'overview');
-            window.location.href = '/guide?tour=1&step=overview';
+            window.location.href = withBase('/guide?tour=1&step=overview');
             return;
         }
 
@@ -252,7 +252,7 @@
         const step = steps.find(item => item.id === stepId) || steps[0];
         localStorage.setItem(STEP_KEY, step.id);
         localStorage.setItem(ACTIVE_KEY, '1');
-        window.location.href = step.url;
+        window.location.href = withBase(step.url);
     }
 
     function exitTour() {
@@ -376,7 +376,27 @@
     }
 
     function currentPath() {
-        return window.location.pathname.replace(/^\/+|\/+$/g, '');
+        const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+        const base = basePath().replace(/^\/+|\/+$/g, '');
+        if (base && path.startsWith(`${base}/`)) {
+            return path.slice(base.length + 1);
+        }
+        if (base && path === base) return '';
+        return path;
+    }
+
+    function basePath() {
+        const marker = '/projects/information-retrieval';
+        const path = window.location.pathname;
+        const index = path.indexOf(marker);
+        return index >= 0 ? path.slice(0, index + marker.length) : '';
+    }
+
+    function withBase(url) {
+        if (!url || /^[a-z]+:/i.test(url)) return url;
+        const base = basePath();
+        if (!base || !url.startsWith('/')) return url;
+        return `${base}${url}`;
     }
 
     function escapeHtml(value) {

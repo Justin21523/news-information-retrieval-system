@@ -1,21 +1,22 @@
-// CNIRS - Evaluation Page JavaScript (Enhanced)
+// CNIRS evaluation dashboard.
 
-// DOM Elements
 const evalQuery = document.getElementById('eval-query');
+const evalQuerySet = document.getElementById('eval-query-set');
 const evalTopk = document.getElementById('eval-topk');
+const evalKValues = document.getElementById('eval-k-values');
 const runEvalBtn = document.getElementById('run-eval-btn');
 const evalLoading = document.getElementById('eval-loading');
 const evalResults = document.getElementById('eval-results');
 const metricsCards = document.getElementById('metrics-cards');
 const comparisonTable = document.getElementById('comparison-table');
+const evaluationMeta = document.getElementById('evaluation-meta');
+const perQueryBreakdown = document.getElementById('per-query-breakdown');
 
-// Chart control checkboxes
 const overlayPrecisionCheck = document.getElementById('overlay-precision');
 const overlayRecallCheck = document.getElementById('overlay-recall');
 const overlayF1Check = document.getElementById('overlay-f1');
 const showInterpolatedCheck = document.getElementById('show-interpolated');
 
-// Chart instances
 let charts = {
     precision: null,
     recall: null,
@@ -27,89 +28,95 @@ let charts = {
     prInterpolated: null
 };
 
-// Current evaluation data
 let currentEvalData = null;
 
-// Run evaluation button click
-runEvalBtn.addEventListener('click', runEvaluation);
-
-// Enter key to run evaluation
-evalQuery.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        runEvaluation();
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    loadQuerySets();
 });
 
-// Chart overlay toggle listeners
-if (overlayPrecisionCheck) {
-    overlayPrecisionCheck.addEventListener('change', () => {
-        if (currentEvalData) displayCharts(currentEvalData.results);
-    });
+if (runEvalBtn) {
+    runEvalBtn.addEventListener('click', runEvaluation);
 }
-if (overlayRecallCheck) {
-    overlayRecallCheck.addEventListener('change', () => {
-        if (currentEvalData) displayCharts(currentEvalData.results);
-    });
-}
-if (overlayF1Check) {
-    overlayF1Check.addEventListener('change', () => {
-        if (currentEvalData) displayCharts(currentEvalData.results);
-    });
-}
-if (showInterpolatedCheck) {
-    showInterpolatedCheck.addEventListener('change', () => {
-        if (currentEvalData) displayCharts(currentEvalData.results);
+
+if (evalQuery) {
+    evalQuery.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            runEvaluation();
+        }
     });
 }
 
-/**
- * Run evaluation for selected models
- */
-async function runEvaluation() {
-    const query = evalQuery.value.trim();
+[overlayPrecisionCheck, overlayRecallCheck, overlayF1Check, showInterpolatedCheck]
+    .filter(Boolean)
+    .forEach((control) => {
+        control.addEventListener('change', () => {
+            if (currentEvalData) {
+                displayCharts(currentEvalData.results || {});
+            }
+        });
+    });
 
-    if (!query) {
-        alert('請輸入測試查詢');
+async function loadQuerySets() {
+    if (!evalQuerySet) {
         return;
     }
+    try {
+        const response = await fetch('api/evaluation/query_sets');
+        const payload = await response.json();
+        const data = normalizeApiPayload(payload);
+        const querySets = data.query_sets || [];
+        evalQuerySet.innerHTML = querySets.map((querySet) => `
+            <option value="${escapeAttr(querySet.id)}" ${querySet.default ? 'selected' : ''}>
+                ${escapeHtml(querySet.name)} (${querySet.query_count} queries)
+            </option>
+        `).join('');
+    } catch (error) {
+        console.warn('Unable to load evaluation query sets', error);
+    }
+}
 
-    // Get selected models
+async function runEvaluation() {
     const selectedModels = Array.from(document.querySelectorAll('.model-checkbox:checked'))
-        .map(cb => cb.value);
+        .map((checkbox) => checkbox.value);
 
     if (selectedModels.length === 0) {
         alert('請至少選擇一個模型');
         return;
     }
 
-    const topK = parseInt(evalTopk.value);
+    const query = evalQuery?.value.trim() || '';
+    const querySet = evalQuerySet?.value || undefined;
+    const topK = parseInt(evalTopk?.value || '20', 10);
+    const kValues = parseKValues(evalKValues?.value, topK);
+    const body = {
+        query_set: querySet,
+        models: selectedModels,
+        top_k: topK,
+        k_values: kValues
+    };
+    if (query) {
+        body.queries = [{ id: 'custom_1', query }];
+    }
 
-    // Show loading
     evalLoading.style.display = 'block';
     evalResults.style.display = 'none';
     runEvalBtn.disabled = true;
 
     try {
-        const response = await fetch('/api/evaluate', {
+        const response = await fetch('api/evaluate', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                query,
-                models: selectedModels,
-                top_k: topK
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-            currentEvalData = data;
-            displayEvaluation(data);
-        } else {
-            alert('評估錯誤: ' + data.error);
+        const payload = await response.json();
+        if (!payload.ok && !payload.success) {
+            const message = payload.error?.message || payload.message || 'Evaluation failed';
+            alert(`評估錯誤: ${message}`);
+            return;
         }
+        const data = normalizeApiPayload(payload);
+        currentEvalData = data;
+        displayEvaluation(data);
     } catch (error) {
         console.error('Evaluation error:', error);
         alert('評估失敗，請稍後再試');
@@ -119,358 +126,239 @@ async function runEvaluation() {
     }
 }
 
-/**
- * Display evaluation results
- */
 function displayEvaluation(data) {
-    // Show results container
     evalResults.style.display = 'block';
-
-    // Display metrics summary cards
-    displayMetricsCards(data.results);
-
-    // Display charts
-    displayCharts(data.results);
-
-    // Display comparison table
-    displayComparisonTable(data.results);
-
-    // Scroll to results
+    displayEvaluationMeta(data);
+    displayMetricsCards(data.results || {});
+    displayCharts(data.results || {});
+    displayComparisonTable(data.results || {});
+    displayPerQueryBreakdown(data.per_query || {});
     evalResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-/**
- * Display metrics summary cards
- */
+function displayEvaluationMeta(data) {
+    if (!evaluationMeta) {
+        return;
+    }
+    const coverage = data.qrels_coverage || {};
+    const dataset = data.dataset || {};
+    evaluationMeta.innerHTML = `
+        <div class="evaluation-notice">
+            <strong>Demo evaluation, not full benchmark.</strong>
+            <span>${escapeHtml(data.disclaimer || '')}</span>
+        </div>
+        <div class="evaluation-meta-grid">
+            <div><span>Query Set</span><strong>${escapeHtml(data.query_set_info?.name || data.query_set || '-')}</strong></div>
+            <div><span>Corpus</span><strong>${formatNumber(dataset.total_documents || 0)} docs</strong></div>
+            <div><span>Qrels Coverage</span><strong>${formatPercent(coverage.coverage || 0)}</strong></div>
+            <div><span>Resolved Judgments</span><strong>${coverage.resolved || 0}/${coverage.judgments || 0}</strong></div>
+        </div>
+    `;
+}
+
 function displayMetricsCards(results) {
     metricsCards.innerHTML = '';
-
     Object.entries(results).forEach(([model, metrics]) => {
-        if (metrics.error) return;
-
+        if (metrics.error || metrics.available === false) {
+            return;
+        }
         const card = document.createElement('div');
         card.className = 'metric-card';
-
         card.innerHTML = `
-            <div class="metric-card-header">${model.toUpperCase()}</div>
-            <div class="metric-card-value">${(metrics.map * 100).toFixed(1)}%</div>
+            <div class="metric-card-header">${escapeHtml(model.toUpperCase())}</div>
+            <div class="metric-card-value">${formatPercent(metrics.map || 0)}</div>
             <div class="metric-card-model">MAP</div>
-            <div style="font-size: 0.8rem; margin-top: 8px; color: var(--text-secondary);">
-                MRR: ${(metrics.mrr * 100).toFixed(1)}% |
-                R-Prec: ${(metrics.r_precision * 100).toFixed(1)}%
+            <div class="metric-card-subline">
+                MRR ${formatPercent(metrics.mrr || 0)} · nDCG@10 ${formatPercent(metricAt(metrics.ndcg_at_k, 10))}
             </div>
         `;
-
         metricsCards.appendChild(card);
     });
 }
 
-/**
- * Display all charts
- */
 function displayCharts(results) {
-    // Destroy existing charts
-    Object.values(charts).forEach(chart => {
+    Object.values(charts).forEach((chart) => {
         if (chart) chart.destroy();
     });
+    charts = Object.fromEntries(Object.keys(charts).map((key) => [key, null]));
 
-    const models = Object.keys(results).filter(m => !results[m].error);
+    const models = Object.keys(results).filter((model) => !results[model].error && results[model].available !== false);
+    if (!models.length || typeof Chart === 'undefined') {
+        return;
+    }
     const colors = getModelColors(models);
-
-    // Check overlay options
     const overlayPrecision = overlayPrecisionCheck?.checked ?? true;
     const overlayRecall = overlayRecallCheck?.checked ?? true;
     const overlayF1 = overlayF1Check?.checked ?? true;
     const showInterpolated = showInterpolatedCheck?.checked ?? true;
 
-    // Precision @ K Chart
     if (overlayPrecision) {
-        const precisionData = {
-            labels: results[models[0]]?.precision_at_k.map(p => `P@${p.k}`) || [],
-            datasets: models.map((model, idx) => ({
-                label: model.toUpperCase(),
-                data: results[model].precision_at_k.map(p => p.value),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '33',
-                tension: 0.3,
-                fill: false,
-                borderWidth: 2
-            }))
-        };
-        charts.precision = createLineChart('precision-chart', precisionData);
+        charts.precision = createLineChart('precision-chart', {
+            labels: (results[models[0]]?.precision_at_k || []).map((point) => `P@${point.k}`),
+            datasets: models.map((model, index) => metricDataset(model, results[model].precision_at_k, colors[index]))
+        });
     }
 
-    // Recall @ K Chart
     if (overlayRecall) {
-        const recallData = {
-            labels: results[models[0]]?.recall_at_k.map(r => `R@${r.k}`) || [],
-            datasets: models.map((model, idx) => ({
-                label: model.toUpperCase(),
-                data: results[model].recall_at_k.map(r => r.value),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '33',
-                tension: 0.3,
-                fill: false,
-                borderWidth: 2
-            }))
-        };
-        charts.recall = createLineChart('recall-chart', recallData);
+        charts.recall = createLineChart('recall-chart', {
+            labels: (results[models[0]]?.recall_at_k || []).map((point) => `R@${point.k}`),
+            datasets: models.map((model, index) => metricDataset(model, results[model].recall_at_k, colors[index]))
+        });
     }
 
-    // F1-Score @ K Chart
     if (overlayF1) {
-        const f1Data = {
-            labels: results[models[0]]?.f1_at_k.map(f => `F1@${f.k}`) || [],
-            datasets: models.map((model, idx) => ({
-                label: model.toUpperCase(),
-                data: results[model].f1_at_k.map(f => f.value),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '33',
-                tension: 0.3,
-                fill: false,
-                borderWidth: 2
-            }))
-        };
-        charts.f1 = createLineChart('f1-chart', f1Data);
+        charts.f1 = createLineChart('f1-chart', {
+            labels: (results[models[0]]?.f1_at_k || []).map((point) => `F1@${point.k}`),
+            datasets: models.map((model, index) => metricDataset(model, results[model].f1_at_k, colors[index]))
+        });
     }
 
-    // nDCG @ K Chart
-    const ndcgData = {
-        labels: results[models[0]]?.ndcg_at_k.map(n => `nDCG@${n.k}`) || [],
-        datasets: models.map((model, idx) => ({
-            label: model.toUpperCase(),
-            data: results[model].ndcg_at_k.map(n => n.value),
-            borderColor: colors[idx],
-            backgroundColor: colors[idx] + '33',
-            tension: 0.3,
-            fill: false,
-            borderWidth: 2
-        }))
-    };
-    charts.ndcg = createLineChart('ndcg-chart', ndcgData);
+    charts.ndcg = createLineChart('ndcg-chart', {
+        labels: (results[models[0]]?.ndcg_at_k || []).map((point) => `nDCG@${point.k}`),
+        datasets: models.map((model, index) => metricDataset(model, results[model].ndcg_at_k, colors[index]))
+    });
 
-    // F-beta Scores Chart
-    const fbetaData = {
-        labels: [],
-        datasets: []
-    };
-
-    models.forEach((model, idx) => {
-        const beta05 = results[model].f_beta_scores.filter(f => f.beta === 0.5);
-        const beta20 = results[model].f_beta_scores.filter(f => f.beta === 2.0);
-
-        if (beta05.length > 0) {
-            fbetaData.labels = beta05.map(f => `F@${f.k}`);
-            fbetaData.datasets.push({
-                label: `${model.toUpperCase()} (β=0.5)`,
-                data: beta05.map(f => f.value),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '33',
-                tension: 0.3,
-                fill: false,
-                borderDash: [5, 5],
-                borderWidth: 2
-            });
-            fbetaData.datasets.push({
-                label: `${model.toUpperCase()} (β=2.0)`,
-                data: beta20.map(f => f.value),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '55',
-                tension: 0.3,
-                fill: false,
-                borderWidth: 2
-            });
+    const fbetaData = { labels: [], datasets: [] };
+    models.forEach((model, index) => {
+        const beta05 = (results[model].f_beta_scores || []).filter((point) => point.beta === 0.5);
+        const beta20 = (results[model].f_beta_scores || []).filter((point) => point.beta === 2.0);
+        if (beta05.length) {
+            fbetaData.labels = beta05.map((point) => `F@${point.k}`);
+            fbetaData.datasets.push(metricDataset(`${model.toUpperCase()} beta=0.5`, beta05, colors[index], [5, 5]));
+            fbetaData.datasets.push(metricDataset(`${model.toUpperCase()} beta=2.0`, beta20, colors[index]));
         }
     });
     charts.fbeta = createLineChart('fbeta-chart', fbetaData);
 
-    // Precision at Recall Chart
-    const pAtRData = {
-        labels: results[models[0]]?.precision_at_recall.map(p => `R=${(p.recall*100).toFixed(0)}%`) || [],
-        datasets: models.map((model, idx) => ({
+    charts.pAtR = createBarChart('p-at-r-chart', {
+        labels: (results[models[0]]?.precision_at_recall || []).map((point) => `R=${Math.round(point.recall * 100)}%`),
+        datasets: models.map((model, index) => ({
             label: model.toUpperCase(),
-            data: results[model].precision_at_recall.map(p => p.precision),
-            backgroundColor: colors[idx],
-            borderColor: colors[idx],
+            data: (results[model].precision_at_recall || []).map((point) => point.precision),
+            backgroundColor: colors[index],
+            borderColor: colors[index],
             borderWidth: 2
         }))
-    };
-    charts.pAtR = createBarChart('p-at-r-chart', pAtRData);
+    });
 
-    // Raw PR Curve
-    const prData = {
-        datasets: models.map((model, idx) => ({
+    charts.prCurve = createScatterChart('pr-curve-chart', {
+        datasets: models.map((model, index) => ({
             label: model.toUpperCase(),
-            data: results[model].pr_curve.map(p => ({ x: p.recall, y: p.precision })),
-            borderColor: colors[idx],
-            backgroundColor: colors[idx] + '33',
+            data: (results[model].pr_curve || []).map((point) => ({ x: point.recall, y: point.precision })),
+            borderColor: colors[index],
+            backgroundColor: `${colors[index]}33`,
             tension: 0.3,
             fill: false,
             pointRadius: 3,
             borderWidth: 2
         }))
-    };
-    charts.prCurve = createScatterChart('pr-curve-chart', prData);
+    });
 
-    // Interpolated PR Curve
     if (showInterpolated) {
-        const prInterpData = {
-            labels: results[models[0]]?.interpolated_precision.map(p => (p.recall*100).toFixed(0) + '%') || [],
-            datasets: models.map((model, idx) => ({
-                label: model.toUpperCase(),
-                data: results[model].interpolated_precision.map(p => p.precision),
-                borderColor: colors[idx],
-                backgroundColor: colors[idx] + '33',
-                tension: 0.0,  // Straight lines for interpolated
-                fill: false,
-                borderWidth: 2,
-                pointRadius: 4
-            }))
-        };
-        charts.prInterpolated = createLineChart('pr-interpolated-chart', prInterpData);
+        charts.prInterpolated = createLineChart('pr-interpolated-chart', {
+            labels: (results[models[0]]?.interpolated_precision || []).map((point) => `${Math.round(point.recall * 100)}%`),
+            datasets: models.map((model, index) => metricDataset(model, results[model].interpolated_precision, colors[index]))
+        });
     }
 }
 
-/**
- * Create line chart
- */
+function metricDataset(label, points, color, dash = []) {
+    return {
+        label: label.toUpperCase(),
+        data: (points || []).map((point) => point.value ?? point.precision ?? 0),
+        borderColor: color,
+        backgroundColor: `${color}33`,
+        tension: 0.3,
+        fill: false,
+        borderDash: dash,
+        borderWidth: 2
+    };
+}
+
 function createLineChart(canvasId, data) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    return new Chart(ctx, {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas.getContext('2d'), {
         type: 'line',
-        data: data,
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom'
-                },
-                title: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 1.0,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
-                }
-            }
-        }
+        data,
+        options: chartOptions()
     });
 }
 
-/**
- * Create bar chart
- */
 function createBarChart(canvasId, data) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    return new Chart(ctx, {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: data,
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 1.0,
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
-                }
-            }
-        }
+        data,
+        options: chartOptions()
     });
 }
 
-/**
- * Create scatter chart for PR curve
- */
 function createScatterChart(canvasId, data) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    return new Chart(ctx, {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas.getContext('2d'), {
         type: 'line',
-        data: data,
+        data,
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom'
-                }
-            },
+            plugins: { legend: { display: true, position: 'bottom' } },
             scales: {
                 x: {
                     type: 'linear',
                     min: 0,
                     max: 1,
-                    title: {
-                        display: true,
-                        text: 'Recall'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
+                    title: { display: true, text: 'Recall' },
+                    ticks: { callback: (value) => `${Math.round(value * 100)}%` }
                 },
                 y: {
                     min: 0,
                     max: 1,
-                    title: {
-                        display: true,
-                        text: 'Precision'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return (value * 100).toFixed(0) + '%';
-                        }
-                    }
+                    title: { display: true, text: 'Precision' },
+                    ticks: { callback: (value) => `${Math.round(value * 100)}%` }
                 }
             }
         }
     });
 }
 
-/**
- * Display comparison table
- */
-function displayComparisonTable(results) {
-    const models = Object.keys(results).filter(m => !results[m].error);
+function chartOptions() {
+    return {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: true, position: 'bottom' } },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 1.0,
+                ticks: { callback: (value) => `${Math.round(value * 100)}%` }
+            }
+        }
+    };
+}
 
-    if (models.length === 0) {
+function displayComparisonTable(results) {
+    const models = Object.keys(results).filter((model) => !results[model].error && results[model].available !== false);
+    if (!models.length) {
         comparisonTable.innerHTML = '<p>沒有可比較的結果</p>';
         return;
     }
 
-    // Find best values for highlighting
-    const bestMAP = Math.max(...models.map(m => results[m].map));
-    const bestMRR = Math.max(...models.map(m => results[m].mrr));
-    const bestRPrec = Math.max(...models.map(m => results[m].r_precision));
-    const bestBpref = Math.max(...models.map(m => results[m].bpref));
+    const best = {
+        map: Math.max(...models.map((model) => results[model].map || 0)),
+        mrr: Math.max(...models.map((model) => results[model].mrr || 0)),
+        r_precision: Math.max(...models.map((model) => results[model].r_precision || 0)),
+        bpref: Math.max(...models.map((model) => results[model].bpref || 0))
+    };
 
-    let tableHTML = `
+    comparisonTable.innerHTML = `
         <div class="comparison-table">
             <table>
                 <thead>
                     <tr>
-                        <th>模型</th>
+                        <th>Model</th>
                         <th>MAP</th>
                         <th>MRR</th>
                         <th>R-Precision</th>
@@ -483,53 +371,119 @@ function displayComparisonTable(results) {
                     </tr>
                 </thead>
                 <tbody>
-    `;
-
-    models.forEach(model => {
-        const metrics = results[model];
-        const p5 = metrics.precision_at_k.find(p => p.k === 5)?.value || 0;
-        const p10 = metrics.precision_at_k.find(p => p.k === 10)?.value || 0;
-        const r10 = metrics.recall_at_k.find(r => r.k === 10)?.value || 0;
-        const f1_10 = metrics.f1_at_k.find(f => f.k === 10)?.value || 0;
-        const ndcg10 = metrics.ndcg_at_k.find(n => n.k === 10)?.value || 0;
-
-        tableHTML += `
-            <tr>
-                <td><strong>${model.toUpperCase()}</strong></td>
-                <td class="${metrics.map === bestMAP ? 'best-value' : ''}">${(metrics.map * 100).toFixed(2)}%</td>
-                <td class="${metrics.mrr === bestMRR ? 'best-value' : ''}">${(metrics.mrr * 100).toFixed(2)}%</td>
-                <td class="${metrics.r_precision === bestRPrec ? 'best-value' : ''}">${(metrics.r_precision * 100).toFixed(2)}%</td>
-                <td class="${metrics.bpref === bestBpref ? 'best-value' : ''}">${(metrics.bpref * 100).toFixed(2)}%</td>
-                <td>${(p5 * 100).toFixed(2)}%</td>
-                <td>${(p10 * 100).toFixed(2)}%</td>
-                <td>${(r10 * 100).toFixed(2)}%</td>
-                <td>${(f1_10 * 100).toFixed(2)}%</td>
-                <td>${(ndcg10 * 100).toFixed(2)}%</td>
-            </tr>
-        `;
-    });
-
-    tableHTML += `
+                    ${models.map((model) => {
+                        const metrics = results[model];
+                        return `
+                            <tr>
+                                <td><strong>${escapeHtml(model.toUpperCase())}</strong></td>
+                                <td class="${bestClass(metrics.map, best.map)}">${formatPercent(metrics.map || 0)}</td>
+                                <td class="${bestClass(metrics.mrr, best.mrr)}">${formatPercent(metrics.mrr || 0)}</td>
+                                <td class="${bestClass(metrics.r_precision, best.r_precision)}">${formatPercent(metrics.r_precision || 0)}</td>
+                                <td class="${bestClass(metrics.bpref, best.bpref)}">${formatPercent(metrics.bpref || 0)}</td>
+                                <td>${formatPercent(metricAt(metrics.precision_at_k, 5))}</td>
+                                <td>${formatPercent(metricAt(metrics.precision_at_k, 10))}</td>
+                                <td>${formatPercent(metricAt(metrics.recall_at_k, 10))}</td>
+                                <td>${formatPercent(metricAt(metrics.f1_at_k, 10))}</td>
+                                <td>${formatPercent(metricAt(metrics.ndcg_at_k, 10))}</td>
+                            </tr>
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
         </div>
     `;
-
-    comparisonTable.innerHTML = tableHTML;
 }
 
-/**
- * Get color palette for models
- */
-function getModelColors(models) {
-    const colorPalette = [
-        '#3b82f6', // blue
-        '#10b981', // green
-        '#f59e0b', // orange
-        '#ef4444', // red
-        '#8b5cf6', // purple
-        '#06b6d4', // cyan
-    ];
+function displayPerQueryBreakdown(perQuery) {
+    if (!perQueryBreakdown) {
+        return;
+    }
+    const rows = Object.entries(perQuery);
+    if (!rows.length) {
+        perQueryBreakdown.innerHTML = '<p>No per-query data.</p>';
+        return;
+    }
 
-    return models.map((_, idx) => colorPalette[idx % colorPalette.length]);
+    perQueryBreakdown.innerHTML = rows.map(([queryId, queryData]) => `
+        <details class="per-query-item">
+            <summary>
+                <strong>${escapeHtml(queryId)}</strong>
+                <span>${escapeHtml(queryData.query || '')}</span>
+            </summary>
+            <div class="per-query-model-grid">
+                ${Object.entries(queryData.models || {}).map(([model, modelData]) => `
+                    <div class="per-query-model">
+                        <div class="per-query-model-title">${escapeHtml(model.toUpperCase())}</div>
+                        <div class="per-query-metrics">
+                            <span>AP ${formatPercent(modelData.metrics?.ap || 0)}</span>
+                            <span>RR ${formatPercent(modelData.metrics?.rr || 0)}</span>
+                            <span>nDCG@10 ${formatPercent(metricAt(modelData.metrics?.ndcg_at_k, 10))}</span>
+                        </div>
+                        <ol class="judged-results">
+                            ${(modelData.top_results || []).slice(0, 5).map((result) => `
+                                <li>
+                                    <span class="judgment-pill ${result.relevance > 0 ? 'relevant' : 'unjudged'}">
+                                        ${result.judged ? `rel ${result.relevance}` : 'unjudged'}
+                                    </span>
+                                    <span>${escapeHtml(result.title || `Doc ${result.doc_id}`)}</span>
+                                </li>
+                            `).join('')}
+                        </ol>
+                    </div>
+                `).join('')}
+            </div>
+        </details>
+    `).join('');
+}
+
+function parseKValues(value, topK) {
+    const values = (value || '5,10,20')
+        .split(',')
+        .map((item) => parseInt(item.trim(), 10))
+        .filter((item) => Number.isFinite(item) && item > 0 && item <= 100);
+    values.push(topK);
+    return [...new Set(values)].sort((a, b) => a - b);
+}
+
+function normalizeApiPayload(payload) {
+    return payload.data || payload;
+}
+
+function metricAt(series, k) {
+    const item = (series || []).find((point) => point.k === k);
+    if (item) {
+        return item.value || 0;
+    }
+    const fallback = (series || [])[0];
+    return fallback?.value || 0;
+}
+
+function bestClass(value, best) {
+    return (value || 0) === best ? 'best-value' : '';
+}
+
+function getModelColors(models) {
+    const palette = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '#0891b2'];
+    return models.map((_, index) => palette[index % palette.length]);
+}
+
+function formatPercent(value) {
+    return `${((value || 0) * 100).toFixed(1)}%`;
+}
+
+function formatNumber(value) {
+    return new Intl.NumberFormat('en-US').format(value || 0);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, '&#096;');
 }

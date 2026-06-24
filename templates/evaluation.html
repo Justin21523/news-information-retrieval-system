@@ -4,62 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>評估分析 - CNIRS</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <h1>📊 評估分析</h1>
             <p class="subtitle">Evaluation & Performance Analysis<br>檢索系統效能評估</p>
             <nav class="nav">
-                <a href="/" class="nav-link">搜尋</a>
-                <a href="/compare" class="nav-link">模型對比</a>
-                <a href="/expand" class="nav-link">查詢擴展</a>
-                <a href="/evaluation" class="nav-link active">評估分析</a>
-                <a href="/about" class="nav-link">關於</a>
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link active">評估分析</a>
+                <a href="about" class="nav-link">關於</a>
             </nav>
         </header>
 
         <!-- Evaluation Control Panel -->
         <div class="eval-control-panel">
-            <h2>🎯 評估設定</h2>
+            <h2>Evaluation Settings</h2>
 
             <div class="eval-config">
                 <div class="config-group">
-                    <label for="eval-query">測試查詢:</label>
-                    <input type="text" id="eval-query" placeholder="輸入測試查詢..." value="台灣">
+                    <label for="eval-query-set">Query Set:</label>
+                    <select id="eval-query-set">
+                        <option value="news_demo">News Demo Qrels</option>
+                        <option value="mini_ir">Mini IR Concepts</option>
+                    </select>
                 </div>
 
                 <div class="config-group">
-                    <label for="eval-models">評估模型:</label>
+                    <label for="eval-query">Optional single-query override:</label>
+                    <input type="text" id="eval-query" placeholder="Leave blank to run the selected query set" value="">
+                </div>
+
+                <div class="config-group">
+                    <label for="eval-models">Retrieval Models:</label>
                     <div class="checkbox-group">
-                        <label class="checkbox-item">
-                            <input type="checkbox" value="tfidf" class="model-checkbox" checked>
-                            <span>TF-IDF</span>
-                        </label>
                         <label class="checkbox-item">
                             <input type="checkbox" value="bm25" class="model-checkbox" checked>
                             <span>BM25</span>
                         </label>
                         <label class="checkbox-item">
-                            <input type="checkbox" value="boolean" class="model-checkbox">
-                            <span>Boolean</span>
+                            <input type="checkbox" value="tfidf" class="model-checkbox" checked>
+                            <span>TF-IDF</span>
                         </label>
                         <label class="checkbox-item">
-                            <input type="checkbox" value="bert" class="model-checkbox">
-                            <span>BERT</span>
+                            <input type="checkbox" value="hybrid" class="model-checkbox" checked>
+                            <span>Hybrid</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="lm" class="model-checkbox" checked>
+                            <span>LM</span>
                         </label>
                     </div>
                 </div>
 
                 <div class="config-group">
-                    <label for="eval-topk">Top-K 文檔:</label>
+                    <label for="eval-topk">Top-K Documents:</label>
                     <input type="number" id="eval-topk" value="20" min="5" max="50" step="5">
                 </div>
 
-                <button id="run-eval-btn" class="btn btn-primary">▶️ 執行評估</button>
+                <div class="config-group">
+                    <label for="eval-k-values">Metric K values:</label>
+                    <input type="text" id="eval-k-values" value="5,10,20" placeholder="5,10,20">
+                </div>
+
+                <button id="run-eval-btn" class="btn btn-primary">Run Evaluation</button>
             </div>
         </div>
 
@@ -71,9 +89,11 @@
 
         <!-- Results Container -->
         <div id="eval-results" style="display: none;">
+            <div id="evaluation-meta" class="evaluation-meta"></div>
+
             <!-- Metrics Summary Cards -->
             <div class="metrics-summary">
-                <h2>📈 評估指標總覽</h2>
+                <h2>Evaluation Metrics</h2>
                 <div id="metrics-cards" class="metrics-cards"></div>
             </div>
 
@@ -152,8 +172,13 @@
 
             <!-- Model Comparison Table -->
             <div class="comparison-table-section">
-                <h2>🔍 模型比較表</h2>
+                <h2>Model Metrics Table</h2>
                 <div id="comparison-table"></div>
+            </div>
+
+            <div class="comparison-table-section">
+                <h2>Per-Query Breakdown</h2>
+                <div id="per-query-breakdown"></div>
             </div>
         </div>
 
@@ -163,6 +188,6 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='js/evaluation.js') }}"></script>
+    <script src="static/js/evaluation.js"></script>
 </body>
 </html>

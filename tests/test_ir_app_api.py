@@ -2,6 +2,7 @@
 
 from src.ir_app import create_app
 from src.ir_app.config import Settings
+from src.ir_app.services.search_log_service import SearchLogService
 
 
 def make_test_app(tmp_path):
@@ -390,6 +391,75 @@ def test_algorithms_endpoint_exposes_lm_capabilities(tmp_path):
     assert models["lm"]["supports_filters"] is True
     assert models["lm"]["supports_explanation"] is True
     assert models["bert"]["available"] is False
+
+
+def test_evaluation_query_sets_endpoint_lists_demo_qrels(tmp_path):
+    """Evaluation query set discovery exposes demo qrels metadata."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/evaluation/query_sets")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    query_sets = {item["id"]: item for item in payload["data"]["query_sets"]}
+    assert "mini_ir" in query_sets
+    assert payload["data"]["default_query_set"] == "mini_ir"
+    assert query_sets["mini_ir"]["query_count"] >= 1
+
+
+def test_evaluate_endpoint_computes_demo_metrics_and_breakdown(tmp_path):
+    """Evaluation endpoint computes real metrics for multiple retrieval models."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/evaluate",
+        json={
+            "query_set": "mini_ir",
+            "models": ["bm25", "tfidf", "hybrid", "lm"],
+            "top_k": 10,
+            "k_values": [5, 10],
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["evaluation_type"] == "demo"
+    assert "not full benchmark" in data["disclaimer"]
+    assert data["qrels_coverage"]["coverage"] == 1.0
+    assert set(data["results"]) == {"bm25", "tfidf", "hybrid", "lm"}
+    assert set(data["timings"]) == {"bm25", "tfidf", "hybrid", "lm"}
+    for model, metrics in data["results"].items():
+        assert metrics["available"] is True
+        assert 0.0 <= metrics["map"] <= 1.0
+        assert metrics["precision_at_k"]
+        assert metrics["recall_at_k"]
+        assert metrics["ndcg_at_k"]
+        assert data["timings"][model] >= 0
+    first_query = data["per_query"]["M001"]
+    assert "bm25" in first_query["models"]
+    assert first_query["models"]["bm25"]["top_results"]
+    assert payload["meta"]["execution_time"] >= 0
+
+
+def test_search_log_service_writes_jsonl_event(tmp_path):
+    """Search logs capture query, filters, latency, and top results."""
+    log_path = tmp_path / "logs" / "search_logs.jsonl"
+    service = SearchLogService(tmp_path, log_path)
+
+    service.log_event(
+        "/api/search",
+        {"query": "retrieval", "model": "bm25", "filters": {"category": ["models"]}},
+        {"results": [{"doc_id": 1, "article_id": "doc-1"}]},
+        0.012,
+    )
+
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert '"query": "retrieval"' in lines[0]
+    assert '"doc-1"' in lines[0]
 
 
 def test_query_analysis_removes_news_boilerplate_terms(tmp_path):

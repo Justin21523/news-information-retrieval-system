@@ -1115,17 +1115,68 @@ body {
 }
 
 .config-group input[type="text"],
-.config-group input[type="number"] {
+.config-group input[type="number"],
+.config-group select {
     padding: 10px 15px;
     border: 2px solid var(--border-color);
     border-radius: 8px;
     font-size: 1rem;
+    background: white;
     transition: border-color 0.3s;
 }
 
-.config-group input:focus {
+.config-group input:focus,
+.config-group select:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+.evaluation-meta {
+    margin-bottom: 25px;
+}
+
+.evaluation-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--primary-color);
+    background: #eff6ff;
+    color: var(--text-primary);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.evaluation-notice span {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+}
+
+.evaluation-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.evaluation-meta-grid > div {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+}
+
+.evaluation-meta-grid span,
+.metric-card-subline {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.evaluation-meta-grid strong {
+    display: block;
+    color: var(--text-primary);
+    margin-top: 4px;
 }
 
 /* Metrics Summary Cards */
@@ -1180,6 +1231,10 @@ body {
 .metric-card-model {
     font-size: 0.85rem;
     color: var(--text-secondary);
+}
+
+.metric-card-subline {
+    margin-top: 8px;
 }
 
 /* Charts Section */
@@ -1275,6 +1330,84 @@ body {
     color: var(--primary-color);
 }
 
+.per-query-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.per-query-item summary {
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+}
+
+.per-query-item summary span {
+    color: var(--text-secondary);
+}
+
+.per-query-model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+    padding: 0 16px 16px;
+}
+
+.per-query-model {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    background: #f9fafb;
+}
+
+.per-query-model-title {
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.per-query-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.per-query-metrics span,
+.judgment-pill {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    padding: 4px 8px;
+}
+
+.judged-results {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.judged-results li {
+    margin-bottom: 8px;
+}
+
+.judgment-pill.relevant {
+    border-color: #16a34a;
+    color: #166534;
+    background: #dcfce7;
+}
+
+.judgment-pill.unjudged {
+    border-color: #d1d5db;
+    color: #6b7280;
+}
+
 /* Responsive Design for Evaluation */
 @media (max-width: 768px) {
     .charts-section {
@@ -1283,6 +1416,11 @@ body {
     
     .metrics-cards {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .per-query-item summary {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 

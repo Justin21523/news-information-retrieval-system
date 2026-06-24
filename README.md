@@ -4,6 +4,61 @@ A comprehensive Information Retrieval (IR) system implementation for **LIS5033 -
 
 > **完整中文文檔**: See [docs/README.md](docs/README.md) for complete documentation in Traditional Chinese.
 
+## Portfolio News Search Demo
+
+This repository now includes a Flask-based **News Information Retrieval System** for searching a unified Taiwanese news corpus. The demo focuses on explainable IR rather than a black-box search box:
+
+- Unified search across BM25, TF-IDF, Boolean, Hybrid RRF, LM, fuzzy, and CSoundex modes.
+- Faceted metadata filtering by source, category, taxonomy, content type, date, and tags.
+- Search result explanations with matched terms, field boosts, component scores, snippets, and highlights.
+- Document detail enrichment with summary, KWIC, keywords, taxonomy metadata, and related documents.
+- Model comparison for BM25 / TF-IDF / Hybrid / LM on the same query.
+- Demo evaluation dashboard with Precision@K, Recall@K, MAP, MRR, nDCG, PR curves, per-query breakdown, and clearly labeled small demo qrels.
+
+### Demo Flow
+
+```bash
+pip install -r requirements.txt
+IR_ENABLE_HEAVY_MODELS=false python app.py
+```
+
+Open `http://localhost:5001` and try:
+
+1. Search `半導體` with BM25 or Hybrid.
+2. Open a document detail modal and inspect Summary, Keywords, KWIC, and Related News.
+3. Visit `/compare` and compare `人工智慧` across BM25 / TF-IDF / Hybrid / LM.
+4. Visit `/evaluation`, choose `News Demo Qrels`, and run the evaluation dashboard.
+
+### Demo Media
+
+The UI verification script writes screenshots and a short browser recording to `docs/assets/evaluation/`:
+
+```bash
+python scripts/verify_ui_playwright.py
+```
+
+Artifacts:
+
+- [Search Results](docs/assets/evaluation/search-results.png)
+- [Document Detail](docs/assets/evaluation/document-detail.png)
+- [Model Comparison](docs/assets/evaluation/model-compare.png)
+- [Evaluation Dashboard](docs/assets/evaluation/evaluation-dashboard.png)
+- [Demo Video](docs/assets/evaluation/cnirs-demo.webm)
+
+### Runtime Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `IR_DATASET_PATH` | first available unified/CNA corpus | Active JSONL corpus |
+| `IR_FALLBACK_DATASET_PATH` | `datasets/mini/ir_documents.json` | Small fallback fixture |
+| `IR_INDEX_DIR` | `data/indexes` | Persistent lexical index cache |
+| `IR_MAX_DOCUMENTS` | `25000` | Startup corpus cap; empty or `0` means no cap |
+| `IR_TOKENIZER_ENGINE` | `jieba` | Lightweight tokenizer engine |
+| `IR_ENABLE_HEAVY_MODELS` | `false` | Keeps CKIP/BERT-style optional models disabled on low-resource hosts |
+| `IR_HOST` / `IR_PORT` | `0.0.0.0` / `5001` | Flask bind address |
+
+Heavy semantic features such as BERT, KeyBERT, BERTopic, CKIP transformers, sentence-transformers, and FAISS are treated as optional. Missing optional dependencies should return structured unavailable responses instead of crashing startup.
+
 ## Features
 
 ### Core Modules

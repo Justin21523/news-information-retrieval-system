@@ -8,6 +8,23 @@
 ---
 
 ## [Unreleased]
+### [2026-06-24] Evaluation Dashboard Backend 與 Demo 驗證素材
+
+#### ✨ 新增
+- `src/ir_app/services/evaluation_service.py`：新增 demo qrels 評估服務，支援 BM25 / TF-IDF / Hybrid / LM 同 query set 比較，並輸出 Precision@K、Recall@K、MAP、MRR、R-Precision、Bpref、nDCG、F-beta、PR curve 與 per-query breakdown。
+- `data/evaluation/demo_qrels.json`：新增小型 curated demo qrels，包含大型新聞 corpus 主題（人工智慧、半導體、台灣經濟、美國中國、氣候變遷）與 mini IR fixture 主題（information retrieval、boolean retrieval、vector space model、bm25、query expansion）。
+- `src/ir_app/services/search_log_service.py`：新增 JSONL search log foundation，記錄 query、models、filters、top results、latency 與 endpoint，作為後續 click feedback / learning-to-rank 基礎。
+- `scripts/verify_ui_playwright.py`：新增 Playwright UI 驗證腳本，可輸出 search、document detail、model comparison、evaluation dashboard 截圖與 demo webm 錄影。
+
+#### 🔧 改善
+- `/api/evaluate` 從 placeholder 改為真實計算 demo evaluation，並保留 `{ok,data,meta}` 與前端相容欄位。
+- 新增 `/api/evaluation/query_sets`，讓 Evaluation UI 可探索目前可用 query set。
+- `templates/evaluation.html`、`static/js/evaluation.js`、`static/css/style.css`：Evaluation Dashboard 支援 query set 選擇、模型選擇、top-k/k-values、metrics table、PR curve、qrels coverage 與 per-query result breakdown。
+- `README.md`：補上 portfolio demo flow、環境變數、optional dependency 說明與 Playwright screenshots/video artifact 區塊。
+
+#### 🧪 測試
+- `tests/test_ir_app_api.py`：新增 evaluation query set discovery、真實 evaluation metrics schema、per-query breakdown 與 search log JSONL 測試。
+
 ### [2025-12-26] 註解覆蓋率提升與進度紀錄
 
 #### 📝 文檔

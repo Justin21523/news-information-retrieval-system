@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "description": "Small curated demo qrels for portfolio evaluation. These are not complete academic relevance judgments.",
+  "query_sets": {
+    "news_demo": {
+      "name": "News Demo Qrels",
+      "description": "Curated judgments against the unified Taiwanese news corpus.",
+      "judgment_type": "curated_demo",
+      "queries": [
+        {
+          "id": "N001",
+          "query": "人工智慧",
+          "description": "AI industry, policy, education, and medical application news."
+        },
+        {
+          "id": "N002",
+          "query": "半導體",
+          "description": "Semiconductor, chip supply chain, and technology policy news."
+        },
+        {
+          "id": "N003",
+          "query": "台灣 經濟",
+          "description": "Taiwan economy and policy discussion."
+        },
+        {
+          "id": "N004",
+          "query": "美國 中國",
+          "description": "US-China relations, trade, supply chain, and geopolitical news."
+        },
+        {
+          "id": "N005",
+          "query": "氣候變遷",
+          "description": "Climate policy, COP meetings, and environmental risk news."
+        }
+      ],
+      "qrels": {
+        "N001": [
+          {"article_id": "yahoo_121937346", "relevance": 3},
+          {"article_id": "LTN_5241394", "relevance": 3},
+          {"article_id": "yahoo_042516334", "relevance": 2},
+          {"article_id": "yahoo_060020787", "relevance": 2},
+          {"article_id": "yahoo_114038951", "relevance": 2},
+          {"article_id": "LTN_5246847", "relevance": 2},
+          {"article_id": "yahoo_063000672", "relevance": 2},
+          {"article_id": "LTN_5239066", "relevance": 1}
+        ],
+        "N002": [
+          {"article_id": "yahoo_034014406", "relevance": 3},
+          {"article_id": "yahoo_004400023", "relevance": 3},
+          {"article_id": "yahoo_024724218", "relevance": 3},
+          {"article_id": "LTN_5238084", "relevance": 2},
+          {"article_id": "LTN_5239680", "relevance": 2},
+          {"article_id": "LTN_5247391", "relevance": 2},
+          {"article_id": "yahoo_003744273", "relevance": 2},
+          {"article_id": "yahoo_023300542", "relevance": 2}
+        ],
+        "N003": [
+          {"article_id": "yahoo_055752637", "relevance": 3},
+          {"article_id": "yahoo_060134580", "relevance": 3},
+          {"article_id": "yahoo_034900843", "relevance": 2},
+          {"article_id": "yahoo_024847619", "relevance": 2},
+          {"article_id": "yahoo_014007487", "relevance": 1},
+          {"article_id": "yahoo_011045181", "relevance": 1}
+        ],
+        "N004": [
+          {"article_id": "yahoo_222000145", "relevance": 3},
+          {"article_id": "yahoo_060000678", "relevance": 3},
+          {"article_id": "yahoo_060431649", "relevance": 2},
+          {"article_id": "yahoo_072554517", "relevance": 2},
+          {"article_id": "LTN_5249204", "relevance": 2},
+          {"article_id": "yahoo_012258843", "relevance": 1},
+          {"article_id": "setn_1752812", "relevance": 1},
+          {"article_id": "yahoo_033700684", "relevance": 1}
+        ],
+        "N005": [
+          {"article_id": "yahoo_112921359", "relevance": 3},
+          {"article_id": "yahoo_022300527", "relevance": 3},
+          {"article_id": "LTN_5241266", "relevance": 2},
+          {"article_id": "LTN_5237913", "relevance": 2},
+          {"article_id": "LTN_5245358", "relevance": 2},
+          {"article_id": "LTN_5240609", "relevance": 2},
+          {"article_id": "yahoo_050700452", "relevance": 1},
+          {"article_id": "yahoo_010811569", "relevance": 1}
+        ]
+      }
+    },
+    "mini_ir": {
+      "name": "Mini IR Concepts",
+      "description": "Fallback query set for the small educational IR fixture.",
+      "judgment_type": "curated_demo",
+      "queries": [
+        {"id": "M001", "query": "information retrieval", "description": "General IR overview."},
+        {"id": "M002", "query": "boolean retrieval", "description": "Boolean model and operators."},
+        {"id": "M003", "query": "vector space model", "description": "VSM and cosine similarity."},
+        {"id": "M004", "query": "bm25 ranking", "description": "Term weighting and ranking."},
+        {"id": "M005", "query": "query expansion", "description": "Rocchio and relevance feedback."}
+      ],
+      "qrels": {
+        "M001": [
+          {"doc_id": 0, "relevance": 3},
+          {"doc_id": 11, "relevance": 2},
+          {"doc_id": 14, "relevance": 2},
+          {"doc_id": 6, "relevance": 1}
+        ],
+        "M002": [
+          {"doc_id": 1, "relevance": 3},
+          {"doc_id": 3, "relevance": 1},
+          {"doc_id": 4, "relevance": 1}
+        ],
+        "M003": [
+          {"doc_id": 2, "relevance": 3},
+          {"doc_id": 5, "relevance": 2},
+          {"doc_id": 13, "relevance": 1}
+        ],
+        "M004": [
+          {"doc_id": 5, "relevance": 2},
+          {"doc_id": 13, "relevance": 1},
+          {"doc_id": 6, "relevance": 1}
+        ],
+        "M005": [
+          {"doc_id": 7, "relevance": 3},
+          {"doc_id": 12, "relevance": 3},
+          {"doc_id": 14, "relevance": 1}
+        ]
+      }
+    }
+  }
+}

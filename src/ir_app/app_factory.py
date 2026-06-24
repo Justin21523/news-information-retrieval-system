@@ -18,8 +18,10 @@ from src.ir_app.schemas import api_error, api_success
 from src.ir_app.services import (
     DocumentDetailService,
     DocumentService,
+    EvaluationService,
     FeatureUnavailableError,
     RetrievalOrchestrator,
+    SearchLogService,
     SearchService,
 )
 
@@ -46,10 +48,14 @@ def create_app(settings: Settings | None = None) -> Flask:
     search_service = SearchService(settings, document_service)
     document_detail_service = DocumentDetailService(document_service, search_service)
     retrieval_orchestrator = RetrievalOrchestrator(search_service)
+    evaluation_service = EvaluationService(document_service, retrieval_orchestrator)
+    search_log_service = SearchLogService(settings.project_root)
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
     app.config["DOCUMENT_DETAIL_SERVICE"] = document_detail_service
     app.config["RETRIEVAL_ORCHESTRATOR"] = retrieval_orchestrator
+    app.config["EVALUATION_SERVICE"] = evaluation_service
+    app.config["SEARCH_LOG_SERVICE"] = search_log_service
 
     register_page_routes(app, settings)
     register_api_routes(
@@ -58,6 +64,8 @@ def create_app(settings: Settings | None = None) -> Flask:
         search_service,
         retrieval_orchestrator,
         document_detail_service,
+        evaluation_service,
+        search_log_service,
     )
     return app
 
@@ -109,6 +117,8 @@ def register_api_routes(
     search_service: SearchService,
     retrieval_orchestrator: RetrievalOrchestrator,
     document_detail_service: DocumentDetailService,
+    evaluation_service: EvaluationService,
+    search_log_service: SearchLogService,
 ) -> None:
     """Register API routes.
 
@@ -164,6 +174,12 @@ def register_api_routes(
             "model_info": model_info,
             "suggestions": meta.get("suggestions", []),
         }
+        search_log_service.log_event(
+            "/api/search",
+            payload,
+            data,
+            meta["execution_time"],
+        )
         return api_success(
             data,
             meta,
@@ -346,6 +362,12 @@ def register_api_routes(
             operator=payload.get("operator", "AND"),
             filters=payload.get("filters") or None,
         )
+        search_log_service.log_event(
+            request.path,
+            payload,
+            data,
+            meta["execution_time"],
+        )
         return api_success(
             data,
             meta,
@@ -367,10 +389,21 @@ def register_api_routes(
 
     @app.post("/api/evaluate")
     def evaluate():
+        payload = request.get_json(silent=True) or {}
+        data, meta = evaluation_service.evaluate(payload)
+        search_log_service.log_event(
+            "/api/evaluate",
+            payload,
+            data,
+            meta["execution_time"],
+        )
+        return api_success(data, meta, **data)
+
+    @app.get("/api/evaluation/query_sets")
+    def evaluation_query_sets():
         data = {
-            "evaluation_type": "demo",
-            "message": "Demo evaluation requires qrels and is not computed in startup fallback mode.",
-            "metrics": {},
+            "query_sets": evaluation_service.query_sets(),
+            "default_query_set": evaluation_service.default_query_set_id(),
         }
         return api_success(data, **data)
 

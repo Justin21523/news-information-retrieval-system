@@ -79,6 +79,7 @@ class Settings:
             Space: O(1)
         """
         candidates = [
+            root / "data" / "processed" / "unified_news_corpus_full.jsonl",
             root / "data" / "processed" / "unified_news_corpus.jsonl",
             root / "data" / "preprocessed" / "merged_14days_preprocessed.jsonl",
             root / "data" / "processed" / "cna_mvp_cleaned.jsonl",

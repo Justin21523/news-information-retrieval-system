@@ -191,7 +191,7 @@ def check_index_status():
     print("\n[4] Index Status")
     print("-" * 70)
 
-    index_dir = Path('data/index_50k')
+    index_dir = Path('/mnt/c/data/information-retrieval/index_50k')
 
     if not index_dir.exists():
         print("   ⚠ Index directory not found")

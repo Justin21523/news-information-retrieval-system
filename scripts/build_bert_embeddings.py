@@ -14,7 +14,7 @@ Features:
 Usage:
     python scripts/build_bert_embeddings.py \\
         --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-        --output data/indexes/bert_embeddings.npy \\
+        --output /mnt/c/data/information-retrieval/indexes/bert_embeddings.npy \\
         --model paraphrase-multilingual-MiniLM-L12-v2
 
 Complexity:
@@ -336,25 +336,25 @@ Examples:
   # Basic usage
   python scripts/build_bert_embeddings.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes/bert_embeddings.npy
+      --output /mnt/c/data/information-retrieval/indexes/bert_embeddings.npy
 
   # With FAISS index
   python scripts/build_bert_embeddings.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes/bert_embeddings.npy \\
-      --faiss data/indexes/bert_faiss.index \\
+      --output /mnt/c/data/information-retrieval/indexes/bert_embeddings.npy \\
+      --faiss /mnt/c/data/information-retrieval/indexes/bert_faiss.index \\
       --faiss-type hnsw
 
   # Use summary instead of full content (faster)
   python scripts/build_bert_embeddings.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes/bert_embeddings.npy \\
+      --output /mnt/c/data/information-retrieval/indexes/bert_embeddings.npy \\
       --use-summary
 
   # Custom model
   python scripts/build_bert_embeddings.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes/bert_embeddings.npy \\
+      --output /mnt/c/data/information-retrieval/indexes/bert_embeddings.npy \\
       --model paraphrase-multilingual-mpnet-base-v2
         """
     )

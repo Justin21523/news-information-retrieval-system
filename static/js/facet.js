@@ -209,7 +209,11 @@ async function performFacetedSearch() {
     const topK = parseInt(DOM.topkInput?.value) || 20;
 
     if (!query) {
-        alert('請輸入搜尋關鍵字');
+        if (Object.keys(FacetState.activeFilters).length > 0) {
+            await performFacetBrowse(topK);
+            return;
+        }
+        alert('請輸入搜尋關鍵字，或直接點選左側 facet 瀏覽文章');
         return;
     }
 
@@ -287,9 +291,9 @@ function renderCorpusDistribution(distribution) {
         .join('');
 
     panel.innerHTML =
-        '<div class="corpus-distribution-title">Corpus Coverage</div>' +
-        '<div class="distribution-section"><div class="distribution-label">Sources</div>' + sourceItems + '</div>' +
-        '<div class="distribution-section"><div class="distribution-label">Topics</div>' + topicItems + '</div>';
+        '<div class="corpus-distribution-title">語料覆蓋範圍</div>' +
+        '<div class="distribution-section"><div class="distribution-label">來源</div>' + sourceItems + '</div>' +
+        '<div class="distribution-section"><div class="distribution-label">主題</div>' + topicItems + '</div>';
 }
 
 /**
@@ -354,7 +358,7 @@ function createFacetGroup(fieldName, facet) {
     const header = document.createElement('div');
     header.className = 'facet-header';
     header.innerHTML = `
-        <span class="facet-title">${getFieldIcon(fieldName)} ${escapeHtml(facet.display_name)}</span>
+        <span class="facet-title">${getFieldIcon(fieldName)} ${escapeHtml(getFacetDisplayName(fieldName, facet))}</span>
         <span class="facet-summary">${formatFacetCoverage(facet)}</span>
         <span class="facet-toggle">${facet.quality?.collapsed_by_default ? '▶' : '▼'}</span>
     `;
@@ -401,6 +405,7 @@ function createFacetGroup(fieldName, facet) {
 function createFacetLabel(fieldName, fv) {
     const label = document.createElement('label');
     label.className = 'facet-label';
+    label.title = '點選即可套用篩選並更新結果';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -408,11 +413,11 @@ function createFacetLabel(fieldName, fv) {
     checkbox.value = fv.value;
     checkbox.dataset.count = fv.count;
     checkbox.checked = FacetState.activeFilters[fieldName]?.includes(fv.value) || false;
-    checkbox.addEventListener('change', () => handleFacetChange(fieldName, fv.value, checkbox.checked));
+    checkbox.addEventListener('change', () => handleFacetChange(fieldName, fv.value, checkbox.checked, fv));
 
     const text = document.createElement('span');
     text.className = 'facet-text';
-    text.innerHTML = `<span class="facet-value-name">${escapeHtml(fv.label || fv.value)}</span><span class="facet-count">${formatNumber(fv.count)}</span>`;
+    text.innerHTML = `<span class="facet-value-name">${escapeHtml(facetValueLabel(fv))}</span><span class="facet-count">${formatNumber(fv.count)}</span>`;
 
     label.appendChild(checkbox);
     label.appendChild(text);
@@ -426,12 +431,12 @@ function createFacetQualityNote(facet) {
     note.className = 'facet-quality-note';
     const coverage = Number(facet.coverage || facet.quality.coverage || 0);
     const hidden = Number(facet.quality.missing_or_hidden_documents || 0);
-    const parts = [`${Math.round(coverage * 100)}% usable`];
+    const parts = [`${Math.round(coverage * 100)}% 可用`];
     if (hidden > 0) {
-        parts.push(`${formatNumber(hidden)} hidden/missing`);
+        parts.push(`${formatNumber(hidden)} 筆隱藏或缺漏`);
     }
     if (facet.quality.is_low_information) {
-        parts.push('low variety');
+        parts.push('低變異度');
     }
     note.textContent = parts.join(' · ');
     return note;
@@ -509,7 +514,7 @@ function collapseFacetGroup(group, facet, displayCount) {
 /**
  * Handle facet checkbox change
  */
-function handleFacetChange(fieldName, value, checked) {
+function handleFacetChange(fieldName, value, checked, facetValue = null) {
     if (!FacetState.activeFilters[fieldName]) {
         FacetState.activeFilters[fieldName] = [];
     }
@@ -528,12 +533,34 @@ function handleFacetChange(fieldName, value, checked) {
     // Update active filters display
     updateActiveFiltersDisplay();
 
-    // Re-run search with new filters (only if a search has been performed)
-    if (FacetState.currentQuery) {
-        const topK = parseInt(DOM.topkInput?.value) || 20;
-        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
-            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
+    runSearchForFacetChange(fieldName, value, facetValue);
+}
+
+function runSearchForFacetChange(fieldName, value, facetValue = null) {
+    const topK = parseInt(DOM.topkInput?.value) || 20;
+    const query = currentOrFacetQuery();
+    if (!query) {
+        performFacetBrowse(topK).catch((error) => {
+            console.error('Facet browse error:', error);
+            alert('篩選瀏覽失敗: ' + error.message);
+        });
+        return;
     }
+    FacetState.currentQuery = query;
+    FacetState.currentModel = DOM.modelSelect?.value || FacetState.currentModel || 'bm25';
+    loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, Math.max(topK, 100))
+        .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK))
+        .catch((error) => {
+            console.error('Facet click search error:', error);
+            alert('篩選查詢失敗: ' + error.message);
+        });
+}
+
+function currentOrFacetQuery() {
+    const typedQuery = DOM.queryInput?.value?.trim();
+    if (typedQuery) return typedQuery;
+    if (FacetState.currentQuery) return FacetState.currentQuery;
+    return '';
 }
 
 /**
@@ -575,6 +602,55 @@ async function performFilteredSearch(query, model, topK) {
     }
 }
 
+async function performFacetBrowse(topK) {
+    showLoading(true);
+
+    try {
+        const response = await fetch('api/search/browse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filters: FacetState.activeFilters,
+                top_k: topK,
+                sort: 'date_desc'
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = normalizeApiPayload(await response.json());
+        if (!data.success) {
+            throw new Error(apiErrorMessage(data));
+        }
+
+        FacetState.searchResults = data.results || [];
+        FacetState.facets = data.facets || FacetState.facets;
+        renderFacets(FacetState.facets, true);
+        updateActiveFiltersDisplay();
+        displaySearchResults({
+            ...data,
+            query: '',
+            browse_mode: true,
+            model: 'facet_browse',
+            query_analysis: {
+                warnings: ['目前顯示 facet metadata 篩選結果，未使用關鍵字排序。']
+            },
+            model_info: {
+                id: 'facet_browse',
+                name: 'Facet Browse',
+                description: '直接依 metadata facets 瀏覽符合條件的新聞。'
+            }
+        });
+    } catch (error) {
+        console.error('Facet browse error:', error);
+        alert('篩選瀏覽失敗: ' + error.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
 /**
  * Display search results using the global displayResults function
  */
@@ -607,11 +683,11 @@ function updateActiveFiltersDisplay() {
 
     for (const [fieldName, values] of Object.entries(FacetState.activeFilters)) {
         const facet = FacetState.facets[fieldName];
-        const displayName = facet?.display_name || fieldName;
+        const displayName = getFacetDisplayName(fieldName, facet);
 
         values.forEach(value => {
             const facetValue = facet?.values?.find(item => item.value === value);
-            const label = facetValue?.label || value;
+            const label = facetValueLabel(facetValue || { value });
             html += `
                 <span class="filter-tag">
                     ${displayName}: ${label}
@@ -646,12 +722,7 @@ function removeFilter(fieldName, value) {
     // Update display
     updateActiveFiltersDisplay();
 
-    // Re-run search if a search has been performed
-    if (FacetState.currentQuery) {
-        const topK = parseInt(DOM.topkInput?.value) || 20;
-        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
-            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
-    }
+    if (FacetState.currentQuery) runSearchForFacetChange(fieldName, value);
 }
 
 /**
@@ -668,12 +739,7 @@ function clearAllFilters() {
     // Update display
     updateActiveFiltersDisplay();
 
-    // Re-run search if a search has been performed
-    if (FacetState.currentQuery) {
-        const topK = parseInt(DOM.topkInput?.value) || 20;
-        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
-            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
-    }
+    if (FacetState.currentQuery) runSearchForFacetChange('', '');
 }
 
 /**
@@ -694,6 +760,46 @@ function getFieldIcon(fieldName) {
         'tags': '#️⃣'
     };
     return icons[fieldName] || '🔹';
+}
+
+function getFacetDisplayName(fieldName, facet = null) {
+    const labels = {
+        source: '新聞來源',
+        source_name: '來源名稱',
+        category: '原始分類',
+        category_name: '分類名稱',
+        content_type: '內容類型',
+        taxonomy_topic: '主題分類',
+        taxonomy_path: '分類路徑',
+        published_year: '年份',
+        published_month: '月份',
+        pub_date: '發布日期',
+        author: '作者',
+        tags: '標籤'
+    };
+    return labels[fieldName] || facet?.display_name || fieldName;
+}
+
+function facetValueLabel(fv) {
+    if (!fv) return '';
+    const value = String(fv.label || fv.value || '');
+    const labels = {
+        article: '新聞文章',
+        news: '新聞',
+        business: '財經',
+        politics: '政治',
+        society: '社會',
+        technology: '科技',
+        international: '國際',
+        sports: '體育',
+        entertainment: '娛樂',
+        lifestyle: '生活',
+        health: '健康',
+        education: '教育',
+        opinion: '評論',
+        general: '綜合'
+    };
+    return labels[value] || labels[value.toLowerCase()] || value;
 }
 
 function formatNumber(value) {

@@ -16,7 +16,7 @@ It computes standard IR metrics:
 - F1@K
 
 Usage:
-    python scripts/evaluate_retrieval.py --index-dir data/indexes --queries data/evaluation/test_queries.txt --qrels data/evaluation/qrels.txt --output data/results/evaluation_results.json
+    python scripts/evaluate_retrieval.py --index-dir /mnt/c/data/information-retrieval/indexes --queries /mnt/c/data/information-retrieval/evaluation/test_queries.txt --qrels /mnt/c/data/information-retrieval/evaluation/qrels.txt --output data/results/evaluation_results.json
 
 Author: Information Retrieval System
 License: Educational Use
@@ -587,16 +587,16 @@ Examples:
   python scripts/evaluate_retrieval.py --models tfidf bm25
 
   # Custom paths
-  python scripts/evaluate_retrieval.py --index-dir data/indexes --queries data/evaluation/test_queries.txt --qrels data/evaluation/qrels.txt
+  python scripts/evaluate_retrieval.py --index-dir /mnt/c/data/information-retrieval/indexes --queries /mnt/c/data/information-retrieval/evaluation/test_queries.txt --qrels /mnt/c/data/information-retrieval/evaluation/qrels.txt
         """
     )
 
-    parser.add_argument('--index-dir', type=str, default='data/indexes',
-                       help='Path to indexes directory (default: data/indexes)')
-    parser.add_argument('--queries', type=str, default='data/evaluation/test_queries.txt',
-                       help='Path to test queries file (default: data/evaluation/test_queries.txt)')
-    parser.add_argument('--qrels', type=str, default='data/evaluation/qrels.txt',
-                       help='Path to QRELS file (default: data/evaluation/qrels.txt)')
+    parser.add_argument('--index-dir', type=str, default='/mnt/c/data/information-retrieval/indexes',
+                       help='Path to indexes directory (default: /mnt/c/data/information-retrieval/indexes)')
+    parser.add_argument('--queries', type=str, default='/mnt/c/data/information-retrieval/evaluation/test_queries.txt',
+                       help='Path to test queries file (default: /mnt/c/data/information-retrieval/evaluation/test_queries.txt)')
+    parser.add_argument('--qrels', type=str, default='/mnt/c/data/information-retrieval/evaluation/qrels.txt',
+                       help='Path to QRELS file (default: /mnt/c/data/information-retrieval/evaluation/qrels.txt)')
     parser.add_argument('--models', type=str, nargs='+',
                        default=['boolean', 'tfidf', 'bm25', 'bert'],
                        choices=['boolean', 'tfidf', 'bm25', 'bert'],

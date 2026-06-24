@@ -13,8 +13,8 @@ Features:
 
 Usage:
     python scripts/data/clean_dataset.py \
-        --input data/raw/cna_mvp_dataset.jsonl \
-        --output data/processed/cna_mvp_cleaned.jsonl
+        --input /mnt/c/data/information-retrieval/raw/cna_mvp_dataset.jsonl \
+        --output /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl
 
 Author: CNIRS Development Team
 License: Educational Use Only

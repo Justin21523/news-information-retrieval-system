@@ -45,7 +45,7 @@ class TechNewsSpider(scrapy.Spider):
         'ROBOTSTXT_OBEY': True,
         'USER_AGENT': 'CNIRS Academic Research Bot (Educational Use)',
         'FEEDS': {
-            'data/raw/technews_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/technews_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,

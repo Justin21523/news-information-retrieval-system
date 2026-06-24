@@ -18,7 +18,7 @@ The field index supports:
 Usage:
     python scripts/build_field_index.py
     python scripts/build_field_index.py --input data/preprocessed/custom.jsonl
-    python scripts/build_field_index.py --output data/indexes/field_index_custom.pkl
+    python scripts/build_field_index.py --output /mnt/c/data/information-retrieval/indexes/field_index_custom.pkl
 
 Author: Information Retrieval System
 Date: 2025-11-17
@@ -224,7 +224,7 @@ Examples:
     python scripts/build_field_index.py --input data/preprocessed/custom.jsonl
 
     # Save index to custom location
-    python scripts/build_field_index.py --output data/indexes/field_index_custom.pkl
+    python scripts/build_field_index.py --output /mnt/c/data/information-retrieval/indexes/field_index_custom.pkl
 
     # Enable verbose logging
     python scripts/build_field_index.py --verbose
@@ -244,8 +244,8 @@ Examples:
     parser.add_argument(
         '--output', '-o',
         type=str,
-        default='data/indexes/field_index.pkl',
-        help='Output pickle file for field index (default: data/indexes/field_index.pkl)'
+        default='/mnt/c/data/information-retrieval/indexes/field_index.pkl',
+        help='Output pickle file for field index (default: /mnt/c/data/information-retrieval/indexes/field_index.pkl)'
     )
 
     parser.add_argument(

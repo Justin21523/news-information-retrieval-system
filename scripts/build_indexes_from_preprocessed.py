@@ -16,7 +16,7 @@ Builds:
 Usage:
     python scripts/build_indexes_from_preprocessed.py \
         --input data/preprocessed/merged_14days_preprocessed.jsonl \
-        --output data/indexes_10k
+        --output /mnt/c/data/information-retrieval/indexes_10k
 
 Author: CNIRS Project
 """
@@ -359,7 +359,7 @@ def main():
     parser.add_argument(
         '--output', '-o',
         type=str,
-        default='data/indexes_10k',
+        default='/mnt/c/data/information-retrieval/indexes_10k',
         help='Output directory for indexes'
     )
 

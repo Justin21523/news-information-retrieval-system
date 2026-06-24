@@ -7,19 +7,19 @@ incrementally from news article JSONL files.
 
 Usage:
     # Build from all files in directory
-    python scripts/build_incremental_index.py --data-dir data/raw
+    python scripts/build_incremental_index.py --data-dir /mnt/c/data/information-retrieval/raw
 
     # Build from specific pattern
-    python scripts/build_incremental_index.py --data-dir data/raw --pattern "*_14days.jsonl"
+    python scripts/build_incremental_index.py --data-dir /mnt/c/data/information-retrieval/raw --pattern "*_14days.jsonl"
 
     # Limit documents
-    python scripts/build_incremental_index.py --data-dir data/raw --limit 10000
+    python scripts/build_incremental_index.py --data-dir /mnt/c/data/information-retrieval/raw --limit 10000
 
     # Resume from checkpoint
-    python scripts/build_incremental_index.py --data-dir data/raw --resume
+    python scripts/build_incremental_index.py --data-dir /mnt/c/data/information-retrieval/raw --resume
 
     # Full rebuild
-    python scripts/build_incremental_index.py --data-dir data/raw --full-rebuild
+    python scripts/build_incremental_index.py --data-dir /mnt/c/data/information-retrieval/raw --full-rebuild
 
 Author: Information Retrieval System
 """
@@ -65,22 +65,22 @@ def main():
         epilog="""
 Examples:
   # Build index from all files
-  python %(prog)s --data-dir data/raw
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw
 
   # Build with specific pattern
-  python %(prog)s --data-dir data/raw --pattern "ltn_*.jsonl"
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --pattern "ltn_*.jsonl"
 
   # Limit to 10000 documents
-  python %(prog)s --data-dir data/raw --limit 10000
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --limit 10000
 
   # Resume from checkpoint
-  python %(prog)s --data-dir data/raw --resume
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --resume
 
   # Full rebuild (clear existing)
-  python %(prog)s --data-dir data/raw --full-rebuild
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --full-rebuild
 
   # Disable deduplication
-  python %(prog)s --data-dir data/raw --no-dedup
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --no-dedup
         """
     )
 

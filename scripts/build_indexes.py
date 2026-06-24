@@ -8,12 +8,12 @@ This script builds multiple search indexes from preprocessed news articles:
 3. TF-IDF Vectors (for VSM ranking)
 4. BM25 Index (for BM25 ranking)
 
-All indexes are saved to data/indexes/ for use by retrieval systems.
+All indexes are saved to /mnt/c/data/information-retrieval/indexes/ for use by retrieval systems.
 
 Usage:
     python scripts/build_indexes.py \\
         --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-        --output data/indexes
+        --output /mnt/c/data/information-retrieval/indexes
 
 Complexity:
     Time: O(N*M) where N=number of documents, M=average document length
@@ -384,13 +384,13 @@ Examples:
   # Basic usage
   python scripts/build_indexes.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes
+      --output /mnt/c/data/information-retrieval/indexes
 
   # With custom statistics output
   python scripts/build_indexes.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-      --output data/indexes \\
-      --stats data/stats/index_stats.txt
+      --output /mnt/c/data/information-retrieval/indexes \\
+      --stats /mnt/c/data/information-retrieval/stats/index_stats.txt
         """
     )
 

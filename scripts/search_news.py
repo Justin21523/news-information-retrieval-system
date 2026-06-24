@@ -19,7 +19,7 @@ Usage Examples:
     python scripts/search_news.py --query "人工智慧" --model hybrid
 
     # Build index from JSONL first
-    python scripts/search_news.py --build --data-dir data/raw --limit 10000
+    python scripts/search_news.py --build --data-dir /mnt/c/data/information-retrieval/raw --limit 10000
 
     # Build from PostgreSQL
     python scripts/search_news.py --build --from-db --db-name ir_news --source ltn
@@ -225,7 +225,7 @@ Examples:
   python %(prog)s --query "人工智慧" --model hybrid --topk 20
 
   # Build index first
-  python %(prog)s --build --data-dir data/raw --limit 10000
+  python %(prog)s --build --data-dir /mnt/c/data/information-retrieval/raw --limit 10000
 
   # Interactive mode
   python %(prog)s --interactive
@@ -242,8 +242,8 @@ Examples:
     build_group.add_argument(
         '--data-dir',
         type=str,
-        default='data/raw',
-        help='Directory containing JSONL files (default: data/raw)'
+        default='/mnt/c/data/information-retrieval/raw',
+        help='Directory containing JSONL files (default: /mnt/c/data/information-retrieval/raw)'
     )
     build_group.add_argument(
         '--limit',

@@ -161,7 +161,7 @@ class StormMediaSpider(BasePlaywrightSpider):
 
         # Output settings
         'FEEDS': {
-            'data/raw/storm_media_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/storm_media_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -297,7 +297,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                 callback=self.parse_list_page,
                 errback=self.handle_error,
                 dont_filter=True,
-                meta=self.get_playwright_meta(wait_selector='div.card_info')
+                meta={'playwright': False}
             )
 
         elif self.mode == 'sequential':
@@ -330,7 +330,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                 callback=self.parse_list_page,
                 errback=self.handle_error,
                 dont_filter=True,
-                meta=self.get_playwright_meta(wait_selector='div.card_info')
+                meta={'playwright': False}
             )
 
     def parse_sitemap(self, response):
@@ -375,7 +375,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                     url=url,
                     callback=self.parse_article,
                     errback=self.handle_error,
-                    meta=self.get_playwright_meta(wait_selector='article.article_page')
+                    meta={'playwright': False}
                 )
 
         except ET.ParseError as e:
@@ -432,7 +432,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                 url=article_url,
                 callback=self.parse_article,
                 errback=self.handle_error,
-                meta=self.get_playwright_meta(wait_selector='article.article_page')
+                meta={'playwright': False}
             )
 
         logger.info(f"Found {articles_found} articles on list page")
@@ -450,7 +450,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                     callback=self.parse_list_page,
                     errback=self.handle_error,
                     dont_filter=True,
-                    meta=self.get_playwright_meta(wait_selector='div.card_info')
+                    meta={'playwright': False}
                 )
 
     def _generate_sequential_requests(self):
@@ -475,7 +475,7 @@ class StormMediaSpider(BasePlaywrightSpider):
                 callback=self.parse_article,
                 errback=self.handle_error,
                 meta={
-                    **self.get_playwright_meta(wait_selector='article.article_page'),
+                    'playwright': False,
                     'article_id': article_id,
                     'mode': 'sequential'
                 },

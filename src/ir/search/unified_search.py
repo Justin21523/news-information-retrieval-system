@@ -290,11 +290,11 @@ class UnifiedSearchEngine:
 
         Examples:
             >>> engine = UnifiedSearchEngine()
-            >>> stats = engine.build_index_from_jsonl("data/raw", limit=10000)
+            >>> stats = engine.build_index_from_jsonl("/mnt/c/data/information-retrieval/raw", limit=10000)
             >>> print(f"Indexed {stats['total_docs']} documents")
 
             >>> # Use larger batches for maximum throughput
-            >>> stats = engine.build_index_from_jsonl("data/raw", doc_batch_size=200)
+            >>> stats = engine.build_index_from_jsonl("/mnt/c/data/information-retrieval/raw", doc_batch_size=200)
         """
         self.logger.info(f"Building index from {data_dir} (batch_size={doc_batch_size})...")
 
@@ -506,7 +506,7 @@ class UnifiedSearchEngine:
 
         Examples:
             >>> engine = UnifiedSearchEngine()
-            >>> engine.build_index_from_jsonl("data/raw")
+            >>> engine.build_index_from_jsonl("/mnt/c/data/information-retrieval/raw")
             >>> results = engine.search("台灣 政治", top_k=10)
             >>> for r in results:
             ...     print(f"{r.rank}. {r.title} (score: {r.score:.4f})")
@@ -972,7 +972,7 @@ def demo():
     engine = UnifiedSearchEngine()
 
     # Check for data
-    data_dir = Path("data/raw")
+    data_dir = Path("/mnt/c/data/information-retrieval/raw")
     if not data_dir.exists() or not list(data_dir.glob("*.jsonl")):
         print(f"\n⚠ No data found in {data_dir}")
         print("Please run crawlers first to collect data.")

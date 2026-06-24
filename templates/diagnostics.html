@@ -3,54 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ranking Diagnostics - CNIRS</title>
+    <title>排序診斷 - CNIRS</title>
     <link rel="stylesheet" href="static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>Ranking Diagnostics</h1>
-            <p class="subtitle">BM25 / TF-IDF / LM term contribution analysis</p>
+            <h1>排序診斷</h1>
+            <p class="subtitle">BM25 / TF-IDF / LM 詞項貢獻分析</p>
             <nav class="nav">
                 <a href="./" class="nav-link">搜尋</a>
                 <a href="compare" class="nav-link">模型對比</a>
                 <a href="expand" class="nav-link">查詢擴展</a>
                 <a href="evaluation" class="nav-link">評估分析</a>
-                <a href="diagnostics" class="nav-link active">Ranking Diagnostics</a>
+                <a href="diagnostics" class="nav-link active">排序診斷</a>
                 <a href="feedback" class="nav-link">回饋分析</a>
                 <a href="corpus" class="nav-link">語料庫</a>
+                <a href="analysis-graph" class="nav-link">分析圖譜</a>
                 <a href="guide" class="nav-link">導覽</a>
                 <a href="about" class="nav-link">關於</a>
             </nav>
         </header>
 
         <section class="search-box">
-            <input type="text" id="diag-query" placeholder="Query, e.g. 半導體 or information retrieval" value="information retrieval">
+            <input type="text" id="diag-query" placeholder="輸入 query，例如：半導體 或 information retrieval" value="information retrieval">
             <div class="search-options">
                 <div class="option-group">
                     <label for="diag-doc-id">Document ID:</label>
                     <input type="text" id="diag-doc-id" value="0">
                 </div>
                 <div class="option-group">
-                    <label>Models:</label>
+                    <label>模型:</label>
                     <div class="checkbox-group">
                         <label><input type="checkbox" class="diag-model" value="bm25" checked> BM25</label>
                         <label><input type="checkbox" class="diag-model" value="tfidf" checked> TF-IDF</label>
                         <label><input type="checkbox" class="diag-model" value="lm" checked> LM</label>
                     </div>
                 </div>
-                <button id="run-diagnostics-btn" class="btn btn-primary">Run Diagnostics</button>
+                <button id="run-diagnostics-btn" class="btn btn-primary">執行診斷</button>
             </div>
         </section>
 
         <div id="diagnostics-loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p>Building ranking diagnostics...</p>
+            <p>正在建立排序診斷...</p>
         </div>
 
         <section id="diagnostics-results" class="diagnostics-page-results"></section>
     </div>
 
+    <script src="static/js/i18n.js"></script>
     <script src="static/js/explanation-panel.js"></script>
     <script src="static/js/diagnostics.js"></script>
     <script src="static/js/demo-assistant.js"></script>

@@ -48,7 +48,7 @@ class CNANewsSpider(scrapy.Spider):
         'USER_AGENT': 'CNIRS Academic Research Bot (Educational Use)',
         'HTTPERROR_ALLOW_404': True,  # Allow 404 responses to reach errback
         'FEEDS': {
-            'data/raw/cna_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/cna_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,

@@ -92,7 +92,7 @@ class SETNNewsSpider(scrapy.Spider):
         'RETRY_HTTP_CODES': [500, 502, 503, 504, 408, 429],
 
         'FEEDS': {
-            'data/raw/setn_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/setn_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析圖譜 - CNIRS</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>分析圖譜</h1>
+            <p class="subtitle">以節點方式呈現查詢流程、模型、文章結果與多層 metadata 分析</p>
+            <nav class="nav">
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="diagnostics" class="nav-link">排序診斷</a>
+                <a href="feedback" class="nav-link">回饋分析</a>
+                <a href="corpus" class="nav-link">語料庫</a>
+                <a href="analysis-graph" class="nav-link active">分析圖譜</a>
+                <a href="guide" class="nav-link">導覽</a>
+                <a href="about" class="nav-link">關於</a>
+            </nav>
+        </header>
+
+        <section class="search-box analysis-graph-controls">
+            <input type="text" id="graph-query" value="台灣 經濟" placeholder="輸入 query 產生分析圖譜">
+            <div class="search-options">
+                <div class="option-group">
+                    <label for="graph-models">模型</label>
+                    <input type="text" id="graph-models" value="bm25,tfidf,hybrid,lm">
+                </div>
+                <div class="option-group">
+                    <label for="graph-topk">Top-K</label>
+                    <input type="number" id="graph-topk" value="6" min="3" max="12">
+                </div>
+                <button id="graph-run-btn" class="btn btn-primary">建立圖譜</button>
+            </div>
+        </section>
+
+        <div id="analysis-graph-loading" class="loading" style="display:none;">
+            <div class="spinner"></div>
+            <p>正在建立分析圖譜...</p>
+        </div>
+
+        <main class="analysis-graph-layout">
+            <section class="analysis-graph-stage">
+                <div id="analysis-graph-flow" class="analysis-flow"></div>
+                <svg id="analysis-graph-svg" class="analysis-graph-svg" viewBox="0 0 1200 720" role="img" aria-label="IR analysis graph"></svg>
+            </section>
+            <aside id="analysis-graph-panel" class="analysis-graph-panel">
+                <h2>節點預覽</h2>
+                <p class="explain-muted">Hover 節點可放大預覽，點選節點會固定顯示完整資訊。</p>
+            </aside>
+        </main>
+    </div>
+
+    <script src="static/js/i18n.js"></script>
+    <script src="static/js/document-modal.js"></script>
+    <script src="static/js/analysis-graph.js"></script>
+    <script src="static/js/demo-assistant.js"></script>
+</body>
+</html>

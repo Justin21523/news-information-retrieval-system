@@ -63,11 +63,49 @@ def test_guide_page_exposes_demo_walkthrough(tmp_path):
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "CNIRS Demo Guide" in html
-    assert "Operation Flow" in html
-    assert "Start Guided Demo" in html
+    assert "CNIRS 操作導覽" in html
+    assert "操作流程" in html
+    assert "開始小幫手導覽" in html
+    assert "i18n.js" in html
     assert "demo-assistant.js" in html
     assert "run=1" in html
+
+
+def test_portfolio_pages_load_i18n_and_assistant_assets(tmp_path):
+    """Demo-facing pages expose language switching and guided tour assets."""
+    client = make_test_app(tmp_path).test_client()
+
+    for path in [
+        "/",
+        "/guide",
+        "/compare",
+        "/corpus",
+        "/evaluation",
+        "/diagnostics",
+        "/feedback",
+        "/analysis-graph",
+    ]:
+        response = client.get(path)
+        html = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert "i18n.js" in html
+        assert "demo-assistant.js" in html
+
+
+def test_analysis_graph_page_and_expand_button_styles(tmp_path):
+    """Analysis graph page is exposed and expansion button uses shared button CSS."""
+    client = make_test_app(tmp_path).test_client()
+
+    graph_response = client.get("/analysis-graph")
+    graph_html = graph_response.get_data(as_text=True)
+    expand_response = client.get("/expand")
+    expand_html = expand_response.get_data(as_text=True)
+
+    assert graph_response.status_code == 200
+    assert "分析圖譜" in graph_html
+    assert "analysis-graph.js" in graph_html
+    assert 'id="expand-btn" class="btn btn-primary"' in expand_html
 
 
 def test_search_requires_query(tmp_path):
@@ -80,6 +118,34 @@ def test_search_requires_query(tmp_path):
     assert response.status_code == 400
     assert payload["ok"] is False
     assert payload["error"]["code"] == "QUERY_REQUIRED"
+
+
+def test_facet_browse_returns_filtered_results_without_query(tmp_path):
+    """Facet browsing supports direct metadata filtering without a lexical query."""
+    client = make_test_app(tmp_path).test_client()
+
+    facets_response = client.get("/api/all_facets")
+    facets_payload = facets_response.get_json()
+    facet_field, facet = next(
+        (field, facet)
+        for field, facet in facets_payload["data"]["facets"].items()
+        if facet.get("values")
+    )
+    facet_value = facet["values"][0]["value"]
+
+    response = client.post(
+        "/api/search/browse",
+        json={"filters": {facet_field: [facet_value]}, "top_k": 5},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["browse_mode"] is True
+    assert payload["data"]["query"] == ""
+    assert payload["data"]["results"]
+    assert payload["data"]["total_matches"] >= len(payload["data"]["results"])
+    assert "facets" in payload["data"]
 
 
 def test_bm25_search_returns_results(tmp_path):
@@ -105,6 +171,26 @@ def test_bm25_search_returns_results(tmp_path):
     } <= set(first)
     assert payload["results"] == payload["data"]["results"]
     assert "ranking_features" in first["explanation"]
+
+
+def test_analysis_graph_api_returns_nodes_edges_and_layers(tmp_path):
+    """Analysis graph API exposes query, pipeline, model, and document nodes."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get(
+        "/api/analysis/graph?query=information%20retrieval&models=bm25,tfidf&top_k=3"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["nodes"]
+    assert data["edges"]
+    assert "document" in data["layers"]
+    assert any(node["type"] == "model" for node in data["nodes"])
+    assert any(node["type"] == "document" for node in data["nodes"])
+    assert payload["meta"]["execution_time"] >= 0
 
 
 def test_supported_search_models_return_stable_schema(tmp_path):
@@ -297,7 +383,7 @@ def test_corpus_dashboard_page_exists(tmp_path):
     response = client.get("/corpus")
 
     assert response.status_code == 200
-    assert b"Corpus Dashboard" in response.data
+    assert "語料庫儀表板" in response.get_data(as_text=True)
 
 
 def test_corpus_audit_endpoint_reports_readiness_and_metadata(tmp_path):

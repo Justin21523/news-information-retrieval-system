@@ -12,7 +12,7 @@
 - Python 3.8+
 - 所有依賴已安裝: `pip install -r requirements.txt`
 - 至少 4GB 可用記憶體 (CKIP Transformers 需要)
-- 數據集已準備: `data/processed/cna_mvp_cleaned.jsonl`
+- 數據集已準備: `/mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl`
 
 ### 2. 啟動伺服器
 

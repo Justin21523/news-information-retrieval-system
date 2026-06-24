@@ -82,14 +82,14 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a sitemap=latest \
     -a days=7 \
     -a max_articles=100 \
-    -o data/raw/tvbs_latest.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_latest.jsonl
 
 # Google sitemap (alternative)
 scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a mode=sitemap \
     -a sitemap=google \
     -a days=3 \
-    -o data/raw/tvbs_google.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_google.jsonl
 ```
 
 ### Mode 2: List (Category-Based)
@@ -100,14 +100,14 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a mode=list \
     -a category=politics \
     -a days=7 \
-    -o data/raw/tvbs_politics.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_politics.jsonl
 
 # All categories
 scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a mode=list \
     -a category=all \
     -a days=3 \
-    -o data/raw/tvbs_all.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_all.jsonl
 ```
 
 ### Mode 3: Sequential (Historical Data)
@@ -119,7 +119,7 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a start_id=3040000 \
     -a end_id=3048000 \
     -a max_articles=100 \
-    -o data/raw/tvbs_sequential_recent.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_sequential_recent.jsonl
 
 # Historical ID range (1M-2M)
 scrapy runspider scripts/crawlers/tvbs_spider.py \
@@ -127,7 +127,7 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a start_id=1500000 \
     -a end_id=1600000 \
     -a max_articles=1000 \
-    -o data/raw/tvbs_sequential_historical.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_sequential_historical.jsonl
 ```
 
 ### Mode 4: Hybrid (Comprehensive)
@@ -138,7 +138,7 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a mode=hybrid \
     -a category=politics \
     -a days=30 \
-    -o data/raw/tvbs_hybrid.jsonl
+    -o /mnt/c/data/information-retrieval/raw/tvbs_hybrid.jsonl
 ```
 
 ---
@@ -347,7 +347,7 @@ scrapy runspider scripts/crawlers/tvbs_spider.py \
     -a mode=sitemap \
     -a sitemap=latest \
     -a days=30 \
-    -o data/raw/tvbs_30days.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/tvbs_30days.jsonl \
     -s LOG_LEVEL=INFO
 ```
 
@@ -362,7 +362,7 @@ for start in 1000000 1100000 1200000 1300000 1400000 1500000; do
         -a start_id=$start \
         -a end_id=$end \
         -a max_articles=10000 \
-        -o data/raw/tvbs_historical_${start}.jsonl \
+        -o /mnt/c/data/information-retrieval/raw/tvbs_historical_${start}.jsonl \
         -s LOG_LEVEL=WARNING
 done
 ```
@@ -375,7 +375,7 @@ for cat in politics money local world entertainment sports life tech health; do
         -a mode=list \
         -a category=$cat \
         -a days=7 \
-        -o data/raw/tvbs_${cat}_7days.jsonl \
+        -o /mnt/c/data/information-retrieval/raw/tvbs_${cat}_7days.jsonl \
         -s LOG_LEVEL=INFO
 done
 ```

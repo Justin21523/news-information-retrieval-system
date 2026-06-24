@@ -17,6 +17,8 @@ from typing import Optional, List
 from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError
 
+from scripts.crawlers.utils.jobdir import has_pending_requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +51,7 @@ class PTSNewsSpider(scrapy.Spider):
         'USER_AGENT': 'CNIRS Academic Research Bot (Educational Use)',
         'HTTPERROR_ALLOW_404': True,  # Allow 404 responses to reach errback
         'FEEDS': {
-            'data/raw/pts_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/pts_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -63,8 +65,18 @@ class PTSNewsSpider(scrapy.Spider):
     # Time span: Approximately 19 months (1.6 years) of historical data
     EARLIEST_ID = 690000  # April 2024
     CURRENT_ID_ESTIMATE = 782000  # Will be higher over time
+    IDS_PER_DAY_ESTIMATE = 160  # Heuristic for auto-range in sequential mode
 
-    def __init__(self, days: int = 7, start_id: int = None, end_id: int = None,
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(f"Detected JOBDIR resume queue; skipping start_requests seeding (JOBDIR={crawler.settings.get('JOBDIR')})")
+        return spider
+
+    def __init__(self, days: int = 7, start_date: str = None, end_date: str = None,
+                 start_id: int = None, end_id: int = None,
                  max_articles: int = 500, mode: str = 'dailynews', *args, **kwargs):
         """
         Initialize spider with crawling parameters.
@@ -91,7 +103,22 @@ class PTSNewsSpider(scrapy.Spider):
         self.max_articles = int(max_articles)
         self.mode = mode
 
+        # Date window (used for filtering + auto-range sizing)
+        if start_date and end_date:
+            try:
+                self.start_date = datetime.strptime(start_date, '%Y-%m-%d')
+                self.end_date = datetime.strptime(end_date, '%Y-%m-%d')
+                self.days = max(1, int((self.end_date - self.start_date).days))
+            except ValueError as e:
+                logger.error(f"Invalid date format: {e}")
+                self.end_date = datetime.now()
+                self.start_date = self.end_date - timedelta(days=self.days)
+        else:
+            self.end_date = datetime.now()
+            self.start_date = self.end_date - timedelta(days=self.days)
+
         # For sequential ID crawling
+        self._start_id_provided = start_id is not None
         self.start_id = int(start_id) if start_id else self.EARLIEST_ID
         self.end_id = int(end_id) if end_id else None  # Auto-detect if not provided
 
@@ -118,6 +145,9 @@ class PTSNewsSpider(scrapy.Spider):
         Yields:
             scrapy.Request: Requests for dailynews page or article pages
         """
+        if getattr(self, "_resume_from_jobdir", False):
+            return
+
         if self.mode == 'dailynews':
             # Mode 1: Fast crawl of recent articles
             logger.info("Mode: dailynews - Discovering recent articles from /dailynews")
@@ -254,6 +284,16 @@ class PTSNewsSpider(scrapy.Spider):
             else:
                 self.end_id = self.CURRENT_ID_ESTIMATE
                 logger.warning(f"Could not detect max ID, using estimate: {self.end_id}")
+
+        # Auto-select a bounded start_id for sequential mode based on the configured day window.
+        if self.mode == 'sequential' and not self._start_id_provided and self.end_id:
+            estimated_span = max(1, int(self.days)) * self.IDS_PER_DAY_ESTIMATE
+            auto_start_id = max(self.EARLIEST_ID, int(self.end_id) - int(estimated_span))
+            logger.info(
+                f"Auto range: days={int(self.days)} "
+                f"→ ID span≈{estimated_span:,} (start_id={auto_start_id:,}, end_id={self.end_id:,})"
+            )
+            self.start_id = auto_start_id
 
         # Now start sequential crawling
         self._start_sequential_crawl()
@@ -406,6 +446,15 @@ class PTSNewsSpider(scrapy.Spider):
             if not publish_date:
                 publish_date = response.css('meta[property="pubdate"]::attr(content)').get()
             article['publish_date'] = self.parse_date(publish_date)
+
+            # Date range filtering (best-effort).
+            if article.get('publish_date'):
+                try:
+                    pub_date_obj = datetime.strptime(article['publish_date'], '%Y-%m-%d')
+                    if not (self.start_date <= pub_date_obj <= self.end_date):
+                        return
+                except ValueError:
+                    pass
 
             # Category - from meta or breadcrumb
             category = response.css('meta[property="article:section"]::attr(content)').get()

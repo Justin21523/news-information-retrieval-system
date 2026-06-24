@@ -82,20 +82,32 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
 
         page.goto(f"{base_url}/guide", wait_until="networkidle")
         page.wait_for_selector(".guide-page", timeout=45000)
-        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.screenshot(path=asset_dir / "demo-guide.png", full_page=True)
         page.screenshot(path=asset_dir / "demo-assistant-guide.png", full_page=True)
 
         page.goto(f"{base_url}/?q=半導體%20人工智慧&model=hybrid&run=1&tour=1&step=search", wait_until="networkidle")
-        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector(".search-box.demo-assistant-highlight", timeout=45000)
         page.wait_for_selector(".result-item, .results-list", timeout=45000)
         page.screenshot(path=asset_dir / "demo-assistant-search.png", full_page=True)
+
+        page.goto(f"{base_url}/?q=台灣%20經濟&model=bm25&taxonomy_topic=business&run=1&tour=1&step=facets", wait_until="networkidle")
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
+        page.wait_for_selector("#filter-sidebar.demo-assistant-highlight", timeout=45000)
+        page.wait_for_selector(".result-item, .results-list", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-assistant-facets.png", full_page=True)
 
         page.goto(f"{base_url}/", wait_until="networkidle")
         fill_search(page, "半導體")
         seed_feedback(page)
         page.screenshot(path=asset_dir / "search-results.png", full_page=True)
+
+        run_facet_browse(page)
+        page.screenshot(path=asset_dir / "facet-browse.png", full_page=True)
 
         open_document_detail(page)
         page.screenshot(path=asset_dir / "document-detail.png", full_page=True)
@@ -105,7 +117,8 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.screenshot(path=asset_dir / "model-compare.png", full_page=True)
 
         page.goto(f"{base_url}/compare?q=美國%20中國&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1&tour=1&step=compare", wait_until="networkidle")
-        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector("#comparison-container .model-results", timeout=45000)
         page.screenshot(path=asset_dir / "demo-assistant-compare.png", full_page=True)
 
@@ -116,7 +129,8 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         page.screenshot(path=asset_dir / "topic-explorer.png", full_page=True)
 
         page.goto(f"{base_url}/corpus?tour=1&step=topics&topic_query=半導體%20人工智慧&run_topic=1", wait_until="networkidle")
-        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
         page.wait_for_selector(".topic-card", timeout=60000)
         page.screenshot(path=asset_dir / "demo-assistant-corpus.png", full_page=True)
 
@@ -128,9 +142,24 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         run_diagnostics(page)
         page.screenshot(path=asset_dir / "ranking-diagnostics.png", full_page=True)
 
+        page.goto(f"{base_url}/analysis-graph?query=information%20retrieval&models=bm25,tfidf,hybrid,lm&top_k=6", wait_until="networkidle")
+        run_analysis_graph(page)
+        page.screenshot(path=asset_dir / "analysis-graph.png", full_page=True)
+
+        page.goto(f"{base_url}/analysis-graph?query=台灣%20經濟&models=bm25,tfidf,hybrid,lm&top_k=6&tour=1&step=analysis", wait_until="networkidle")
+        run_analysis_graph(page)
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-assistant-analysis-graph.png", full_page=True)
+
         page.goto(f"{base_url}/feedback", wait_until="networkidle")
         run_feedback_dashboard(page)
         page.screenshot(path=asset_dir / "feedback-analytics.png", full_page=True)
+
+        page.goto(f"{base_url}/guide?tour=1&step=wrap", wait_until="networkidle")
+        page.wait_for_selector("#demo-assistant-app", timeout=45000)
+        page.wait_for_selector("#demo-assistant-coach", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-assistant-wrap.png", full_page=True)
 
         page.close()
         context.close()
@@ -184,6 +213,20 @@ def open_document_detail(page) -> None:
                 return
         except PlaywrightTimeoutError:
             continue
+
+
+def run_facet_browse(page) -> None:
+    """Browse documents directly from a metadata facet without a query.
+
+    Complexity:
+        Time: O(request)
+        Space: O(1)
+    """
+    page.locator("#query-input").fill("")
+    page.wait_for_selector("#facet-groups .facet-label", timeout=45000)
+    page.locator("#facet-groups input[type='checkbox']").first.check(force=True)
+    page.wait_for_selector(".result-item", timeout=45000)
+    page.wait_for_selector("#result-count", timeout=45000)
 
 
 def seed_feedback(page) -> None:
@@ -296,8 +339,27 @@ def run_feedback_dashboard(page) -> None:
     """
     page.wait_for_selector(".feedback-dashboard", timeout=45000)
     page.wait_for_selector(".feedback-summary-card", timeout=45000)
-    page.locator("button:has-text('Train Demo Ranker')").click()
+    page.locator(
+        "#ltr-training-result"
+    ).scroll_into_view_if_needed()
+    page.locator(
+        "button:has-text('Train Demo Ranker'), button:has-text('訓練 Demo Ranker')"
+    ).click()
     page.wait_for_selector("#ltr-training-result table", timeout=45000)
+
+
+def run_analysis_graph(page) -> None:
+    """Load the node-based analysis graph and preview a node.
+
+    Complexity:
+        Time: O(request)
+        Space: O(1)
+    """
+    page.wait_for_selector(".graph-node", timeout=45000)
+    node_count = page.locator(".graph-node").count()
+    if node_count > 1:
+        page.locator(".graph-node").nth(1).hover()
+    page.wait_for_selector(".analysis-graph-panel", timeout=45000)
 
 
 def parse_args() -> argparse.Namespace:

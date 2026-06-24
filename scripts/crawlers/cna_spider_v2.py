@@ -26,7 +26,12 @@ from typing import Dict, Any, Optional
 from urllib.parse import urljoin
 from scrapy_playwright.page import PageMethod
 
-from .base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+try:
+    # When imported as a package module.
+    from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+except ImportError:
+    # When executed via `scrapy runspider scripts/crawlers/cna_spider_v2.py`.
+    from base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +108,7 @@ class CNANewsSpiderV2(BasePlaywrightSpider):
             self.categories = self.CATEGORIES
 
         self.max_articles = int(max_articles) if max_articles else None
+        self.max_pages = int(kwargs.get('max_pages', 500))
 
         # Statistics
         self.stats = {
@@ -115,6 +121,7 @@ class CNANewsSpiderV2(BasePlaywrightSpider):
         logger.info(f"  Date range: {self.start_date.date()} to {self.end_date.date()}")
         logger.info(f"  Categories: {list(self.categories.keys())}")
         logger.info(f"  Max articles per category: {self.max_articles or 'unlimited'}")
+        logger.info(f"  Max pages per category: {self.max_pages}")
 
     def start_requests(self):
         """
@@ -188,6 +195,8 @@ class CNANewsSpiderV2(BasePlaywrightSpider):
         logger.info(f"Found {len(article_links)} article links on page {page}")
 
         articles_yielded = 0
+        in_range_found = False
+        oldest_date_on_page: Optional[datetime] = None
 
         for link in article_links:
             # Build absolute URL
@@ -196,6 +205,24 @@ class CNANewsSpiderV2(BasePlaywrightSpider):
             # Filter by URL pattern (CNA articles: /news/<category>/<ID>)
             if '/news/' not in article_url:
                 continue
+
+            # Prefer filtering via date embedded in CNA URLs: /news/<cat>/<YYYYMMDD><NNNN>.aspx
+            # This reduces unnecessary Playwright loads for out-of-range pages.
+            url_date: Optional[datetime] = None
+            match = re.search(r'/news/[a-z]+/(\d{8})\d{4}\\.aspx', article_url)
+            if match:
+                try:
+                    url_date = datetime.strptime(match.group(1), '%Y%m%d')
+                except ValueError:
+                    url_date = None
+
+            if url_date:
+                oldest_date_on_page = url_date if oldest_date_on_page is None else min(oldest_date_on_page, url_date)
+                if url_date < self.start_date:
+                    continue
+                if url_date > self.end_date:
+                    continue
+                in_range_found = True
 
             # Check if max articles reached
             if self.max_articles and articles_yielded >= self.max_articles:
@@ -222,7 +249,15 @@ class CNANewsSpiderV2(BasePlaywrightSpider):
         # Check for next page (pagination)
         # CNA pagination: ?page=2, ?page=3, etc.
         next_page = response.css('a.pageNext::attr(href)').get()
-        if next_page and articles_yielded > 0:
+        if next_page and articles_yielded > 0 and page < self.max_pages:
+            # If this page is already entirely older than the target window, stop pagination.
+            if oldest_date_on_page and oldest_date_on_page < self.start_date and not in_range_found:
+                logger.info(
+                    f"Stopping pagination for {category_name}: "
+                    f"oldest={oldest_date_on_page.date()} < start_date={self.start_date.date()}"
+                )
+                return
+
             next_url = urljoin(response.url, next_page)
             yield scrapy.Request(
                 url=next_url,

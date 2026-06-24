@@ -416,13 +416,22 @@ data/database/*.db
 !data/indexes/.gitkeep
 
 # Raw data (too large)
-# data/raw/*.jsonl
+data/raw/**/*.jsonl*
 data/raw/*.zip
 data/raw/*.tar.gz
 # data/raw/data/
 
 # Preprocessed data
-# data/preprocessed/*.jsonl
+data/preprocessed/**/*.jsonl*
+data/processed/**/*.jsonl*
+data/cleaned/**/*.jsonl*
+
+# Scrapy resume state (very large)
+data/jobdir/
+
+# Crawler test artifacts (generated)
+data/test_output/
+data/crawler_test_results.json
 
 # All index directories
 # data/index*/

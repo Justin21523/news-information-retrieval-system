@@ -124,7 +124,7 @@ class JSONLImporter:
         Examples:
             >>> db_manager = PostgresManager()
             >>> importer = JSONLImporter(db_manager)
-            >>> stats = importer.import_file('data/raw/ltn_14days.jsonl')
+            >>> stats = importer.import_file('/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl')
             >>> print(f"Imported {stats['inserted']} documents")
         """
         filepath = Path(filepath)
@@ -230,7 +230,7 @@ class JSONLImporter:
         Examples:
             >>> db_manager = PostgresManager()
             >>> importer = JSONLImporter(db_manager)
-            >>> stats = importer.import_directory('data/raw', pattern='*_14days.jsonl')
+            >>> stats = importer.import_directory('/mnt/c/data/information-retrieval/raw', pattern='*_14days.jsonl')
             >>> print(f"Total imported: {stats['total_inserted']}")
         """
         directory = Path(directory)
@@ -317,7 +317,7 @@ class JSONLImporter:
 
         Examples:
             >>> importer = JSONLImporter(db_manager)
-            >>> verification = importer.verify_import('data/raw/ltn_14days.jsonl')
+            >>> verification = importer.verify_import('/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl')
             >>> print(f"Match rate: {verification['match_rate']:.2f}%")
         """
         self.logger.info(f"Verifying import for {jsonl_path}...")
@@ -384,7 +384,7 @@ def demo():
     importer = JSONLImporter(db_manager, batch_size=100)
 
     # Check for data
-    data_dir = Path("data/raw")
+    data_dir = Path("/mnt/c/data/information-retrieval/raw")
     if not data_dir.exists():
         print(f"\n⚠ Data directory not found: {data_dir}")
         print("Please run crawlers first to collect data.")

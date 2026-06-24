@@ -38,8 +38,43 @@ from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)
 
+try:
+    # When imported as a package module.
+    from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider
+except ImportError:
+    # When executed via `scrapy runspider scripts/crawlers/chinatimes_spider.py`.
+    try:
+        from base_playwright_spider import BasePlaywrightSpider
+    except ImportError:  # pragma: no cover
+        BasePlaywrightSpider = scrapy.Spider
 
-class ChinaTimesSpider(scrapy.Spider):
+try:
+    from scrapy_playwright.page import PageMethod
+except ImportError:  # pragma: no cover
+    PageMethod = None
+
+
+def should_abort_request(request) -> bool:
+    """
+    Abort non-essential resource requests to speed up Playwright navigation.
+
+    Args:
+        request: Playwright request object.
+
+    Returns:
+        bool: True to abort the request.
+
+    Complexity:
+        Time: O(1)
+        Space: O(1)
+    """
+    try:
+        return request.resource_type in {"image", "media", "font"}
+    except Exception:
+        return False
+
+
+class ChinaTimesSpider(BasePlaywrightSpider):
     """
     Scrapy spider for China Times News (中時新聞網).
 
@@ -69,6 +104,7 @@ class ChinaTimesSpider(scrapy.Spider):
 
     name = 'chinatimes_news'
     allowed_domains = ['chinatimes.com', 'www.chinatimes.com']
+    handle_httpstatus_list = [403, 429, 500, 502, 503, 504]
 
     # Category mapping
     CATEGORIES = {
@@ -89,7 +125,8 @@ class ChinaTimesSpider(scrapy.Spider):
 
     # Custom settings
     custom_settings = {
-        'DOWNLOAD_DELAY': 2,  # 2 seconds between requests
+        'TWISTED_REACTOR': 'twisted.internet.asyncioreactor.AsyncioSelectorReactor',
+        'DOWNLOAD_DELAY': 1.5,  # balance speed and throttling
         'CONCURRENT_REQUESTS_PER_DOMAIN': 2,  # Can handle 2 concurrent
         'ROBOTSTXT_OBEY': True,
         'RETRY_TIMES': 3,
@@ -98,9 +135,33 @@ class ChinaTimesSpider(scrapy.Spider):
         # User-Agent rotation
         'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 
+        # Optional Playwright fallback (used when `use_playwright=auto/1`).
+        'DOWNLOAD_HANDLERS': {
+            "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+            "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+        },
+        'PLAYWRIGHT_BROWSER_TYPE': 'chromium',
+        'PLAYWRIGHT_LAUNCH_OPTIONS': {
+            'headless': True,
+            'timeout': 60000,
+            'args': [
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+            ],
+        },
+        'PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT': 60000,
+        'PLAYWRIGHT_ABORT_REQUEST': should_abort_request,
+        'DOWNLOADER_MIDDLEWARES': {
+            'scripts.crawlers.middlewares.stealth_middleware.StealthMiddleware': 585,
+            'scripts.crawlers.middlewares.humanization_middleware.HumanizationMiddleware': 586,
+        },
+        'PLAYWRIGHT_STEALTH_ENABLED': True,
+        'HUMANIZATION_ENABLED': False,
+
         # Output settings
         'FEEDS': {
-            'data/raw/chinatimes_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/chinatimes_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -117,6 +178,9 @@ class ChinaTimesSpider(scrapy.Spider):
                  days: int = 7,
                  start_date: str = None,
                  end_date: str = None,
+                 max_pages: int = None,
+                 max_links_per_page: int = None,
+                 use_playwright: str = 'auto',
                  *args, **kwargs):
         """
         Initialize China Times spider with date range and category.
@@ -150,12 +214,38 @@ class ChinaTimesSpider(scrapy.Spider):
             self.end_date = datetime.now()
             self.start_date = self.end_date - timedelta(days=int(days))
 
+        self.max_links_per_page: Optional[int]
+        if max_links_per_page is not None:
+            max_links_per_page = int(max_links_per_page)
+            self.max_links_per_page = max_links_per_page if max_links_per_page > 0 else None
+        else:
+            self.max_links_per_page = None
+
+        # Pagination guard: auto-scale for larger historical windows.
+        # This is a safety limit; date filtering in parse_article will further reduce output.
+        window_days = max(1, int((self.end_date - self.start_date).days) + 1)
+        if max_pages is not None:
+            self.max_pages = int(max_pages)
+        else:
+            self.max_pages = min(2000, max(10, window_days * 3))
+
+        mode = str(use_playwright).strip().lower() if use_playwright is not None else 'auto'
+        if mode in {'1', 'true', 'yes', 'always'}:
+            self.playwright_mode = 'always'
+        elif mode in {'0', 'false', 'no', 'never'}:
+            self.playwright_mode = 'never'
+        else:
+            self.playwright_mode = 'auto'
+
         logger.info("=" * 70)
         logger.info(f"China Times Spider Initialized")
         logger.info("=" * 70)
         logger.info(f"Category: {self.category_name} ({self.category})")
         logger.info(f"Date Range: {self.start_date.date()} to {self.end_date.date()}")
         logger.info(f"Days: {(self.end_date - self.start_date).days + 1}")
+        logger.info(f"Max pages: {self.max_pages}")
+        logger.info(f"Max links per page: {self.max_links_per_page or 'unlimited'}")
+        logger.info(f"Playwright mode: {self.playwright_mode}")
         logger.info("=" * 70)
 
         # Statistics
@@ -171,20 +261,34 @@ class ChinaTimesSpider(scrapy.Spider):
         Yields:
             scrapy.Request: HTTP requests
         """
-        # Build category URL
-        if self.category == 'all':
-            base_url = "https://www.chinatimes.com/realtimenews/"
-        else:
-            base_url = f"https://www.chinatimes.com/realtimenews/?chdtv"
+        base_url = "https://chinatimes.com/realtimenews/"
 
         logger.info(f"Starting with URL: {base_url}")
+
+        request_meta = {}
+        if self.playwright_mode == 'always':
+            request_meta = self._get_playwright_meta(wait_ms=1200)
 
         yield scrapy.Request(
             url=base_url,
             callback=self.parse_list_page,
             errback=self.handle_error,
             dont_filter=True,
+            meta=request_meta,
         )
+
+    def _get_playwright_meta(self, wait_ms: int = 1000) -> Dict[str, Any]:
+        """Build Playwright meta for fallback requests (O(1) time/space)."""
+        if hasattr(self, 'get_playwright_meta'):
+            methods = []
+            if PageMethod and wait_ms:
+                methods = [PageMethod('wait_for_timeout', int(wait_ms))]
+            return self.get_playwright_meta(playwright_page_methods=methods)
+
+        meta: Dict[str, Any] = {'playwright': True}
+        if PageMethod and wait_ms:
+            meta['playwright_page_methods'] = [PageMethod('wait_for_timeout', int(wait_ms))]
+        return meta
 
     def parse_list_page(self, response):
         """
@@ -199,6 +303,22 @@ class ChinaTimesSpider(scrapy.Spider):
         """
         self.pages_visited += 1
         logger.info(f"Parsing list page: {response.url}")
+
+        if response.status in {403, 429, 500, 502, 503, 504}:
+            logger.warning(f"Non-200 list page (status={response.status}): {response.url}")
+            if self.playwright_mode == 'auto' and not response.meta.get('playwright') and not response.meta.get('playwright_fallback'):
+                meta = {
+                    'playwright_fallback': True,
+                    **self._get_playwright_meta(wait_ms=2500),
+                }
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta=meta,
+                )
+            return
 
         # Extract article links
         article_selectors = response.css(
@@ -236,14 +356,18 @@ class ChinaTimesSpider(scrapy.Spider):
                 callback=self.parse_article,
                 errback=self.handle_error,
                 dont_filter=False,
+                meta=(self._get_playwright_meta(wait_ms=1200) if response.meta.get('playwright') or self.playwright_mode == 'always' else {}),
             )
+
+            if self.max_links_per_page is not None and articles_found >= self.max_links_per_page:
+                break
 
         logger.info(f"Found {articles_found} articles on list page")
 
         # Pagination
         next_page = response.css('a.page-link[rel="next"]::attr(href), a.next::attr(href)').get()
 
-        if next_page and articles_found > 0 and self.pages_visited < 10:
+        if next_page and articles_found > 0 and self.pages_visited < self.max_pages:
             next_url = response.urljoin(next_page)
             logger.info(f"Following pagination to: {next_url}")
 
@@ -252,6 +376,7 @@ class ChinaTimesSpider(scrapy.Spider):
                 callback=self.parse_list_page,
                 errback=self.handle_error,
                 dont_filter=True,
+                meta=(self._get_playwright_meta(wait_ms=1200) if response.meta.get('playwright') or self.playwright_mode == 'always' else {}),
             )
 
     def parse_article(self, response):
@@ -271,6 +396,28 @@ class ChinaTimesSpider(scrapy.Spider):
         Yields:
             dict: Article data in standardized format
         """
+        if response.status in {403, 429, 500, 502, 503, 504}:
+            logger.warning(f"Non-200 article response (status={response.status}): {response.url}")
+            if (
+                self.playwright_mode in {'auto', 'always'}
+                and not response.meta.get('playwright')
+                and not response.meta.get('playwright_fallback')
+            ):
+                meta = {
+                    'playwright_fallback': True,
+                    **self._get_playwright_meta(wait_ms=2500),
+                }
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_article,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta=meta,
+                )
+                return
+            self.articles_failed += 1
+            return
+
         try:
             logger.debug(f"Parsing article: {response.url}")
 
@@ -347,6 +494,12 @@ class ChinaTimesSpider(scrapy.Spider):
                 article['category'] = category
                 article['category_name'] = self.CATEGORIES.get(category, {}).get('name', category)
 
+            # Category filtering (best-effort; ChinaTimes list pages are not strictly category-scoped).
+            if self.category != 'all':
+                detected = self._extract_category_from_url(response.url)
+                if detected != self.category:
+                    return
+
             # Extract tags
             tag_selectors = response.css(
                 'div.article-hash-tag a::text, '
@@ -387,8 +540,36 @@ class ChinaTimesSpider(scrapy.Spider):
             self.articles_failed += 1
 
     def handle_error(self, failure):
-        """Handle request errors with detailed logging."""
+        """Handle request errors with detailed logging and Playwright fallback."""
+        from scrapy.spidermiddlewares.httperror import HttpError
+        from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError, ConnectError
+
         request = failure.request
+
+        # Best-effort Playwright retry for connectivity/WAF failures.
+        if (
+            self.playwright_mode == 'auto'
+            and not request.meta.get('playwright')
+            and not request.meta.get('playwright_fallback')
+        ):
+            should_retry = False
+            if failure.check(DNSLookupError, TimeoutError, TCPTimedOutError, ConnectError):
+                should_retry = True
+            elif failure.check(HttpError):
+                response = failure.value.response
+                if response is not None and response.status in {403, 429, 500, 502, 503, 504}:
+                    should_retry = True
+
+            if should_retry:
+                logger.warning(f"Retrying with Playwright fallback: {request.url}")
+                meta = {
+                    **request.meta,
+                    'playwright_fallback': True,
+                    **self._get_playwright_meta(wait_ms=2500),
+                }
+                yield request.replace(dont_filter=True, meta=meta)
+                return
+
         logger.error("=" * 70)
         logger.error(f"Request failed: {request.url}")
         logger.error(f"Error type: {failure.type.__name__}")

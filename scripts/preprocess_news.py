@@ -10,9 +10,9 @@ This script performs comprehensive NLP preprocessing on news articles:
 5. Output enriched JSONL with NLP fields
 
 Usage:
-    python scripts/preprocess_news.py --input data/processed/cna_mvp_cleaned.jsonl \
+    python scripts/preprocess_news.py --input /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl \
                                       --output data/preprocessed/cna_mvp_preprocessed.jsonl \
-                                      --report data/stats/preprocessing_report.txt
+                                      --report /mnt/c/data/information-retrieval/stats/preprocessing_report.txt
 
 Complexity:
     Time: O(N*n) where N=number of articles, n=average article length
@@ -376,17 +376,17 @@ def main():
 Examples:
   # Basic usage
   python scripts/preprocess_news.py \\
-      --input data/processed/cna_mvp_cleaned.jsonl \\
+      --input /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl \\
       --output data/preprocessed/cna_mvp_preprocessed.jsonl
 
   # With custom settings
   python scripts/preprocess_news.py \\
-      --input data/processed/cna_mvp_cleaned.jsonl \\
+      --input /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl \\
       --output data/preprocessed/cna_mvp_preprocessed.jsonl \\
       --engine jieba \\
       --keywords 10 \\
       --summary-sentences 5 \\
-      --report data/stats/preprocessing_report.txt
+      --report /mnt/c/data/information-retrieval/stats/preprocessing_report.txt
         """
     )
 

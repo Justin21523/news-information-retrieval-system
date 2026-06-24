@@ -5,6 +5,7 @@ const feedbackLimit = document.getElementById('feedback-limit');
 const refreshFeedbackButton = document.getElementById('refresh-feedback-btn');
 const feedbackLoading = document.getElementById('feedback-loading');
 const feedbackDashboard = document.getElementById('feedback-dashboard');
+const feedbackCharts = {};
 
 refreshFeedbackButton?.addEventListener('click', loadFeedbackAnalytics);
 document.addEventListener('DOMContentLoaded', loadFeedbackAnalytics);
@@ -45,6 +46,16 @@ function renderDashboard(data, features) {
             ${summaryCard('CTR', formatPercent(summary.ctr))}
             ${summaryCard('Labels', summary.total_relevance_labels)}
             ${summaryCard('Zero Results', summary.zero_result_queries)}
+        </section>
+        <section class="feedback-card feedback-card-wide">
+            <h2>回饋視覺化</h2>
+            <div class="dashboard-chart-grid">
+                <article class="chart-container"><h3>Model CTR</h3><canvas id="feedback-ctr-chart"></canvas></article>
+                <article class="chart-container"><h3>Zero-Result Rate</h3><canvas id="feedback-zero-chart"></canvas></article>
+                <article class="chart-container"><h3>Relevance Labels</h3><canvas id="feedback-label-chart"></canvas></article>
+                <article class="chart-container"><h3>Position Bias</h3><canvas id="feedback-position-chart"></canvas></article>
+                <article class="chart-container chart-container-wide"><h3>Feature Signals</h3><canvas id="feedback-feature-chart"></canvas></article>
+            </div>
         </section>
         <section class="feedback-grid">
             <article class="feedback-card">
@@ -88,6 +99,99 @@ function renderDashboard(data, features) {
             </article>
         </section>
     `;
+    window.setTimeout(() => renderFeedbackCharts(data, features), 0);
+}
+
+function renderFeedbackCharts(data, features) {
+    if (!window.Chart) return;
+    destroyCharts(feedbackCharts);
+    const modelRows = data.model_metrics || [];
+    const modelLabels = modelRows.map((row) => row.model || '-');
+    feedbackCharts.ctr = barChart(
+        'feedback-ctr-chart',
+        modelLabels,
+        modelRows.map((row) => Number(row.ctr || 0) * 100),
+        'CTR %',
+        '#2563eb'
+    );
+    feedbackCharts.zero = barChart(
+        'feedback-zero-chart',
+        modelLabels,
+        modelRows.map((row) => Number(row.zero_result_rate || 0) * 100),
+        'Zero %',
+        '#dc2626'
+    );
+    const relevance = data.relevance_distribution || [];
+    feedbackCharts.labels = barChart(
+        'feedback-label-chart',
+        relevance.map((row) => `Grade ${row.grade}`),
+        relevance.map((row) => Number(row.count || 0)),
+        'labels',
+        '#16a34a'
+    );
+    const buckets = data.position_bias?.buckets || {};
+    const bucketLabels = ['rank_1', 'rank_2_3', 'rank_4_10', 'rank_11_plus', 'unknown'];
+    feedbackCharts.position = new Chart(document.getElementById('feedback-position-chart'), {
+        type: 'bar',
+        data: {
+            labels: ['1', '2-3', '4-10', '11+', 'unknown'],
+            datasets: [
+                {
+                    label: 'Clicks',
+                    data: bucketLabels.map((key) => Number(buckets[key]?.clicks || 0)),
+                    backgroundColor: '#7c3aed'
+                },
+                {
+                    label: 'Labels',
+                    data: bucketLabels.map((key) => Number(buckets[key]?.relevance || 0)),
+                    backgroundColor: '#f59e0b'
+                }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
+    const featureRows = features.rows || [];
+    const featureNames = ['field_boost', 'bm25_score', 'tfidf_score', 'lm_score', 'rank'];
+    feedbackCharts.features = barChart(
+        'feedback-feature-chart',
+        featureNames,
+        featureNames.map((name) => averageFeature(featureRows, name)),
+        'avg feature',
+        '#0f766e'
+    );
+}
+
+function averageFeature(rows, name) {
+    const values = rows
+        .map((row) => Number(row.features?.[name]))
+        .filter((value) => Number.isFinite(value));
+    if (!values.length) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function barChart(canvasId, labels, values, label, color = '#2563eb') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{ label, data: values, backgroundColor: color, borderWidth: 1 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function destroyCharts(registry) {
+    Object.keys(registry).forEach((key) => {
+        if (registry[key]) registry[key].destroy();
+        delete registry[key];
+    });
 }
 
 function renderEmptyState(summary) {

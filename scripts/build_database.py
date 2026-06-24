@@ -314,7 +314,7 @@ Examples:
   python scripts/build_database.py \\
       --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
       --output data/database/cnirs.db \\
-      --stats data/stats/database_stats.txt
+      --stats /mnt/c/data/information-retrieval/stats/database_stats.txt
 
   # Skip FTS index
   python scripts/build_database.py \\

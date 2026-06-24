@@ -46,7 +46,7 @@ pip install --upgrade Flask
 確保有建立好的索引檔案：
 
 ```bash
-ls -lh data/index_50k/  # 或其他索引目錄
+ls -lh /mnt/c/data/information-retrieval/index_50k/  # 或其他索引目錄
 ```
 
 ---

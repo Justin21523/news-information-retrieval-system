@@ -6,6 +6,7 @@ const topkInput = document.getElementById('topk-input');
 const compareBtn = document.getElementById('compare-btn');
 const loading = document.getElementById('loading');
 const comparisonContainer = document.getElementById('comparison-container');
+const compareCharts = {};
 
 queryInput.addEventListener('keypress', (event) => {
     if (event.key === 'Enter') {
@@ -115,6 +116,7 @@ function displayComparison(data) {
     comparisonContainer.appendChild(header);
 
     comparisonContainer.appendChild(createComparisonSummary(data.comparison || {}));
+    comparisonContainer.appendChild(createComparisonCharts(data));
 
     const grid = document.createElement('div');
     grid.className = 'comparison-grid';
@@ -124,6 +126,87 @@ function displayComparison(data) {
     comparisonContainer.appendChild(grid);
 
     comparisonContainer.appendChild(createPerformanceTable(modelEntries));
+}
+
+function createComparisonCharts(data) {
+    const section = document.createElement('section');
+    section.className = 'dashboard-chart-section';
+    section.innerHTML = `
+        <h2>視覺化模型分析</h2>
+        <div class="dashboard-chart-grid">
+            <article class="chart-container"><h3>模型延遲</h3><canvas id="compare-latency-chart"></canvas></article>
+            <article class="chart-container"><h3>結果數量</h3><canvas id="compare-count-chart"></canvas></article>
+            <article class="chart-container"><h3>平均分數</h3><canvas id="compare-score-chart"></canvas></article>
+            <article class="chart-container"><h3>模型重疊矩陣</h3><canvas id="compare-overlap-chart"></canvas></article>
+            <article class="chart-container chart-container-wide"><h3>Rank Disagreement</h3><canvas id="compare-rank-chart"></canvas></article>
+        </div>
+    `;
+    window.setTimeout(() => renderComparisonCharts(data), 0);
+    return section;
+}
+
+function renderComparisonCharts(data) {
+    if (!window.Chart) return;
+    destroyCharts(compareCharts);
+    const entries = Object.entries(data.models || {});
+    const labels = entries.map(([model, payload]) => payload.model_info?.name || model.toUpperCase());
+    const counts = entries.map(([, payload]) => Number(payload.total_results || (payload.results || []).length || 0));
+    const latency = entries.map(([, payload]) => Number(payload.execution_time || 0) * 1000);
+    const avgScores = entries.map(([, payload]) => {
+        const results = payload.results || [];
+        return results.length
+            ? results.reduce((sum, result) => sum + Number(result.score || 0), 0) / results.length
+            : 0;
+    });
+    compareCharts.latency = barChart('compare-latency-chart', labels, latency, 'ms');
+    compareCharts.count = barChart('compare-count-chart', labels, counts, 'results');
+    compareCharts.score = barChart('compare-score-chart', labels, avgScores, 'avg score');
+
+    const overlap = data.comparison?.overlap || {};
+    compareCharts.overlap = barChart(
+        'compare-overlap-chart',
+        Object.keys(overlap),
+        Object.values(overlap).map(Number),
+        'shared docs'
+    );
+    const rankRows = (data.comparison?.rank_changes || []).slice(0, 12);
+    compareCharts.rank = barChart(
+        'compare-rank-chart',
+        rankRows.map((row) => `Doc ${row.doc_id}`),
+        rankRows.map((row) => Number(row.rank_span || 0)),
+        'rank span'
+    );
+}
+
+function barChart(canvasId, labels, values, label) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label,
+                data: values,
+                backgroundColor: '#2563eb',
+                borderColor: '#1d4ed8',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function destroyCharts(registry) {
+    Object.keys(registry).forEach((key) => {
+        if (registry[key]) registry[key].destroy();
+        delete registry[key];
+    });
 }
 
 function createComparisonSummary(comparison) {

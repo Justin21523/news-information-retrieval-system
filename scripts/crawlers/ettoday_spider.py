@@ -54,6 +54,9 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider
+from scrapy_playwright.page import PageMethod
+
+from scripts.crawlers.utils.jobdir import has_pending_requests
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +142,7 @@ class ETtodaySpider(BasePlaywrightSpider):
 
         # Output settings
         'FEEDS': {
-            'data/raw/ettoday_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/ettoday_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -151,11 +154,24 @@ class ETtodaySpider(BasePlaywrightSpider):
         'LOG_LEVEL': 'INFO',
     }
 
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(
+                "Detected JOBDIR resume queue; skipping start_requests seeding "
+                f"(JOBDIR={crawler.settings.get('JOBDIR')})"
+            )
+        return spider
+
     def __init__(self,
                  category: str = 'all',
                  days: int = 7,
                  start_date: str = None,
                  end_date: str = None,
+                 max_pages: int = None,
+                 use_playwright: str = 'auto',
                  *args, **kwargs):
         """
         Initialize ETtoday spider with date range and category.
@@ -189,12 +205,20 @@ class ETtodaySpider(BasePlaywrightSpider):
             self.end_date = datetime.now()
             self.start_date = self.end_date - timedelta(days=int(days))
 
+        # Pagination guard: auto-scale for larger historical windows.
+        window_days = max(1, int((self.end_date - self.start_date).days) + 1)
+        if max_pages is not None:
+            self.max_pages = int(max_pages)
+        else:
+            self.max_pages = min(2000, max(10, window_days * 3))
+
         logger.info("=" * 70)
         logger.info(f"ETtoday Spider Initialized")
         logger.info("=" * 70)
         logger.info(f"Category: {self.category_name} ({self.category})")
         logger.info(f"Date Range: {self.start_date.date()} to {self.end_date.date()}")
         logger.info(f"Days: {(self.end_date - self.start_date).days + 1}")
+        logger.info(f"Max pages: {self.max_pages}")
         logger.info("=" * 70)
 
         # Statistics
@@ -202,6 +226,20 @@ class ETtodaySpider(BasePlaywrightSpider):
         self.articles_failed = 0
         self.pages_visited = 0
         self.seen_urls = set()
+        mode = str(use_playwright).strip().lower() if use_playwright is not None else 'auto'
+        if mode in {'1', 'true', 'yes', 'always'}:
+            self.playwright_mode = 'always'
+        elif mode in {'0', 'false', 'no', 'never'}:
+            self.playwright_mode = 'never'
+        else:
+            self.playwright_mode = 'auto'
+
+    def _get_playwright_meta(self, wait_ms: int = 800):
+        return self.get_playwright_meta(
+            playwright_page_methods=[
+                PageMethod('wait_for_timeout', int(wait_ms)),
+            ]
+        )
 
     def start_requests(self):
         """
@@ -210,6 +248,9 @@ class ETtodaySpider(BasePlaywrightSpider):
         Yields:
             scrapy.Request: Playwright-enabled HTTP requests
         """
+        if getattr(self, "_resume_from_jobdir", False):
+            return
+
         # Build category URL
         if self.category == 'all':
             base_url = "https://www.ettoday.net/news/news-list.htm"
@@ -218,12 +259,21 @@ class ETtodaySpider(BasePlaywrightSpider):
 
         logger.info(f"Starting with URL: {base_url}")
 
+        meta = (
+            self._get_playwright_meta(wait_ms=800)
+            if self.playwright_mode == 'always'
+            else {'playwright': False}
+        )
+        # Some category URLs may return 404 (site structure changes). Handle it in
+        # parse_list_page and fall back to the generic list page.
+        meta['handle_httpstatus_list'] = [404]
+
         yield scrapy.Request(
             url=base_url,
             callback=self.parse_list_page,
             errback=self.handle_error,
             dont_filter=True,
-            meta=self.get_playwright_meta(wait_selector='div.part_list_2')
+            meta=meta,
         )
 
     def parse_list_page(self, response):
@@ -239,6 +289,65 @@ class ETtodaySpider(BasePlaywrightSpider):
         """
         self.pages_visited += 1
         logger.info(f"Parsing list page: {response.url}")
+
+        if response.status == 404 and self.category != 'all':
+            if not response.meta.get('slug_fallback') and self.category_slug.endswith('s'):
+                alt_slug = self.category_slug[:-1]
+                alt_url = f"https://www.ettoday.net/news/{alt_slug}/"
+                logger.warning(
+                    "Category URL returned 404; retrying with alternate slug "
+                    f"({self.category_slug} -> {alt_slug}): {alt_url}"
+                )
+                yield scrapy.Request(
+                    url=alt_url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta={
+                        'slug_fallback': True,
+                        'handle_httpstatus_list': [404],
+                        **(
+                            self._get_playwright_meta(wait_ms=800)
+                            if self.playwright_mode == 'always'
+                            else {'playwright': False}
+                        ),
+                    },
+                )
+                return
+
+            if not response.meta.get('category_fallback'):
+                fallback_url = "https://www.ettoday.net/news/news-list.htm"
+                logger.warning(
+                    f"Category URL returned 404; falling back to all-news list: {fallback_url}"
+                )
+                yield scrapy.Request(
+                    url=fallback_url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta={
+                        'category_fallback': True,
+                        'handle_httpstatus_list': [404],
+                        **(
+                            self._get_playwright_meta(wait_ms=800)
+                            if self.playwright_mode == 'always'
+                            else {'playwright': False}
+                        ),
+                    },
+                )
+            return
+
+        if response.status in {403, 429, 500, 502, 503, 504}:
+            logger.warning(f"Non-200 list page (status={response.status}): {response.url}")
+            if self.playwright_mode == 'auto' and not response.meta.get('playwright') and not response.meta.get('playwright_fallback'):
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta={'playwright_fallback': True, **self._get_playwright_meta(wait_ms=2500)},
+                )
+            return
 
         # Extract article links
         article_selectors = response.css(
@@ -276,7 +385,11 @@ class ETtodaySpider(BasePlaywrightSpider):
                 callback=self.parse_article,
                 errback=self.handle_error,
                 dont_filter=False,
-                meta=self.get_playwright_meta(wait_selector='article.story')
+                meta=(
+                    self._get_playwright_meta(wait_ms=800)
+                    if response.meta.get('playwright') or self.playwright_mode == 'always'
+                    else {'playwright': False}
+                )
             )
 
         logger.info(f"Found {articles_found} articles on list page")
@@ -284,7 +397,7 @@ class ETtodaySpider(BasePlaywrightSpider):
         # Pagination - ETtoday uses page numbers
         next_page = response.css('div.pages a.tipBarL::attr(href), a.next::attr(href)').get()
 
-        if next_page and articles_found > 0 and self.pages_visited < 10:
+        if next_page and articles_found > 0 and self.pages_visited < self.max_pages:
             next_url = response.urljoin(next_page)
             logger.info(f"Following pagination to: {next_url}")
 
@@ -293,7 +406,11 @@ class ETtodaySpider(BasePlaywrightSpider):
                 callback=self.parse_list_page,
                 errback=self.handle_error,
                 dont_filter=True,
-                meta=self.get_playwright_meta(wait_selector='div.part_list_2')
+                meta=(
+                    self._get_playwright_meta(wait_ms=800)
+                    if response.meta.get('playwright') or self.playwright_mode == 'always'
+                    else {'playwright': False}
+                )
             )
 
     def parse_article(self, response):
@@ -429,8 +546,35 @@ class ETtodaySpider(BasePlaywrightSpider):
             self.articles_failed += 1
 
     def handle_error(self, failure):
-        """Handle request errors with detailed logging."""
+        """Handle request errors with detailed logging and Playwright fallback."""
+        from scrapy.spidermiddlewares.httperror import HttpError
+        from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError, ConnectError
+
         request = failure.request
+
+        if (
+            self.playwright_mode == 'auto'
+            and not request.meta.get('playwright')
+            and not request.meta.get('playwright_fallback')
+        ):
+            should_retry = False
+            if failure.check(DNSLookupError, TimeoutError, TCPTimedOutError, ConnectError):
+                should_retry = True
+            elif failure.check(HttpError):
+                response = failure.value.response
+                if response is not None and response.status in {403, 429, 500, 502, 503, 504}:
+                    should_retry = True
+
+            if should_retry:
+                logger.warning(f"Retrying with Playwright fallback: {request.url}")
+                meta = {
+                    **request.meta,
+                    'playwright_fallback': True,
+                    **self._get_playwright_meta(wait_ms=2500),
+                }
+                yield request.replace(dont_filter=True, meta=meta)
+                return
+
         logger.error("=" * 70)
         logger.error(f"Request failed: {request.url}")
         logger.error(f"Error type: {failure.type.__name__}")

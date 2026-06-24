@@ -172,6 +172,10 @@ def register_page_routes(app: Flask, settings: Settings) -> None:
     def pat_tree_page():
         return render_if_exists("pat_tree.html")
 
+    @app.route("/analysis-graph")
+    def analysis_graph_page():
+        return render_if_exists("analysis_graph.html")
+
 
 def register_api_routes(
     app: Flask,
@@ -277,6 +281,60 @@ def register_api_routes(
         payload.setdefault("filters", {})
         with app.test_request_context(json=payload):
             return search()
+
+    @app.post("/api/search/browse")
+    def search_browse():
+        payload = request.get_json(silent=True) or {}
+        filters = payload.get("filters") or {}
+        top_k = payload.get("top_k", 20)
+        sort = payload.get("sort", "date_desc")
+        started = time.perf_counter()
+        results, meta = search_service.browse(filters, top_k, sort)
+        facets = search_service.facets(
+            {str(item["doc_id"]) for item in results},
+            filters,
+        )
+        data = {
+            "query": "",
+            "model": "facet_browse",
+            "browse_mode": True,
+            "filters": filters,
+            "sort": sort,
+            "results": results,
+            "total_results": len(results),
+            "total_matches": meta.get("total_matches", len(results)),
+            "facets": facets,
+            "response_time": meta["execution_time"],
+        }
+        meta = {**meta, "execution_time": time.perf_counter() - started}
+        search_log_service.log_event(
+            "/api/search/browse",
+            payload,
+            data,
+            meta["execution_time"],
+        )
+        feedback_service.log_search_event(
+            "/api/search/browse",
+            payload,
+            data,
+            meta["execution_time"],
+            document_service.dataset_hash,
+            _session_id(),
+        )
+        return api_success(
+            data,
+            meta,
+            query="",
+            model="facet_browse",
+            browse_mode=True,
+            filters=filters,
+            sort=sort,
+            results=results,
+            total_results=len(results),
+            total_matches=data["total_matches"],
+            facets=facets,
+            response_time=meta["execution_time"],
+        )
 
     @app.post("/api/facets")
     def facets_for_search():
@@ -618,6 +676,28 @@ def register_api_routes(
         data = {"models": _with_demo_coverage(retrieval_orchestrator.supported_models())}
         return api_success(data, models=data["models"])
 
+    @app.get("/api/analysis/graph")
+    def analysis_graph():
+        query = (request.args.get("query") or "台灣 經濟").strip()
+        models = [
+            item.strip()
+            for item in (request.args.get("models") or "bm25,tfidf,hybrid,lm").split(",")
+            if item.strip()
+        ]
+        top_k = request.args.get("top_k", 6)
+        started = time.perf_counter()
+        data, compare_meta = retrieval_orchestrator.compare(
+            query=query,
+            models=models,
+            top_k=top_k,
+        )
+        graph = _build_analysis_graph(data, document_service, search_service)
+        meta = {
+            "execution_time": time.perf_counter() - started,
+            "compare_time": compare_meta.get("execution_time", 0.0),
+        }
+        return api_success(graph, meta, **graph)
+
     @app.post("/api/export")
     def export_results():
         payload = request.get_json(silent=True) or {}
@@ -703,6 +783,156 @@ def register_api_routes(
                 }
             )
         return enriched
+
+
+def _build_analysis_graph(
+    comparison_data: dict[str, Any],
+    document_service: DocumentService,
+    search_service: SearchService,
+) -> dict[str, Any]:
+    """Build an interactive graph payload for the analysis visualization page.
+
+    Complexity:
+        Time: O(m * k)
+        Space: O(m * k)
+    """
+    query = comparison_data.get("query") or ""
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "query",
+            "type": "query",
+            "label": query,
+            "layer": "query",
+            "preview": "查詢輸入與 query analysis 的起點。",
+            "metrics": comparison_data.get("query_analysis", {}),
+        },
+        {
+            "id": "processing",
+            "type": "pipeline",
+            "label": "Text Processing",
+            "layer": "processing",
+            "preview": "正規化、中文斷詞、stopword 與 query understanding。",
+        },
+        {
+            "id": "index",
+            "type": "pipeline",
+            "label": "Index",
+            "layer": "index",
+            "preview": "Inverted index、TF-IDF vectors、BM25 statistics 與 facets postings。",
+        },
+        {
+            "id": "ranking",
+            "type": "pipeline",
+            "label": "Ranking",
+            "layer": "ranking",
+            "preview": "模型分數、field boost、component scores 與 rank fusion。",
+        },
+        {
+            "id": "feedback",
+            "type": "pipeline",
+            "label": "Feedback",
+            "layer": "feedback",
+            "preview": "Search logs、clicks、relevance labels 與 LTR feature foundation。",
+        },
+    ]
+    edges = [
+        {"source": "query", "target": "processing", "label": "normalize"},
+        {"source": "processing", "target": "index", "label": "tokenize"},
+        {"source": "index", "target": "ranking", "label": "retrieve"},
+        {"source": "ranking", "target": "feedback", "label": "observe"},
+    ]
+
+    seen_docs: set[str] = set()
+    for model_id, payload in (comparison_data.get("models") or {}).items():
+        model_node = f"model:{model_id}"
+        nodes.append(
+            {
+                "id": model_node,
+                "type": "model",
+                "label": payload.get("model_info", {}).get("name") or model_id.upper(),
+                "layer": "model",
+                "preview": payload.get("model_info", {}).get("description", ""),
+                "metrics": {
+                    "execution_time": payload.get("execution_time", 0.0),
+                    "total_results": payload.get("total_results", 0),
+                    "available": payload.get("available", True),
+                },
+            }
+        )
+        edges.append({"source": "ranking", "target": model_node, "label": "score"})
+        for result in (payload.get("results") or [])[:8]:
+            doc_id = str(result.get("doc_id"))
+            doc_node = f"doc:{doc_id}"
+            if doc_node not in seen_docs:
+                seen_docs.add(doc_node)
+                metadata = result.get("metadata") or {}
+                nodes.append(
+                    {
+                        "id": doc_node,
+                        "type": "document",
+                        "label": result.get("title") or f"Document {doc_id}",
+                        "layer": "document",
+                        "doc_id": doc_id,
+                        "preview": result.get("snippet", ""),
+                        "metrics": {
+                            "score": result.get("score"),
+                            "rank": result.get("rank"),
+                            "source": metadata.get("source_label") or metadata.get("source"),
+                            "topic": metadata.get("taxonomy_label")
+                            or metadata.get("taxonomy_topic"),
+                            "date": metadata.get("published_date"),
+                        },
+                        "explanation": result.get("explanation", {}),
+                    }
+                )
+                for field in ("source", "taxonomy_topic", "content_type"):
+                    value = metadata.get(field)
+                    if value:
+                        facet_node = f"facet:{field}:{value}"
+                        if not any(node["id"] == facet_node for node in nodes):
+                            nodes.append(
+                                {
+                                    "id": facet_node,
+                                    "type": "facet",
+                                    "label": str(value),
+                                    "layer": "metadata",
+                                    "preview": f"{field} metadata facet",
+                                }
+                            )
+                        edges.append(
+                            {
+                                "source": doc_node,
+                                "target": facet_node,
+                                "label": field,
+                            }
+                        )
+            edges.append(
+                {
+                    "source": model_node,
+                    "target": doc_node,
+                    "label": f"#{result.get('rank', '-')}",
+                    "score": result.get("score"),
+                }
+            )
+
+    distribution = search_service.corpus_distribution()
+    return {
+        "query": query,
+        "nodes": nodes,
+        "edges": edges,
+        "layers": [
+            "query",
+            "processing",
+            "index",
+            "ranking",
+            "model",
+            "document",
+            "metadata",
+            "feedback",
+        ],
+        "corpus_distribution": distribution,
+        "total_documents": len(document_service.documents),
+    }
 
 
 def run() -> None:

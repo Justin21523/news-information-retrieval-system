@@ -95,19 +95,19 @@ scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=sitemap \
     -a sitemap=todaynews \
     -a max_articles=100 \
-    -o data/raw/cti_today.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cti_today.jsonl
 
 # 2-day coverage
 scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=sitemap \
     -a sitemap=todaynews_d2 \
-    -o data/raw/cti_2days.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cti_2days.jsonl
 
 # All sitemaps (comprehensive)
 scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=sitemap \
     -a sitemap=all \
-    -o data/raw/cti_all_sitemaps.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cti_all_sitemaps.jsonl
 ```
 
 ### Mode 2: List (Category-Based with Deep Pagination)
@@ -118,7 +118,7 @@ scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=list \
     -a category=politics \
     -a days=30 \
-    -o data/raw/cti_politics.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cti_politics.jsonl
 
 # All categories, 2 years (DEEP COVERAGE)
 scrapy runspider scripts/crawlers/cti_spider.py \
@@ -126,7 +126,7 @@ scrapy runspider scripts/crawlers/cti_spider.py \
     -a category=all \
     -a days=730 \
     -a max_pages=500 \
-    -o data/raw/cti_2years_all.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cti_2years_all.jsonl
 ```
 
 ---
@@ -340,7 +340,7 @@ scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=sitemap \
     -a sitemap=all \
     -a days=30 \
-    -o data/raw/cti_30days.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/cti_30days.jsonl \
     -s LOG_LEVEL=INFO
 ```
 
@@ -353,7 +353,7 @@ for cat in politics money society world entertainment life sports tech; do
         -a category=$cat \
         -a days=730 \
         -a max_pages=500 \
-        -o data/raw/cti_${cat}_2years.jsonl \
+        -o /mnt/c/data/information-retrieval/raw/cti_${cat}_2years.jsonl \
         -s LOG_LEVEL=INFO
     sleep 60  # Pause between categories to avoid rate limiting
 done
@@ -364,7 +364,7 @@ done
 scrapy runspider scripts/crawlers/cti_spider.py \
     -a mode=sitemap \
     -a sitemap=all \
-    -o data/raw/cti_all_sitemaps.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/cti_all_sitemaps.jsonl \
     -s LOG_LEVEL=INFO
 ```
 

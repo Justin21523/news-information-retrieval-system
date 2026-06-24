@@ -96,7 +96,7 @@ class NextAppleSpider(scrapy.Spider):
         'RETRY_HTTP_CODES': [500, 502, 503, 504, 408, 429],
         'HTTPERROR_ALLOW_404': True,
         'FEEDS': {
-            'data/raw/nextapple_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/nextapple_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,

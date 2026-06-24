@@ -9,7 +9,7 @@ This script performs batch preprocessing on merged JSONL data:
 
 Usage:
     python scripts/preprocess_batch.py \
-        --input data/raw/merged_14days.jsonl \
+        --input /mnt/c/data/information-retrieval/raw/merged_14days.jsonl \
         --output data/preprocessed/merged_14days_preprocessed.jsonl
 
 Author: CNIRS Project
@@ -336,7 +336,7 @@ def main():
     parser.add_argument(
         '--input',
         type=str,
-        default='data/raw/merged_14days.jsonl',
+        default='/mnt/c/data/information-retrieval/raw/merged_14days.jsonl',
         help='Input JSONL file'
     )
     parser.add_argument(

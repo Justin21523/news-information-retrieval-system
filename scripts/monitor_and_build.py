@@ -47,7 +47,7 @@ def run_indexing():
     result = subprocess.run([
         PYTHON, "scripts/build_indexes_from_preprocessed.py",
         "--input", str(INPUT_FILE),
-        "--output", "data/indexes_10k"
+        "--output", "/mnt/c/data/information-retrieval/indexes_10k"
     ], cwd=PROJECT_ROOT)
 
     if result.returncode != 0:
@@ -59,7 +59,7 @@ def run_indexing():
     result = subprocess.run([
         PYTHON, "scripts/build_bert_embeddings.py",
         "--input", str(INPUT_FILE),
-        "--output", "data/indexes_10k/bert_embeddings.npy",
+        "--output", "/mnt/c/data/information-retrieval/indexes_10k/bert_embeddings.npy",
         "--model", "paraphrase-multilingual-MiniLM-L12-v2",
         "--batch-size", "64"
     ], cwd=PROJECT_ROOT)

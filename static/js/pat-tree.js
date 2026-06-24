@@ -11,7 +11,7 @@ window.addEventListener('DOMContentLoaded', () => {
 async function loadTreeStatistics() {
     try {
         // Make initial request to build tree (this will trigger caching)
-        const response = await fetch('/api/pat_tree?max_nodes=1');
+        const response = await fetch('api/pat_tree?max_nodes=1');
         const data = await response.json();
 
         if (data.success && data.statistics) {
@@ -58,7 +58,7 @@ async function visualizeTree() {
 
     try {
         // Build URL with query parameters
-        let url = `/api/pat_tree?max_nodes=${maxNodes}`;
+        let url = `api/pat_tree?max_nodes=${maxNodes}`;
         if (prefix) {
             url += `&prefix=${encodeURIComponent(prefix)}`;
         }
@@ -177,7 +177,7 @@ async function extractKeywords() {
     resultDiv.style.display = 'none';
 
     try {
-        const response = await fetch('/api/pat_tree_keywords', {
+        const response = await fetch('api/pat_tree_keywords', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

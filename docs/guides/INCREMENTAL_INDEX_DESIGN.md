@@ -238,7 +238,7 @@ results = search(
 ### 5.1 即時更新 (Real-time)
 
 ```bash
-# 監控 data/raw/ 目錄，有新檔案立即索引
+# 監控 /mnt/c/data/information-retrieval/raw/ 目錄，有新檔案立即索引
 python scripts/index_monitor.py --watch data/raw --interval 60
 ```
 

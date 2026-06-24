@@ -284,9 +284,9 @@
   - [ ] 自動重試失敗請求
 
 **預計產出**:
-- `data/raw/cna_news_2022-2024.jsonl` (20,000 篇)
-- `data/raw/pts_news_2022-2024.jsonl` (10,000 篇)
-- `data/raw/technews_2022-2024.jsonl` (5,000 篇)
+- `/mnt/c/data/information-retrieval/raw/cna_news_2022-2024.jsonl` (20,000 篇)
+- `/mnt/c/data/information-retrieval/raw/pts_news_2022-2024.jsonl` (10,000 篇)
+- `/mnt/c/data/information-retrieval/raw/technews_2022-2024.jsonl` (5,000 篇)
 
 ---
 
@@ -369,11 +369,11 @@
 - [ ] **執行索引建立**
 
 **預計產出**:
-- `data/indexes/inverted_index.pkl`
-- `data/indexes/positional_index.pkl`
-- `data/indexes/tfidf/tfidf_matrix.pkl`
-- `data/indexes/bert/embeddings.h5`
-- `data/indexes/bert/faiss_index.bin`
+- `/mnt/c/data/information-retrieval/indexes/inverted_index.pkl`
+- `/mnt/c/data/information-retrieval/indexes/positional_index.pkl`
+- `/mnt/c/data/information-retrieval/indexes/tfidf/tfidf_matrix.pkl`
+- `/mnt/c/data/information-retrieval/indexes/bert/embeddings.h5`
+- `/mnt/c/data/information-retrieval/indexes/bert/faiss_index.bin`
 
 ---
 
@@ -407,8 +407,8 @@
   - [ ] 每個查詢至少 20 篇標註
 
 **預計產出**:
-- `data/evaluation/queries.json`
-- `data/evaluation/qrels.txt`
+- `/mnt/c/data/information-retrieval/evaluation/queries.json`
+- `/mnt/c/data/information-retrieval/evaluation/qrels.txt`
 
 ---
 

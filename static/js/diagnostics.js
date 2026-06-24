@@ -5,6 +5,7 @@ const diagDocId = document.getElementById('diag-doc-id');
 const diagButton = document.getElementById('run-diagnostics-btn');
 const diagLoading = document.getElementById('diagnostics-loading');
 const diagResults = document.getElementById('diagnostics-results');
+const diagnosticsCharts = {};
 
 diagButton?.addEventListener('click', runDiagnostics);
 
@@ -95,12 +96,94 @@ function renderDiagnostics(data) {
         </section>
         <section class="diagnostics-card">
             <h3>Field-Aware Ranking Signals</h3>
+            <div class="dashboard-chart-grid">
+                <article class="chart-container"><h4>Query Coverage</h4><canvas id="diag-coverage-chart"></canvas></article>
+                <article class="chart-container"><h4>Field Boost</h4><canvas id="diag-field-chart"></canvas></article>
+                <article class="chart-container chart-container-wide"><h4>Term Contribution</h4><canvas id="diag-term-chart"></canvas></article>
+            </div>
             ${renderCoverage(data.query_coverage || {})}
             ${renderFieldContributions(data.field_contributions || {})}
             ${renderFieldMatrix(data.field_match_matrix || [])}
         </section>
         <div class="diagnostics-card-grid">${modelCards}</div>
     `;
+    window.setTimeout(() => renderDiagnosticsCharts(data), 0);
+}
+
+function renderDiagnosticsCharts(data) {
+    if (!window.Chart) return;
+    destroyCharts(diagnosticsCharts);
+    const coverage = data.query_coverage || {};
+    diagnosticsCharts.coverage = new Chart(document.getElementById('diag-coverage-chart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Matched', 'Missing'],
+            datasets: [{
+                data: [
+                    (coverage.matched_terms || []).length,
+                    (coverage.missing_terms || []).length
+                ],
+                backgroundColor: ['#16a34a', '#dc2626']
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    const fields = data.field_contributions?.fields || {};
+    diagnosticsCharts.fields = barChart(
+        'diag-field-chart',
+        Object.keys(fields),
+        Object.values(fields).map((item) => Number(item.boost || item.weight || 0)),
+        'boost'
+    );
+
+    const termRows = [];
+    Object.entries(data.models || {}).forEach(([model, info]) => {
+        (info.terms || []).forEach((term) => {
+            termRows.push({
+                label: `${model}:${term.term}`,
+                score: Number(term.score ?? term.log_prob ?? term.doc_weight ?? 0)
+            });
+        });
+    });
+    termRows.sort((left, right) => Math.abs(right.score) - Math.abs(left.score));
+    diagnosticsCharts.terms = barChart(
+        'diag-term-chart',
+        termRows.slice(0, 16).map((row) => row.label),
+        termRows.slice(0, 16).map((row) => row.score),
+        'contribution'
+    );
+}
+
+function barChart(canvasId, labels, values, label) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label,
+                data: values,
+                backgroundColor: '#0f766e',
+                borderColor: '#115e59',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+function destroyCharts(registry) {
+    Object.keys(registry).forEach((key) => {
+        if (registry[key]) registry[key].destroy();
+        delete registry[key];
+    });
 }
 
 function renderCoverage(coverage) {

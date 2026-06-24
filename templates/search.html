@@ -26,6 +26,7 @@
                 <a href="diagnostics" class="nav-link">排序診斷</a>
                 <a href="feedback" class="nav-link">回饋分析</a>
                 <a href="corpus" class="nav-link">語料庫</a>
+                <a href="analysis-graph" class="nav-link">分析圖譜</a>
                 <a href="guide" class="nav-link">導覽</a>
                 <a href="about" class="nav-link">關於</a>
             </nav>
@@ -74,15 +75,15 @@
                 <div class="search-box">
                     <div class="demo-guide-strip" aria-label="Demo guide quick actions">
                         <div>
-                            <span class="demo-guide-kicker">Demo Guide</span>
-                            <strong>Try a complete explainable news search flow</strong>
-                            <p>Start with a real query, then inspect facets, ranking reasons, document detail, comparison, and evaluation.</p>
+                            <span class="demo-guide-kicker">Demo 導覽</span>
+                            <strong>體驗完整可解釋新聞檢索流程</strong>
+                            <p>從真實新聞查詢開始，接著檢視 facets、排序理由、文章詳情、模型對比與評估結果。</p>
                         </div>
                         <div class="demo-guide-actions">
                             <button type="button" class="demo-chip" data-demo-query="半導體 人工智慧" data-demo-model="hybrid" data-demo-topk="20">Hybrid: 半導體 AI</button>
                             <button type="button" class="demo-chip" data-demo-query="台灣 經濟" data-demo-model="bm25" data-demo-topk="20">BM25: 台灣經濟</button>
                             <button type="button" class="demo-chip" data-demo-query="美國 中國" data-demo-model="wand_bm25" data-demo-topk="20">WAND: 美中新聞</button>
-                            <a class="demo-chip demo-chip-link" href="guide">Open walkthrough</a>
+                            <a class="demo-chip demo-chip-link" href="guide">開啟操作導覽</a>
                         </div>
                     </div>
                     <input type="text" id="query-input" placeholder="輸入查詢關鍵字... (例如: 人工智慧、颱風災害、台灣經濟)" autofocus>
@@ -204,6 +205,7 @@
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+    <script src="static/js/i18n.js"></script>
     <script src="static/js/explanation-panel.js"></script>
     <script src="static/js/document-modal.js"></script>
     <script src="static/js/search.js"></script>

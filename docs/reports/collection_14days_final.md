@@ -118,32 +118,32 @@ does not match the requested one (twisted.internet.asyncioreactor.AsyncioSelecto
 ### 有效資料檔案 (13 個)
 
 ```
-data/raw/yahoo_sports_14days.jsonl          206MB    66,414 篇
-data/raw/yahoo_finance_14days.jsonl         136MB    43,488 篇  (執行中)
-data/raw/yahoo_politics_14days.jsonl        141MB    45,639 篇
-data/raw/yahoo_entertainment_14days.jsonl    99MB    31,656 篇
-data/raw/yahoo_world_14days.jsonl            73MB    23,136 篇
-data/raw/yahoo_lifestyle_14days.jsonl        55MB    17,519 篇
-data/raw/yahoo_tech_14days.jsonl             44MB    13,988 篇
-data/raw/yahoo_health_14days.jsonl           11MB     3,520 篇
-data/raw/nextapple_14days.jsonl             7.5MB       998 篇
-data/raw/setn_14days.jsonl                  1.5MB       500 篇
-data/raw/udn_14days.jsonl                   195KB        63 篇
-data/raw/ltn_14days.jsonl                    52KB        20 篇
-data/raw/pts_14days.jsonl                    44KB        20 篇
+/mnt/c/data/information-retrieval/raw/yahoo_sports_14days.jsonl          206MB    66,414 篇
+/mnt/c/data/information-retrieval/raw/yahoo_finance_14days.jsonl         136MB    43,488 篇  (執行中)
+/mnt/c/data/information-retrieval/raw/yahoo_politics_14days.jsonl        141MB    45,639 篇
+/mnt/c/data/information-retrieval/raw/yahoo_entertainment_14days.jsonl    99MB    31,656 篇
+/mnt/c/data/information-retrieval/raw/yahoo_world_14days.jsonl            73MB    23,136 篇
+/mnt/c/data/information-retrieval/raw/yahoo_lifestyle_14days.jsonl        55MB    17,519 篇
+/mnt/c/data/information-retrieval/raw/yahoo_tech_14days.jsonl             44MB    13,988 篇
+/mnt/c/data/information-retrieval/raw/yahoo_health_14days.jsonl           11MB     3,520 篇
+/mnt/c/data/information-retrieval/raw/nextapple_14days.jsonl             7.5MB       998 篇
+/mnt/c/data/information-retrieval/raw/setn_14days.jsonl                  1.5MB       500 篇
+/mnt/c/data/information-retrieval/raw/udn_14days.jsonl                   195KB        63 篇
+/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl                    52KB        20 篇
+/mnt/c/data/information-retrieval/raw/pts_14days.jsonl                    44KB        20 篇
 ```
 
 ### 已刪除的空白檔案 (8 個)
 
 ```
-✗ data/raw/ftv_politics_14days.jsonl      (0 bytes) - 已刪除
-✗ data/raw/ftv_finance_14days.jsonl       (0 bytes) - 已刪除
-✗ data/raw/ftv_culture_14days.jsonl       (0 bytes) - 已刪除
-✗ data/raw/ftv_international_14days.jsonl (0 bytes) - 已刪除
-✗ data/raw/ftv_life_14days.jsonl          (0 bytes) - 已刪除
-✗ data/raw/ftv_all_14days.jsonl           (0 bytes) - 已刪除
-✗ data/raw/storm_14days.jsonl             (0 bytes) - 已刪除
-✗ data/raw/tvbs_14days.jsonl              (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_politics_14days.jsonl      (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_finance_14days.jsonl       (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_culture_14days.jsonl       (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_international_14days.jsonl (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_life_14days.jsonl          (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/ftv_all_14days.jsonl           (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/storm_14days.jsonl             (0 bytes) - 已刪除
+✗ /mnt/c/data/information-retrieval/raw/tvbs_14days.jsonl              (0 bytes) - 已刪除
 ```
 
 ---

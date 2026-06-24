@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corpus Dashboard - CNIRS</title>
+    <title>語料庫儀表板 - CNIRS</title>
     <link rel="stylesheet" href="static/css/style.css">
     <link rel="stylesheet" href="static/css/facet.css">
 </head>
@@ -15,8 +15,8 @@
     <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
     <div class="container">
         <header class="header">
-            <h1>CNIRS Corpus Dashboard</h1>
-            <p class="subtitle">Large-corpus readiness, metadata quality, taxonomy facets, and IR pipeline visibility</p>
+            <h1>CNIRS 語料庫儀表板</h1>
+            <p class="subtitle">大型語料狀態、metadata 品質、taxonomy facets 與 IR pipeline 可視化</p>
             <nav class="nav">
                 <a href="./" class="nav-link">搜尋</a>
                 <a href="compare" class="nav-link">模型對比</a>
@@ -33,7 +33,7 @@
         <main class="corpus-page">
             <section id="corpus-loading" class="loading">
                 <div class="spinner"></div>
-                <p>Loading corpus audit...</p>
+                <p>正在載入語料庫稽核...</p>
             </section>
 
             <section id="corpus-error" class="no-results" style="display: none;"></section>
@@ -44,24 +44,24 @@
                 <div class="dashboard-grid">
                     <article class="dashboard-card dashboard-card-wide">
                         <div class="dashboard-card-header">
-                            <h2>Demo Readiness</h2>
+                            <h2>Demo 準備狀態</h2>
                             <span id="readiness-status" class="status-pill"></span>
                         </div>
                         <div id="readiness-checks" class="readiness-list"></div>
                     </article>
 
                     <article class="dashboard-card">
-                        <h2>Source Distribution</h2>
+                        <h2>來源分布</h2>
                         <div id="source-distribution" class="bar-list"></div>
                     </article>
 
                     <article class="dashboard-card">
-                        <h2>Taxonomy Distribution</h2>
+                        <h2>Taxonomy 分布</h2>
                         <div id="taxonomy-distribution" class="bar-list"></div>
                     </article>
 
                     <article class="dashboard-card">
-                        <h2>Date Coverage</h2>
+                        <h2>日期覆蓋</h2>
                         <div id="year-distribution" class="bar-list compact"></div>
                     </article>
 
@@ -71,42 +71,42 @@
                     </article>
 
                     <article class="dashboard-card dashboard-card-wide">
-                        <h2>Metadata Completeness</h2>
+                        <h2>Metadata 完整度</h2>
                         <div id="metadata-completeness" class="completeness-grid"></div>
                     </article>
 
                     <article class="dashboard-card dashboard-card-wide">
-                        <h2>Facet Quality</h2>
+                        <h2>Facet 品質</h2>
                         <div id="facet-quality" class="completeness-grid"></div>
                         <div id="facet-quality-notes" class="known-gaps"></div>
                     </article>
 
                     <article class="dashboard-card dashboard-card-wide">
-                        <h2>IR System Flow</h2>
+                        <h2>IR 系統流程</h2>
                         <div id="system-flow" class="flow-diagram"></div>
                     </article>
 
                     <article class="dashboard-card dashboard-card-wide">
                         <div class="dashboard-card-header">
                             <h2>Topic Explorer</h2>
-                            <span class="status-pill">Lightweight clustering</span>
+                            <span class="status-pill">輕量 clustering</span>
                         </div>
                         <div class="topic-controls">
-                            <input type="text" id="topic-query" placeholder="Query for topic exploration, e.g. 半導體 人工智慧">
+                            <input type="text" id="topic-query" placeholder="輸入要探索 topic 的 query，例如：半導體 人工智慧">
                             <select id="topic-method">
                                 <option value="kmeans">K-means</option>
                                 <option value="hierarchical">HAC</option>
                             </select>
                             <input type="number" id="topic-clusters" value="5" min="2" max="12">
                             <input type="number" id="topic-sample-size" value="120" min="10" max="200">
-                            <button id="run-topic-explorer" class="btn btn-primary">Analyze Topics</button>
+                            <button id="run-topic-explorer" class="btn btn-primary">分析 Topics</button>
                         </div>
                         <div id="topic-status" class="explain-muted"></div>
                         <div id="topic-results" class="topic-results"></div>
                     </article>
 
                     <article class="dashboard-card dashboard-card-wide">
-                        <h2>External Data Policy</h2>
+                        <h2>外部資料策略</h2>
                         <div id="external-sources" class="external-source-list"></div>
                     </article>
                 </div>
@@ -114,6 +114,7 @@
         </main>
     </div>
 
+    <script src="static/js/i18n.js"></script>
     <script src="static/js/corpus.js"></script>
     <script src="static/js/demo-assistant.js"></script>
 </body>

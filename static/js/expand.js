@@ -40,7 +40,7 @@ async function performExpansion() {
     expandBtn.disabled = true;
 
     try {
-        const response = await fetch('/api/expand_query', {
+        const response = await fetch('api/expand_query', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -53,12 +53,13 @@ async function performExpansion() {
             })
         });
 
-        const data = await response.json();
+        const payload = await response.json();
+        const data = normalizeApiPayload(payload);
 
         if (data.success) {
             displayExpansion(data, maxExpansionTerms);
         } else {
-            alert('擴展錯誤: ' + data.error);
+            alert('擴展錯誤: ' + apiErrorMessage(data));
         }
     } catch (error) {
         console.error('Expansion error:', error);
@@ -73,14 +74,16 @@ async function performExpansion() {
  * Display expansion results
  */
 function displayExpansion(data, maxExpansionTerms) {
+    const terms = normalizeExpansionTerms(data).slice(0, maxExpansionTerms);
     // Create header
     const header = document.createElement('div');
     header.className = 'results-header';
     header.innerHTML = `
         <h2>查詢擴展結果</h2>
         <div class="results-meta">
-            <span>原始查詢: <strong>${data.original_query}</strong></span>
-            <span>相關文檔數: ${data.num_relevant}</span>
+            <span>原始查詢: <strong>${escapeHtml(data.original_query)}</strong></span>
+            <span>方法: ${escapeHtml(data.method || 'rocchio_prf')}</span>
+            <span>Query drift: ${formatScore(data.query_drift)}</span>
         </div>
     `;
     expansionContainer.appendChild(header);
@@ -91,73 +94,68 @@ function displayExpansion(data, maxExpansionTerms) {
     summaryCard.innerHTML = `
         <div class="summary-section">
             <h3>📝 擴展查詢</h3>
-            <div class="expanded-query">${highlightExpansion(data.expanded_query, data.original_query)}</div>
+            <div class="expanded-query">${highlightExpansion(data.expanded_query || data.original_query, data.original_query)}</div>
         </div>
 
         <div class="summary-section">
-            <h3>✨ 新增擴展詞 (Top ${Math.min(maxExpansionTerms, data.expansion_terms.length)})</h3>
+            <h3>✨ 新增擴展詞 (Top ${terms.length})</h3>
             <div class="expansion-terms">
-                ${data.expansion_terms.slice(0, maxExpansionTerms).map(term => `
+                ${terms.map(term => `
                     <div class="expansion-term">
-                        <span class="term-text">${term.term}</span>
-                        <span class="term-weight">${term.weight.toFixed(4)}</span>
+                        <span class="term-text">${escapeHtml(term.term)}</span>
+                        <span class="term-weight">${formatScore(term.weight)}</span>
                     </div>
-                `).join('')}
+                `).join('') || '<p class="explain-muted">目前沒有新增擴展詞。</p>'}
             </div>
         </div>
     `;
     expansionContainer.appendChild(summaryCard);
 
-    // Performance comparison
-    const perfCard = document.createElement('div');
-    perfCard.className = 'performance-comparison';
-
-    const origTotal = data.original_results.total;
-    const expTotal = data.expanded_results.total;
-    const improvement = origTotal > 0 ? ((expTotal - origTotal) / origTotal * 100).toFixed(1) : 'N/A';
-
-    perfCard.innerHTML = `
-        <h3>📊 效能比較</h3>
-        <div class="perf-stats">
-            <div class="perf-item">
-                <div class="perf-label">原始結果數</div>
-                <div class="perf-value">${origTotal}</div>
-            </div>
-            <div class="perf-item">
-                <div class="perf-label">擴展後結果數</div>
-                <div class="perf-value perf-highlight">${expTotal}</div>
-            </div>
-            <div class="perf-item">
-                <div class="perf-label">結果提升</div>
-                <div class="perf-value ${improvement !== 'N/A' && parseFloat(improvement) > 0 ? 'perf-positive' : ''}">${improvement !== 'N/A' ? improvement + '%' : 'N/A'}</div>
-            </div>
-        </div>
+    const actionCard = document.createElement('div');
+    actionCard.className = 'performance-comparison';
+    actionCard.innerHTML = `
+        <h3>下一步查詢</h3>
+        <p class="explain-muted">使用擴展後 query 回到主搜尋頁，比較原始 query 與 Rocchio pseudo-relevance feedback 的結果差異。</p>
+        <a class="btn btn-secondary" href="./?q=${encodeURIComponent(data.expanded_query || data.original_query)}&model=bm25&run=1">用擴展查詢搜尋</a>
     `;
-    expansionContainer.appendChild(perfCard);
+    expansionContainer.appendChild(actionCard);
+}
 
-    // Side-by-side results comparison
-    const comparisonGrid = document.createElement('div');
-    comparisonGrid.className = 'comparison-grid';
+function normalizeApiPayload(payload) {
+    if (!payload) return payload;
+    if (payload.ok === true && payload.data) {
+        return { ...payload.data, success: true, meta: payload.meta || {}, raw: payload };
+    }
+    return payload;
+}
 
-    // Original results
-    const originalCard = createResultsCard(
-        '原始查詢結果',
-        data.original_results.results,
-        data.original_query,
-        'original'
-    );
+function apiErrorMessage(payload, fallback = '未知錯誤') {
+    if (!payload) return fallback;
+    if (typeof payload.error === 'string') return payload.error;
+    if (payload.error && payload.error.message) return payload.error.message;
+    return payload.message || fallback;
+}
 
-    // Expanded results
-    const expandedCard = createResultsCard(
-        '擴展查詢結果',
-        data.expanded_results.results,
-        data.expanded_query,
-        'expanded'
-    );
+function normalizeExpansionTerms(data) {
+    const weights = data.term_weights || {};
+    return (data.expanded_terms || data.expansion_terms || []).map((term) => {
+        if (typeof term === 'string') return { term, weight: Number(weights[term] || 0) };
+        return { term: term.term || term.word || '', weight: Number(term.weight || weights[term.term] || 0) };
+    }).filter((item) => item.term);
+}
 
-    comparisonGrid.appendChild(originalCard);
-    comparisonGrid.appendChild(expandedCard);
-    expansionContainer.appendChild(comparisonGrid);
+function formatScore(value) {
+    const number = Number(value || 0);
+    return Number.isFinite(number) ? number.toFixed(4) : '0.0000';
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**

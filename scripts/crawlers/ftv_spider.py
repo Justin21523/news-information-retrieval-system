@@ -6,7 +6,7 @@ FTV (民視新聞) Spider (Deep Refactoring - Complete Version)
 Comprehensive Playwright-based spider for FTV News with deep pagination
 and aggressive historical data crawling (targeting 2 years).
 
-Target: https://www.ftvnews.com.tw/
+Target: https://news.ftv.com.tw/ (primary; behind Cloudflare)
 Strategy: Deep pagination + All categories + Aggressive crawling
 
 Key Features (Complete Version):
@@ -30,15 +30,42 @@ import logging
 import re
 import hashlib
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
+
+from scrapy.exceptions import CloseSpider
 
 # Set twisted reactor BEFORE importing any scrapy modules that might install it
 import os
 os.environ.setdefault('TWISTED_REACTOR', 'twisted.internet.asyncioreactor.AsyncioSelectorReactor')
 
-from base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+try:
+    # When imported as a package module.
+    from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+except ImportError:
+    # When executed via `scrapy runspider scripts/crawlers/ftv_spider.py`.
+    from base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
 from scrapy_playwright.page import PageMethod
 
 logger = logging.getLogger(__name__)
+
+def should_abort_request(request) -> bool:
+    """
+    Abort non-essential resource requests to speed up navigation.
+
+    Args:
+        request: Playwright request object.
+
+    Returns:
+        bool: True to abort the request.
+
+    Complexity:
+        Time: O(1)
+        Space: O(1)
+    """
+    try:
+        return request.resource_type in {"image", "media", "font"}
+    except Exception:
+        return False
 
 
 class FTVNewsSpider(BasePlaywrightSpider):
@@ -47,7 +74,10 @@ class FTVNewsSpider(BasePlaywrightSpider):
     """
 
     name = 'ftv_news'
-    allowed_domains = ['ftvnews.com.tw', 'www.ftvnews.com.tw']
+    allowed_domains = ['news.ftv.com.tw', 'ftv.com.tw', 'ftvnews.com.tw', 'www.ftvnews.com.tw']
+
+    # Try `news.ftv.com.tw` first; fallback is best-effort only.
+    DEFAULT_BASE_HOSTS = ['news.ftv.com.tw', 'www.ftvnews.com.tw']
 
     CATEGORIES = {
         'all': {'slug': '', 'name': '全部'},
@@ -63,21 +93,42 @@ class FTVNewsSpider(BasePlaywrightSpider):
 
     custom_settings = {
         'TWISTED_REACTOR': 'twisted.internet.asyncioreactor.AsyncioSelectorReactor',
-        'DOWNLOAD_DELAY': 2,
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+        'DOWNLOAD_DELAY': 1,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
         'ROBOTSTXT_OBEY': False,
+        'HTTPERROR_ALLOW_ALL': True,
         'DOWNLOAD_HANDLERS': {
             "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
             "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
         },
         'PLAYWRIGHT_BROWSER_TYPE': 'chromium',
-        'PLAYWRIGHT_LAUNCH_OPTIONS': {'headless': True, 'timeout': 60000},
-        'FEEDS': {'data/raw/ftv_news_%(time)s.jsonl': {'format': 'jsonlines', 'encoding': 'utf8'}},
+        'PLAYWRIGHT_LAUNCH_OPTIONS': {
+            'headless': True,
+            'timeout': 60000,
+            'args': [
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+            ],
+        },
+        'PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT': 60000,
+        'PLAYWRIGHT_ABORT_REQUEST': should_abort_request,
+
+        # Anti-detection middlewares (enabled for Playwright requests only)
+        'DOWNLOADER_MIDDLEWARES': {
+            'scripts.crawlers.middlewares.stealth_middleware.StealthMiddleware': 585,
+            'scripts.crawlers.middlewares.humanization_middleware.HumanizationMiddleware': 586,
+        },
+        'PLAYWRIGHT_STEALTH_ENABLED': True,
+        'HUMANIZATION_ENABLED': False,
+
+        'FEEDS': {'/mnt/c/data/information-retrieval/raw/ftv_news_%(time)s.jsonl': {'format': 'jsonlines', 'encoding': 'utf8'}},
         'LOG_LEVEL': 'INFO',
     }
 
     def __init__(self, category: str = 'all', days: int = 730,  # 2 years default
-                 max_pages: int = 500, max_articles: int = None, *args, **kwargs):
+                 max_pages: int = 500, max_articles: int = None,
+                 base_host: str = 'auto', *args, **kwargs):
         """Initialize crawl configuration, date window, and counters (O(1) time/space)."""
         super().__init__(*args, **kwargs)
 
@@ -93,6 +144,16 @@ class FTVNewsSpider(BasePlaywrightSpider):
         self.max_pages = int(max_pages)
         self.max_articles = int(max_articles) if max_articles else None
 
+        base_host = str(base_host or '').strip()
+        if base_host.lower() in {'auto', 'default', ''}:
+            self.base_hosts = list(self.DEFAULT_BASE_HOSTS)
+        else:
+            parsed = urlparse(base_host)
+            if parsed.scheme and parsed.netloc:
+                self.base_hosts = [parsed.netloc]
+            else:
+                self.base_hosts = [base_host]
+
         self.articles_scraped = 0
         self.articles_failed = 0
         self.pages_visited = 0
@@ -106,12 +167,41 @@ class FTVNewsSpider(BasePlaywrightSpider):
         logger.info(f"Category: {self.category_name}")
         logger.info(f"Date Range: {self.start_date.date()} to {self.end_date.date()} ({days} days)")
         logger.info(f"Max Pages: {self.max_pages}")
+        logger.info(f"Base host(s): {', '.join(self.base_hosts)}")
         if self.max_articles:
             logger.info(f"Max Articles: {self.max_articles:,}")
         logger.info("=" * 70)
 
+    @staticmethod
+    def _is_cloudflare_block(response: scrapy.http.Response) -> bool:
+        """
+        Detect Cloudflare 'Sorry, you have been blocked' pages.
+
+        Complexity:
+            Time: O(n) where n is response text length
+            Space: O(1)
+        """
+        if response.status != 403:
+            return False
+        text = (getattr(response, 'text', '') or '').lower()
+        return (
+            'sorry, you have been blocked' in text
+            or 'attention required' in text
+            or '<title>attention required! | cloudflare</title>' in text
+        )
+
+    def _replace_netloc(self, url: str, new_netloc: str) -> str:
+        """Replace the netloc of a URL (O(1) time/space)."""
+        parsed = urlparse(url)
+        return urlunparse(parsed._replace(netloc=new_netloc))
+
+    def _category_url(self, host: str, slug: str) -> str:
+        """Build a category URL for a given host (O(1) time/space)."""
+        return f"https://{host}/category/{slug}"
+
     def start_requests(self):
         """Generate start requests for all categories (if 'all') or specific category."""
+        host = self.base_hosts[0]
         if self.category == 'all':
             # Crawl all categories for maximum coverage
             for cat_code, cat_info in self.CATEGORIES.items():
@@ -119,7 +209,7 @@ class FTVNewsSpider(BasePlaywrightSpider):
                     continue
 
                 self.category_stats[cat_code] = {'pages': 0, 'articles': 0}
-                base_url = f"https://www.ftvnews.com.tw/category/{cat_info['slug']}"
+                base_url = self._category_url(host, cat_info['slug'])
 
                 logger.info(f"Queuing category: {cat_info['name']} - {base_url}")
 
@@ -127,26 +217,32 @@ class FTVNewsSpider(BasePlaywrightSpider):
                     url=base_url,
                     callback=self.parse_list_page,
                     errback=self.handle_error,
-                    meta={'category': cat_code, 'page': 1, **self.get_playwright_meta(
+                    meta={
+                        'category': cat_code,
+                        'page': 1,
+                        'host_index': 0,
+                        **self.get_playwright_meta(
                         playwright_page_methods=[
-                            PageMethod('wait_for_load_state', 'networkidle'),
-                            PlaywrightPageMethods.wait_for_timeout(2000),
+                            PageMethod('wait_for_timeout', 1200),
                         ]
                     )},
                     dont_filter=True,
                 )
         else:
             self.category_stats[self.category] = {'pages': 0, 'articles': 0}
-            base_url = f"https://www.ftvnews.com.tw/category/{self.category_slug}"
+            base_url = self._category_url(host, self.category_slug)
 
             yield scrapy.Request(
                 url=base_url,
                 callback=self.parse_list_page,
                 errback=self.handle_error,
-                meta={'category': self.category, 'page': 1, **self.get_playwright_meta(
+                meta={
+                    'category': self.category,
+                    'page': 1,
+                    'host_index': 0,
+                    **self.get_playwright_meta(
                     playwright_page_methods=[
-                        PageMethod('wait_for_load_state', 'networkidle'),
-                        PlaywrightPageMethods.wait_for_timeout(2000),
+                        PageMethod('wait_for_timeout', 1200),
                     ]
                 )},
                 dont_filter=True,
@@ -156,6 +252,80 @@ class FTVNewsSpider(BasePlaywrightSpider):
         """Parse FTV list page with deep pagination support."""
         category = response.meta.get('category', 'unknown')
         page = response.meta.get('page', 1)
+        host_index = int(response.meta.get('host_index', 0) or 0)
+
+        if response.status != 200:
+            if self._is_cloudflare_block(response):
+                if host_index + 1 < len(self.base_hosts):
+                    next_host = self.base_hosts[host_index + 1]
+                    alt_url = self._replace_netloc(response.url, next_host)
+                    logger.error(f"Cloudflare block detected (403), trying host {next_host}: {alt_url}")
+                    meta = {
+                        **response.meta,
+                        'host_index': host_index + 1,
+                        **self.get_playwright_meta(
+                            playwright_page_methods=[
+                                PageMethod('wait_for_timeout', 1200),
+                            ]
+                        ),
+                    }
+                    yield scrapy.Request(
+                        url=alt_url,
+                        callback=self.parse_list_page,
+                        errback=self.handle_error,
+                        meta=meta,
+                        dont_filter=True,
+                    )
+                    return
+                logger.error(f"Cloudflare block detected (403): {response.url}")
+                raise CloseSpider(reason='blocked_by_cloudflare')
+
+            if response.status in {404, 410} and host_index + 1 < len(self.base_hosts):
+                next_host = self.base_hosts[host_index + 1]
+                alt_url = self._replace_netloc(response.url, next_host)
+                logger.warning(f"Non-200 list page (status={response.status}), trying host {next_host}: {alt_url}")
+                meta = {
+                    **response.meta,
+                    'host_index': host_index + 1,
+                    **self.get_playwright_meta(
+                        playwright_page_methods=[
+                            PageMethod('wait_for_timeout', 1200),
+                        ]
+                    ),
+                }
+                yield scrapy.Request(
+                    url=alt_url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    meta=meta,
+                    dont_filter=True,
+                )
+                return
+
+            retry_count = int(response.meta.get('retry_count', 0) or 0)
+            if retry_count < 2:
+                logger.warning(
+                    f"Non-200 status for list page (status={response.status}), retrying: {response.url}"
+                )
+                meta = {
+                    'category': category,
+                    'page': page,
+                    'host_index': host_index,
+                    'retry_count': retry_count + 1,
+                    **self.get_playwright_meta(
+                        playwright_page_methods=[
+                            PageMethod('wait_for_timeout', 3000),
+                        ]
+                    ),
+                }
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    meta=meta,
+                    dont_filter=True,
+                )
+            return
 
         self.pages_visited += 1
         if category in self.category_stats:
@@ -192,10 +362,12 @@ class FTVNewsSpider(BasePlaywrightSpider):
                 url=article_url,
                 callback=self.parse_article,
                 errback=self.handle_error,
-                meta={'category': category, **self.get_playwright_meta(
+                meta={
+                    'category': category,
+                    'host_index': host_index,
+                    **self.get_playwright_meta(
                     playwright_page_methods=[
-                        PageMethod('wait_for_load_state', 'domcontentloaded'),
-                        PlaywrightPageMethods.wait_for_timeout(1500),
+                        PageMethod('wait_for_timeout', 1000),
                     ]
                 )},
                 dont_filter=False,
@@ -232,10 +404,13 @@ class FTVNewsSpider(BasePlaywrightSpider):
                     url=next_url,
                     callback=self.parse_list_page,
                     errback=self.handle_error,
-                    meta={'category': category, 'page': page + 1, **self.get_playwright_meta(
+                    meta={
+                        'category': category,
+                        'page': page + 1,
+                        'host_index': host_index,
+                        **self.get_playwright_meta(
                         playwright_page_methods=[
-                            PageMethod('wait_for_load_state', 'networkidle'),
-                            PlaywrightPageMethods.wait_for_timeout(2000),
+                            PageMethod('wait_for_timeout', 1200),
                         ]
                     )},
                     dont_filter=True,
@@ -248,6 +423,82 @@ class FTVNewsSpider(BasePlaywrightSpider):
         """
         try:
             category = response.meta.get('category', 'unknown')
+            host_index = int(response.meta.get('host_index', 0) or 0)
+
+            if response.status != 200:
+                if self._is_cloudflare_block(response):
+                    if host_index + 1 < len(self.base_hosts):
+                        next_host = self.base_hosts[host_index + 1]
+                        alt_url = self._replace_netloc(response.url, next_host)
+                        logger.error(f"Cloudflare block detected (403), trying host {next_host}: {alt_url}")
+                        meta = {
+                            **response.meta,
+                            'host_index': host_index + 1,
+                            **self.get_playwright_meta(
+                                playwright_page_methods=[
+                                    PageMethod('wait_for_timeout', 1200),
+                                ]
+                            ),
+                        }
+                        yield scrapy.Request(
+                            url=alt_url,
+                            callback=self.parse_article,
+                            errback=self.handle_error,
+                            meta=meta,
+                            dont_filter=True,
+                        )
+                        return
+                    logger.error(f"Cloudflare block detected (403): {response.url}")
+                    raise CloseSpider(reason='blocked_by_cloudflare')
+
+                if response.status in {404, 410} and host_index + 1 < len(self.base_hosts):
+                    next_host = self.base_hosts[host_index + 1]
+                    alt_url = self._replace_netloc(response.url, next_host)
+                    logger.warning(f"Non-200 article (status={response.status}), trying host {next_host}: {alt_url}")
+                    meta = {
+                        **response.meta,
+                        'host_index': host_index + 1,
+                        **self.get_playwright_meta(
+                            playwright_page_methods=[
+                                PageMethod('wait_for_timeout', 800),
+                            ]
+                        ),
+                    }
+                    yield scrapy.Request(
+                        url=alt_url,
+                        callback=self.parse_article,
+                        errback=self.handle_error,
+                        meta=meta,
+                        dont_filter=True,
+                    )
+                    return
+
+                retry_count = int(response.meta.get('retry_count', 0) or 0)
+                if retry_count < 2:
+                    logger.warning(
+                        f"Non-200 status for article (status={response.status}), retrying: {response.url}"
+                    )
+                    meta = {
+                        **response.meta,
+                        'retry_count': retry_count + 1,
+                        **self.get_playwright_meta(
+                            playwright_page_methods=[
+                                PageMethod('wait_for_timeout', 1500),
+                            ]
+                        ),
+                    }
+                    yield scrapy.Request(
+                        url=response.url,
+                        callback=self.parse_article,
+                        errback=self.handle_error,
+                        meta=meta,
+                        dont_filter=True,
+                    )
+                    return
+
+                logger.warning(f"Non-200 article (status={response.status}), skipping: {response.url}")
+                self.articles_failed += 1
+                return
 
             article = {
                 'article_id': self._generate_article_id(response.url),

@@ -2,7 +2,7 @@
 """
 Import All JSONL Files to PostgreSQL
 
-Imports all collected news articles from data/raw directory into PostgreSQL.
+Imports all collected news articles from /mnt/c/data/information-retrieval/raw directory into PostgreSQL.
 
 Usage:
     python scripts/import_all_to_postgres.py
@@ -54,13 +54,13 @@ def main():
     importer = JSONLImporter(db_manager, batch_size=1000)
     print("   ✓ Importer ready (batch_size=1000)")
 
-    # Import all files from data/raw
-    print("\n3. Starting bulk import from data/raw...")
+    # Import all files from /mnt/c/data/information-retrieval/raw
+    print("\n3. Starting bulk import from /mnt/c/data/information-retrieval/raw...")
     print("-" * 70)
 
     try:
         stats = importer.import_directory(
-            directory='data/raw',
+            directory='/mnt/c/data/information-retrieval/raw',
             pattern='*.jsonl'
         )
 

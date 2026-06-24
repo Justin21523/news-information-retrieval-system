@@ -15,10 +15,10 @@
 
 | 媒體名稱 | 代碼 | 類型 | 狀態 |
 |---------|------|------|------|
-| 中央社 CNA | `cna` | 傳統爬蟲 | ✅ 完成 |
-| 自由時報 LTN | `ltn` | Playwright | ✅ 完成 |
+| 中央社 CNA | `cna` | 傳統爬蟲 / Playwright(v2) | ✅ 完成 |
+| 自由時報 LTN | `ltn` | 傳統爬蟲 | ✅ 完成 |
 | 公視 PTS | `pts` | 傳統爬蟲 | ✅ 完成 |
-| 聯合報 UDN | `udn` | Playwright | ✅ 完成 |
+| 聯合報 UDN | `udn` | 傳統爬蟲 | ✅ 完成 |
 | 蘋果日報 Apple Daily | `apple` | Playwright | ✅ 完成 |
 | TVBS新聞 TVBS News | `tvbs` | Playwright | ✅ 完成 |
 | 中時新聞網 China Times | `chinatimes` | 傳統爬蟲 | ✅ 完成 |
@@ -99,13 +99,13 @@ python scripts/crawlers/run_crawlers.py --crawler ltn \
 scrapy runspider scripts/crawlers/ltn_spider.py \
     -a days=7 \
     -a category=politics \
-    -o data/raw/ltn_politics.jsonl
+    -o /mnt/c/data/information-retrieval/raw/ltn_politics.jsonl
 
 # CNA 中央社
 scrapy runspider scripts/crawlers/cna_spider.py \
     -a start_date=2025-11-01 \
     -a end_date=2025-11-13 \
-    -o data/raw/cna_news.jsonl
+    -o /mnt/c/data/information-retrieval/raw/cna_news.jsonl
 ```
 
 ### 新聞 API 擷取
@@ -116,7 +116,7 @@ python scripts/crawlers/news_api_fetcher.py \
     --query "Taiwan AI" \
     --days 7 \
     --source gdelt \
-    --output data/raw/gdelt_taiwan.jsonl
+    --output /mnt/c/data/information-retrieval/raw/gdelt_taiwan.jsonl
 
 # NewsAPI (需要免費 API key)
 export NEWSAPI_KEY="your_api_key_here"
@@ -124,14 +124,14 @@ python scripts/crawlers/news_api_fetcher.py \
     --query "台灣" \
     --days 7 \
     --source newsapi \
-    --output data/raw/newsapi_taiwan.jsonl
+    --output /mnt/c/data/information-retrieval/raw/newsapi_taiwan.jsonl
 
 # 整合多個來源
 python scripts/crawlers/news_api_fetcher.py \
     --query "台灣 AI" \
     --days 7 \
     --source all \
-    --output data/raw/unified_news.jsonl
+    --output /mnt/c/data/information-retrieval/raw/unified_news.jsonl
 ```
 
 ## 輸出格式 Output Format
@@ -184,7 +184,7 @@ custom_settings = {
 
 ```
 1. 爬取 (Crawling)
-   └─> data/raw/*.jsonl
+   └─> /mnt/c/data/information-retrieval/raw/*.jsonl
 
 2. 預處理 (Preprocessing)
    └─> python scripts/preprocess_news.py
@@ -192,7 +192,7 @@ custom_settings = {
 
 3. 建立索引 (Indexing)
    └─> python scripts/build_field_index.py
-   └─> data/indexes/field_index.pkl
+   └─> /mnt/c/data/information-retrieval/indexes/field_index.pkl
 
 4. 查詢 (Querying)
    └─> Flask API /api/advanced_search
@@ -297,10 +297,10 @@ $env:NEWSAPI_KEY="your_key_here"
 
 **A:** 預設輸出位置：
 
-- 爬蟲輸出: `data/raw/<spider_name>_news_<timestamp>.jsonl`
+- 爬蟲輸出: `/mnt/c/data/information-retrieval/raw/<spider_name>_news_<timestamp>.jsonl`
 - API 輸出: 由 `--output` 參數指定
 - 預處理輸出: `data/preprocessed/`
-- 索引檔案: `data/indexes/`
+- 索引檔案: `/mnt/c/data/information-retrieval/indexes/`
 
 ## 效能優化 Performance
 

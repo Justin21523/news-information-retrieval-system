@@ -81,8 +81,8 @@ Examples:
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='data/raw',
-        help='Output directory for crawled data (default: data/raw)'
+        default='/mnt/c/data/information-retrieval/raw',
+        help='Output directory for crawled data (default: /mnt/c/data/information-retrieval/raw)'
     )
 
     parser.add_argument(

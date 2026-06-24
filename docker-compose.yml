@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  ir-web:
+    build: .
+    ports:
+      - "5001:5001"
+    environment:
+      FLASK_DEBUG: "0"
+      HOST: "0.0.0.0"
+      PORT: "5001"
+      HF_HOME: "/data/hf"
+      TRANSFORMERS_CACHE: "/data/hf"
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - hf_cache:/data/hf
+    restart: unless-stopped
+
+volumes:
+  hf_cache:

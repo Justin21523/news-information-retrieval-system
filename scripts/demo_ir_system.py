@@ -10,7 +10,7 @@ Interactive demonstration of all IR system capabilities including:
 - CKIP tokenization showcase
 
 Usage:
-    python scripts/demo_ir_system.py --index-dir data/index_50k
+    python scripts/demo_ir_system.py --index-dir /mnt/c/data/information-retrieval/index_50k
 
 Author: Information Retrieval System
 """
@@ -363,8 +363,8 @@ def main():
     parser.add_argument(
         '--index-dir',
         type=str,
-        default='data/index_50k',
-        help='Index directory (default: data/index_50k)'
+        default='/mnt/c/data/information-retrieval/index_50k',
+        help='Index directory (default: /mnt/c/data/information-retrieval/index_50k)'
     )
     parser.add_argument(
         '--verbose',

@@ -12,7 +12,7 @@ Usage:
     from unified_retrieval import UnifiedRetrieval
 
     retriever = UnifiedRetrieval()
-    retriever.load_indexes('data/indexes')
+    retriever.load_indexes('/mnt/c/data/information-retrieval/indexes')
 
     results = retriever.search("颱風災害", model='tfidf', top_k=10)
 
@@ -489,7 +489,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Unified Retrieval Demo')
-    parser.add_argument('--index-dir', type=str, default='data/indexes',
+    parser.add_argument('--index-dir', type=str, default='/mnt/c/data/information-retrieval/indexes',
                        help='Path to indexes directory')
     parser.add_argument('--query', type=str, required=True,
                        help='Query string')

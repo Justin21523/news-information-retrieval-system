@@ -6,8 +6,8 @@ Generates comprehensive statistics and visualizations for the dataset.
 
 Usage:
     python scripts/data/analyze_dataset.py \
-        --input data/processed/cna_mvp_cleaned.jsonl \
-        --output data/stats/cna_mvp_stats.txt
+        --input /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl \
+        --output /mnt/c/data/information-retrieval/stats/cna_mvp_stats.txt
 
 Author: CNIRS Development Team
 License: Educational Use Only

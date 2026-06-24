@@ -9,7 +9,7 @@ Tests all IR system components:
 - Content Summarization
 
 Usage:
-    python scripts/test_ir_system.py --index-dir data/index_50k
+    python scripts/test_ir_system.py --index-dir /mnt/c/data/information-retrieval/index_50k
 
 Author: Information Retrieval System
 """
@@ -34,7 +34,7 @@ from src.ir.search import (
 class IRSystemTester:
     """Comprehensive IR System Tester."""
 
-    def __init__(self, index_dir: str = 'data/index_50k'):
+    def __init__(self, index_dir: str = '/mnt/c/data/information-retrieval/index_50k'):
         """
         Initialize tester.
 
@@ -343,8 +343,8 @@ def main():
     parser.add_argument(
         '--index-dir',
         type=str,
-        default='data/index_50k',
-        help='Index directory (default: data/index_50k)'
+        default='/mnt/c/data/information-retrieval/index_50k',
+        help='Index directory (default: /mnt/c/data/information-retrieval/index_50k)'
     )
     parser.add_argument(
         '--verbose',

@@ -104,7 +104,7 @@ LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
 # Feed settings (default output format)
 FEEDS = {
-    'data/raw/crawl_%(name)s_%(time)s.jsonl': {
+    '/mnt/c/data/information-retrieval/raw/crawl_%(name)s_%(time)s.jsonl': {
         'format': 'jsonlines',
         'encoding': 'utf8',
         'store_empty': False,

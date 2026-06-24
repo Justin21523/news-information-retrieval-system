@@ -35,6 +35,8 @@ import sys
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from scripts.crawlers.utils.jobdir import has_pending_requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,8 +162,19 @@ class YahooNewsSpider(scrapy.Spider):
         'RETRY_HTTP_CODES': [500, 502, 503, 504, 408, 429],
     }
 
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(f"Detected JOBDIR resume queue; skipping start_requests seeding (JOBDIR={crawler.settings.get('JOBDIR')})")
+        return spider
+
     def start_requests(self):
         """Generate initial requests based on mode"""
+        if getattr(self, "_resume_from_jobdir", False):
+            return
+
         if self.mode == 'sitemap':
             yield from self._start_sitemap_mode()
         elif self.mode == 'archive':

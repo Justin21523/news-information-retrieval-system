@@ -57,10 +57,36 @@ from typing import Optional, List, Dict, Any
 from urllib.parse import urljoin, urlparse
 
 # Import base spider with anti-detection features
-from base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+try:
+    # When imported as a package module.
+    from scripts.crawlers.base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
+except ImportError:
+    # When executed via `scrapy runspider scripts/crawlers/apple_daily_spider.py`.
+    from base_playwright_spider import BasePlaywrightSpider, PlaywrightPageMethods
 from scrapy_playwright.page import PageMethod
 
+from scripts.crawlers.utils.jobdir import has_pending_requests
+
 logger = logging.getLogger(__name__)
+
+def should_abort_request(request) -> bool:
+    """
+    Abort non-essential resource requests to speed up navigation.
+
+    Args:
+        request: Playwright request object.
+
+    Returns:
+        bool: True to abort the request.
+
+    Complexity:
+        Time: O(1)
+        Space: O(1)
+    """
+    try:
+        return request.resource_type in {"image", "media", "font"}
+    except Exception:
+        return False
 
 
 class AppleDailySpider(BasePlaywrightSpider):
@@ -87,7 +113,29 @@ class AppleDailySpider(BasePlaywrightSpider):
     """
 
     name = 'apple_daily'
-    allowed_domains = ['nextapple.com.tw', 'tw.appledaily.com']
+    allowed_domains = [
+        'nextapple.com.tw',
+        'www.nextapple.com.tw',
+        'tw.appledaily.com',
+        # Fallback sources (NextApple News sitemaps)
+        'news.nextapple.com',
+        'apis.nextapple.tw',
+    ]
+
+    # Fallback sitemap endpoint (server-rendered articles; no Playwright required).
+    NEXTAPPLE_NEWS_SITEMAP = 'https://apis.nextapple.tw/api/xml/site-map/news'
+
+    # Some NextApple News sitemap categories differ from nextapple.com.tw category slugs.
+    # Keep this mapping small and conservative to avoid over-including unrelated content.
+    NEXTAPPLE_NEWS_CATEGORY_ALIASES = {
+        'politics': {'politics', 'politic'},
+        'economy': {'economy', 'finance', 'money'},
+        'society': {'society'},
+        'entertainment': {'entertainment'},
+        'sports': {'sports'},
+        'life': {'life'},
+        'world': {'world'},
+    }
 
     # Category mapping
     CATEGORIES = {
@@ -103,7 +151,8 @@ class AppleDailySpider(BasePlaywrightSpider):
 
     # Custom settings optimized for anti-detection
     custom_settings = {
-        'DOWNLOAD_DELAY': 3,  # 3 seconds between requests (respectful)
+        'TWISTED_REACTOR': 'twisted.internet.asyncioreactor.AsyncioSelectorReactor',
+        'DOWNLOAD_DELAY': 1,  # balance speed and throttling
         'CONCURRENT_REQUESTS_PER_DOMAIN': 1,  # One at a time
         'ROBOTSTXT_OBEY': True,
         'RETRY_TIMES': 3,
@@ -118,11 +167,27 @@ class AppleDailySpider(BasePlaywrightSpider):
         'PLAYWRIGHT_LAUNCH_OPTIONS': {
             'headless': True,
             'timeout': 60000,
+            'args': [
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+            ],
         },
+        'PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT': 60000,
+        'PLAYWRIGHT_ABORT_REQUEST': should_abort_request,
+
+        # Anti-detection middlewares (enabled for Playwright requests only)
+        'DOWNLOADER_MIDDLEWARES': {
+            'scripts.crawlers.middlewares.stealth_middleware.StealthMiddleware': 585,
+            'scripts.crawlers.middlewares.humanization_middleware.HumanizationMiddleware': 586,
+        },
+        'PLAYWRIGHT_STEALTH_ENABLED': True,
+        # Keep smoke tests and mass crawling fast by default; enable if needed per-site.
+        'HUMANIZATION_ENABLED': False,
 
         # Output settings
         'FEEDS': {
-            'data/raw/apple_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/apple_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -134,11 +199,24 @@ class AppleDailySpider(BasePlaywrightSpider):
         'LOG_LEVEL': 'INFO',
     }
 
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(
+                "Detected JOBDIR resume queue; skipping start_requests seeding "
+                f"(JOBDIR={crawler.settings.get('JOBDIR')})"
+            )
+        return spider
+
     def __init__(self,
                  category: str = 'all',
                  days: int = 7,
                  start_date: str = None,
                  end_date: str = None,
+                 max_pages: int = None,
+                 mode: str = 'auto',
                  *args, **kwargs):
         """
         Initialize Apple Daily spider with date range and category.
@@ -172,12 +250,20 @@ class AppleDailySpider(BasePlaywrightSpider):
             self.end_date = datetime.now()
             self.start_date = self.end_date - timedelta(days=int(days))
 
+        # Pagination guard: auto-scale for larger historical windows.
+        window_days = max(1, int((self.end_date - self.start_date).days) + 1)
+        if max_pages is not None:
+            self.max_pages = int(max_pages)
+        else:
+            self.max_pages = min(2000, max(10, window_days * 3))
+
         logger.info("=" * 70)
         logger.info(f"Apple Daily Spider Initialized")
         logger.info("=" * 70)
         logger.info(f"Category: {self.category_name} ({self.category})")
         logger.info(f"Date Range: {self.start_date.date()} to {self.end_date.date()}")
         logger.info(f"Days: {(self.end_date - self.start_date).days + 1}")
+        logger.info(f"Max pages: {self.max_pages}")
         logger.info("=" * 70)
 
         # Statistics
@@ -185,6 +271,8 @@ class AppleDailySpider(BasePlaywrightSpider):
         self.articles_failed = 0
         self.pages_visited = 0
         self.seen_urls = set()
+        self.mode = str(mode).strip().lower() if mode is not None else 'auto'
+        self._fallback_started = False
 
     def start_requests(self):
         """
@@ -193,29 +281,235 @@ class AppleDailySpider(BasePlaywrightSpider):
         Yields:
             scrapy.Request: Requests with Playwright enabled
         """
-        # Build category URL
-        if self.category == 'all':
-            base_url = "https://www.nextapple.com.tw/"
-        else:
-            base_url = f"https://www.nextapple.com.tw/category/{self.category_slug}"
+        if getattr(self, "_resume_from_jobdir", False):
+            return
 
-        logger.info(f"Starting with URL: {base_url}")
+        # Mode selection:
+        # - site: crawl nextapple.com.tw category pages (Playwright)
+        # - sitemap: crawl NextApple News sitemap (no Playwright)
+        # - auto: try a single site probe first; fall back to sitemap on connection issues
+        if self.mode in {'sitemap', 'nextapple', 'news'}:
+            yield from self._start_nextapple_sitemap_fallback()
+            return
+
+        # Avoid the heavy homepage in "all" mode; crawl per-category list pages instead.
+        if self.category == 'all':
+            categories = [
+                (code, info) for code, info in self.CATEGORIES.items()
+                if code != 'all'
+            ]
+        else:
+            categories = [(self.category, self.CATEGORIES[self.category])]
+
+        if not categories:
+            yield from self._start_nextapple_sitemap_fallback()
+            return
+
+        # Probe first in auto mode to avoid queuing many failing requests.
+        probe_only = self.mode == 'auto'
+        probe_category_code, probe_category_info = categories[0]
+        list_url = f"https://www.nextapple.com.tw/category/{probe_category_info['slug']}"
+        logger.info(f"Starting category list probe: {probe_category_info['name']} - {list_url}")
 
         yield scrapy.Request(
-            url=base_url,
+            url=list_url,
             callback=self.parse_list_page,
             errback=self.handle_error,
             dont_filter=True,
-            meta=self.get_playwright_meta(
-                playwright_page_methods=[
-                    PlaywrightPageMethods.wait_for_selector('article, div.post'),
-                    PlaywrightPageMethods.random_scroll(),
-                    PlaywrightPageMethods.wait_for_timeout(
-                        int(self.human_delay(1500, 3000))
-                    ),
-                ]
-            )
+            meta={
+                '_probe': True,
+                '_queued_categories': categories if probe_only else None,
+                'category': probe_category_code,
+                'category_name': probe_category_info['name'],
+                'page': 1,
+                **self.get_playwright_meta(
+                    playwright_page_methods=[
+                        PageMethod('wait_for_timeout', int(self.human_delay(0.8, 1.5) * 1000)),
+                    ]
+                ),
+            },
         )
+
+        if not probe_only:
+            # In explicit site mode, queue all remaining categories immediately.
+            for category_code, category_info in categories[1:]:
+                list_url = f"https://www.nextapple.com.tw/category/{category_info['slug']}"
+                logger.info(f"Starting category list: {category_info['name']} - {list_url}")
+                yield scrapy.Request(
+                    url=list_url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta={
+                        'category': category_code,
+                        'category_name': category_info['name'],
+                        'page': 1,
+                        **self.get_playwright_meta(
+                            playwright_page_methods=[
+                                PageMethod('wait_for_timeout', int(self.human_delay(0.8, 1.5) * 1000)),
+                            ]
+                        ),
+                    },
+                )
+
+    def _start_nextapple_sitemap_fallback(self):
+        """Start crawling via NextApple News sitemap (no Playwright)."""
+        if self._fallback_started:
+            return
+        self._fallback_started = True
+
+        logger.warning(
+            "Using NextApple News sitemap fallback "
+            f"({self.NEXTAPPLE_NEWS_SITEMAP})"
+        )
+        yield scrapy.Request(
+            url=self.NEXTAPPLE_NEWS_SITEMAP,
+            callback=self.parse_nextapple_sitemap,
+            errback=self.handle_error,
+            dont_filter=True,
+            meta={'playwright': False},
+        )
+
+    def parse_nextapple_sitemap(self, response):
+        """Parse NextApple News sitemap and queue article pages (O(n) URLs)."""
+        import xml.etree.ElementTree as ET
+
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse NextApple sitemap XML: {e}")
+            return
+
+        ns = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+        urls = []
+        for url_elem in root.findall('ns:url', ns):
+            loc = url_elem.find('ns:loc', ns)
+            if loc is not None and loc.text:
+                urls.append(loc.text.strip())
+
+        start = self.start_date.date()
+        end = self.end_date.date()
+
+        for url in urls:
+            # Optional category filtering in sitemap fallback mode.
+            if self.category != 'all' and self.category_slug:
+                parsed = urlparse(url)
+                path_parts = [p for p in parsed.path.split('/') if p]
+                url_category = path_parts[0] if path_parts else None
+                allowed = (
+                    self.NEXTAPPLE_NEWS_CATEGORY_ALIASES.get(self.category_slug)
+                    or {self.category_slug}
+                )
+                if url_category and url_category not in allowed:
+                    continue
+
+            # Filter by URL-embedded date when present: /{category}/{YYYYMMDD}/{hash}
+            match = re.search(r'/(\d{8})/', url)
+            if match:
+                try:
+                    pub_date = datetime.strptime(match.group(1), '%Y%m%d').date()
+                    if not (start <= pub_date <= end):
+                        continue
+                except ValueError:
+                    pass
+
+            yield scrapy.Request(
+                url=url,
+                callback=self.parse_nextapple_article,
+                errback=self.handle_error,
+                dont_filter=True,
+                meta={'playwright': False},
+            )
+
+    def parse_nextapple_article(self, response):
+        """Parse NextApple News article pages (fallback mode)."""
+        try:
+            # Date filtering from URL when available.
+            match = re.search(r'/(\d{4})(\d{2})(\d{2})/', response.url)
+            published_date = None
+            if match:
+                published_date = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+                pub_date = datetime.strptime(published_date, '%Y-%m-%d').date()
+                if not (self.start_date.date() <= pub_date <= self.end_date.date()):
+                    return
+
+            title = (
+                response.css('meta[property="og:title"]::attr(content)').get()
+                or response.css('h1::text').get()
+                or response.css('title::text').get()
+            )
+            title = self._clean_text(title) if title else None
+
+            jsonld_body = self._extract_jsonld_field(response, 'articleBody')
+            if isinstance(jsonld_body, str) and jsonld_body.strip():
+                content = self._clean_text(jsonld_body)
+            else:
+                paragraphs = (
+                    response.css('article p::text').getall()
+                    or response.css('div.article-content p::text').getall()
+                    or response.css('div.article-body p::text').getall()
+                )
+                content = ' '.join([self._clean_text(p) for p in paragraphs if p])
+
+            # Publish date from meta/JSON-LD fallback if URL not present.
+            if not published_date:
+                date_text = (
+                    response.css('meta[property="article:published_time"]::attr(content)').get()
+                    or response.css('time::attr(datetime)').get()
+                    or self._extract_jsonld_field(response, 'datePublished')
+                )
+                published_date = self._parse_publish_date(date_text)
+
+            author = (
+                response.css('meta[name="author"]::attr(content)').get()
+                or response.css('span.author::text').get()
+                or response.css('div.author-name::text').get()
+            )
+            author = self._clean_text(author) if author else '壹蘋新聞網'
+
+            category_slug = None
+            parsed = urlparse(response.url)
+            path_parts = [p for p in parsed.path.split('/') if p]
+            if parsed.netloc.endswith("news.nextapple.com") and path_parts:
+                category_slug = path_parts[0]
+
+            article = {
+                'article_id': self._generate_article_id(response.url),
+                'url': response.url,
+                'source': 'Apple Daily',
+                'source_name': '蘋果日報',
+                'crawled_at': datetime.now().isoformat(),
+                'title': title,
+                'content': content,
+                'author': author,
+                'published_date': published_date,
+                'category': self.category if self.category != 'all' else (category_slug or 'unknown'),
+                'category_name': (
+                    self.category_name
+                    if self.category != 'all'
+                    else (
+                        next(
+                            (
+                                info['name']
+                                for info in self.CATEGORIES.values()
+                                if info.get('slug') == category_slug
+                            ),
+                            category_slug or 'unknown',
+                        )
+                    )
+                ),
+            }
+
+            if not article['title'] or not article['content'] or len(article['content']) < 100:
+                self.articles_failed += 1
+                return
+
+            self.articles_scraped += 1
+            yield article
+
+        except Exception as e:
+            logger.error(f"Error parsing NextApple fallback article {response.url}: {e}", exc_info=True)
+            self.articles_failed += 1
 
     def parse_list_page(self, response):
         """
@@ -228,8 +522,35 @@ class AppleDailySpider(BasePlaywrightSpider):
             scrapy.Request: Requests for article detail pages
             scrapy.Request: Request for next page (pagination)
         """
+        category_code = response.meta.get('category', self.category)
+        category_name = response.meta.get('category_name', self.category_name)
+        page = int(response.meta.get('page', 1) or 1)
+
         self.pages_visited += 1
-        logger.info(f"Parsing list page: {response.url}")
+        logger.info(f"Parsing list page: {response.url} (Category: {category_name}, Page: {page})")
+
+        # In auto mode, if the probe succeeded, queue remaining categories now.
+        if response.meta.get('_probe') and self.mode == 'auto':
+            queued = response.meta.get('_queued_categories') or []
+            for category_code2, category_info2 in queued[1:]:
+                list_url = f"https://www.nextapple.com.tw/category/{category_info2['slug']}"
+                logger.info(f"Starting category list: {category_info2['name']} - {list_url}")
+                yield scrapy.Request(
+                    url=list_url,
+                    callback=self.parse_list_page,
+                    errback=self.handle_error,
+                    dont_filter=True,
+                    meta={
+                        'category': category_code2,
+                        'category_name': category_info2['name'],
+                        'page': 1,
+                        **self.get_playwright_meta(
+                            playwright_page_methods=[
+                                PageMethod('wait_for_timeout', int(self.human_delay(0.8, 1.5) * 1000)),
+                            ]
+                        ),
+                    },
+                )
 
         # Extract article links - try multiple selectors for different layouts
         article_selectors = response.css(
@@ -266,16 +587,15 @@ class AppleDailySpider(BasePlaywrightSpider):
                 url=article_url,
                 callback=self.parse_article,
                 errback=self.handle_error,
-                meta=self.get_playwright_meta(
-                    playwright_page_methods=[
-                        PlaywrightPageMethods.wait_for_selector(
-                            'article, div.entry-content'
-                        ),
-                        PlaywrightPageMethods.wait_for_timeout(
-                            int(self.human_delay(800, 1500))
-                        ),
-                    ]
-                ),
+                meta={
+                    'category': category_code,
+                    'category_name': category_name,
+                    **self.get_playwright_meta(
+                        playwright_page_methods=[
+                            PageMethod('wait_for_timeout', int(self.human_delay(0.4, 1.0) * 1000)),
+                        ]
+                    ),
+                },
                 dont_filter=False,
             )
 
@@ -288,7 +608,7 @@ class AppleDailySpider(BasePlaywrightSpider):
             'div.pagination a[href*="page"]::attr(href)'
         ).get()
 
-        if next_page and articles_found > 0 and self.pages_visited < 10:
+        if next_page and articles_found > 0 and page < self.max_pages:
             next_url = response.urljoin(next_page)
             logger.info(f"Following pagination to: {next_url}")
 
@@ -297,14 +617,16 @@ class AppleDailySpider(BasePlaywrightSpider):
                 callback=self.parse_list_page,
                 errback=self.handle_error,
                 dont_filter=True,
-                meta=self.get_playwright_meta(
-                    playwright_page_methods=[
-                        PlaywrightPageMethods.wait_for_selector('article'),
-                        PlaywrightPageMethods.wait_for_timeout(
-                            int(self.human_delay(2000, 4000))
-                        ),
-                    ]
-                )
+                meta={
+                    'category': category_code,
+                    'category_name': category_name,
+                    'page': page + 1,
+                    **self.get_playwright_meta(
+                        playwright_page_methods=[
+                            PageMethod('wait_for_timeout', int(self.human_delay(0.8, 1.5) * 1000)),
+                        ]
+                    ),
+                },
             )
 
     def parse_article(self, response):
@@ -326,6 +648,9 @@ class AppleDailySpider(BasePlaywrightSpider):
         """
         try:
             logger.debug(f"Parsing article: {response.url}")
+
+            category_code = response.meta.get('category', self.category)
+            category_name = response.meta.get('category_name', self.category_name)
 
             # Extract date first to filter
             date_text = self._extract_first(response, [
@@ -396,8 +721,8 @@ class AppleDailySpider(BasePlaywrightSpider):
                 article['category'] = breadcrumb[-1].strip()
                 article['category_name'] = breadcrumb[-1].strip()
             else:
-                article['category'] = self.category
-                article['category_name'] = self.category_name
+                article['category'] = category_code
+                article['category_name'] = category_name
 
             # Extract tags
             tag_selectors = response.css(
@@ -439,14 +764,40 @@ class AppleDailySpider(BasePlaywrightSpider):
             self.articles_failed += 1
 
     def handle_error(self, failure):
-        """Handle request errors with detailed logging."""
+        """Handle request errors with detailed logging and auto fallback."""
         request = failure.request
+
+        # If nextapple.com.tw is blocked/unreachable, fall back to NextApple News sitemaps.
+        if (
+            not self._fallback_started
+            and self.mode in {'auto', 'site'}
+            and request.meta.get('_probe')
+        ):
+            logger.warning(f"Site probe failed, enabling sitemap fallback: {request.url}")
+            yield from self._start_nextapple_sitemap_fallback()
+            return
+
         logger.error("=" * 70)
         logger.error(f"Request failed: {request.url}")
         logger.error(f"Error type: {failure.type.__name__}")
         logger.error(f"Error value: {failure.value}")
         logger.error("=" * 70)
         self.articles_failed += 1
+
+    def _extract_jsonld_field(self, response, field: str) -> Optional[str]:
+        """Extract a field from JSON-LD blocks (fallback parsing)."""
+        scripts = response.css('script[type=\"application/ld+json\"]::text').getall()
+        for script in scripts:
+            try:
+                data = json.loads(script)
+            except Exception:
+                continue
+
+            candidates = data if isinstance(data, list) else [data]
+            for item in candidates:
+                if isinstance(item, dict) and field in item and item[field]:
+                    return item[field]
+        return None
 
     def closed(self, reason):
         """Log spider closure statistics."""

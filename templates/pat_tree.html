@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAT-tree 視覺化 - CNIRS</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="static/css/style.css">
     <style>
         /* PAT-tree specific styles */
         .pat-tree-container {
@@ -289,18 +289,23 @@
     </style>
 </head>
 <body>
+    <style>
+        .portfolio-back-link{position:fixed;top:16px;right:16px;z-index:9999;padding:10px 12px;border-radius:12px;background:rgba(15,23,42,.85);color:#fff;text-decoration:none;font:600 13px/1 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+        .portfolio-back-link:hover{background:rgba(15,23,42,.95)}
+    </style>
+    <a class="portfolio-back-link" href="https://neojustin.dothost.net/projects/information-retrieval">回到作品集</a>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <h1>🌳 PAT-tree 視覺化</h1>
             <p class="subtitle">Patricia Trie Visualization & Keyword Extraction<br>壓縮字典樹結構與關鍵詞提取</p>
             <nav class="nav">
-                <a href="/" class="nav-link">搜尋</a>
-                <a href="/compare" class="nav-link">模型對比</a>
-                <a href="/expand" class="nav-link">查詢擴展</a>
-                <a href="/evaluation" class="nav-link">評估分析</a>
-                <a href="/pat_tree" class="nav-link active">PAT-tree</a>
-                <a href="/about" class="nav-link">關於</a>
+                <a href="./" class="nav-link">搜尋</a>
+                <a href="compare" class="nav-link">模型對比</a>
+                <a href="expand" class="nav-link">查詢擴展</a>
+                <a href="evaluation" class="nav-link">評估分析</a>
+                <a href="pat_tree" class="nav-link active">PAT-tree</a>
+                <a href="about" class="nav-link">關於</a>
             </nav>
         </header>
 
@@ -464,6 +469,7 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='js/pat-tree.js') }}"></script>
+    <script src="static/js/i18n.js"></script>
+    <script src="static/js/pat-tree.js"></script>
 </body>
 </html>

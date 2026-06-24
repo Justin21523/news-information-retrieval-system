@@ -21,8 +21,8 @@ Modules tested:
 
 Usage:
     python scripts/test/test_all_modules.py \
-        --dataset data/processed/cna_mvp_cleaned.jsonl \
-        --output data/test_results/module_test_results.txt
+        --dataset /mnt/c/data/information-retrieval/processed/cna_mvp_cleaned.jsonl \
+        --output /mnt/c/data/information-retrieval/test_results/module_test_results.txt
 
 Author: CNIRS Development Team
 License: Educational Use Only

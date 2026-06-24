@@ -65,7 +65,7 @@ export MKL_NUM_THREADS=32
 export NUMEXPR_NUM_THREADS=32
 
 # 然後執行索引建立
-python scripts/search_news.py --build --limit 50000 --index-dir data/index_50k
+python scripts/search_news.py --build --limit 50000 --index-dir /mnt/c/data/information-retrieval/index_50k
 ```
 
 #### 持久化設定
@@ -200,10 +200,10 @@ python scripts/benchmark_ckip_threads.py --threads 16 32
 
 # 2. 建立小型測試索引 (1000 文檔)
 export OMP_NUM_THREADS=32
-time python scripts/search_news.py --build --limit 1000 --index-dir data/index_test_opt
+time python scripts/search_news.py --build --limit 1000 --index-dir /mnt/c/data/information-retrieval/index_test_opt
 
 # 3. 比較搜尋效能
-python scripts/demo_ir_system.py --index-dir data/index_test_opt
+python scripts/demo_ir_system.py --index-dir /mnt/c/data/information-retrieval/index_test_opt
 ```
 
 ---

@@ -7,16 +7,16 @@ into PostgreSQL database.
 
 Usage:
     # Import all files from directory
-    python scripts/import_jsonl_to_postgres.py --data-dir data/raw
+    python scripts/import_jsonl_to_postgres.py --data-dir /mnt/c/data/information-retrieval/raw
 
     # Import specific file
-    python scripts/import_jsonl_to_postgres.py --file data/raw/ltn_14days.jsonl
+    python scripts/import_jsonl_to_postgres.py --file /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl
 
     # Import with limit
-    python scripts/import_jsonl_to_postgres.py --data-dir data/raw --limit 10000
+    python scripts/import_jsonl_to_postgres.py --data-dir /mnt/c/data/information-retrieval/raw --limit 10000
 
     # Custom database configuration
-    python scripts/import_jsonl_to_postgres.py --data-dir data/raw \\
+    python scripts/import_jsonl_to_postgres.py --data-dir /mnt/c/data/information-retrieval/raw \\
         --db-host localhost --db-name ir_news --db-user postgres
 
 Author: Information Retrieval System
@@ -53,16 +53,16 @@ def main():
         epilog="""
 Examples:
   # Import all JSONL files from directory
-  python %(prog)s --data-dir data/raw
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw
 
   # Import specific file
-  python %(prog)s --file data/raw/ltn_14days.jsonl
+  python %(prog)s --file /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl
 
   # Import with limits
-  python %(prog)s --data-dir data/raw --limit 10000 --batch-size 500
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw --limit 10000 --batch-size 500
 
   # Custom database configuration
-  python %(prog)s --data-dir data/raw \\
+  python %(prog)s --data-dir /mnt/c/data/information-retrieval/raw \\
       --db-host localhost --db-port 5432 --db-name ir_news \\
       --db-user postgres --db-password your_password
 

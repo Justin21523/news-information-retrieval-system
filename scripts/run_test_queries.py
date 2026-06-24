@@ -6,7 +6,7 @@ Executes comprehensive test queries against the IR system and generates
 performance reports.
 
 Usage:
-    python scripts/run_test_queries.py --index-dir data/index_50k
+    python scripts/run_test_queries.py --index-dir /mnt/c/data/information-retrieval/index_50k
     python scripts/run_test_queries.py --test-file tests/test_queries.yaml --output results.json
 
 Author: Information Retrieval System
@@ -397,8 +397,8 @@ def main():
     parser.add_argument(
         '--index-dir',
         type=str,
-        default='data/index_50k',
-        help='Index directory (default: data/index_50k)'
+        default='/mnt/c/data/information-retrieval/index_50k',
+        help='Index directory (default: /mnt/c/data/information-retrieval/index_50k)'
     )
     parser.add_argument(
         '--test-file',

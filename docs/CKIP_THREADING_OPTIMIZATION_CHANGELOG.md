@@ -284,7 +284,7 @@ nohup python scripts/search_news.py \
     --build \
     --data-dir data/raw \
     --limit 50000 \
-    --index-dir data/index_50k \
+    --index-dir /mnt/c/data/information-retrieval/index_50k \
     --ckip-model bert-base \
     > /tmp/build_50k_index_optimized.log 2>&1 &
 ```
@@ -564,7 +564,7 @@ time python scripts/search_news.py \
     --build \
     --data-dir data/raw \
     --limit 50000 \
-    --index-dir data/index_50k_batch \
+    --index-dir /mnt/c/data/information-retrieval/index_50k_batch \
     --ckip-model bert-base
 ```
 

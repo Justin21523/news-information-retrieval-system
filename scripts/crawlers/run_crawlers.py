@@ -31,7 +31,7 @@ Usage:
     python run_crawlers.py --all --days 7
 
     # Custom output directory
-    python run_crawlers.py --crawler ltn --output-dir data/raw/custom/
+    python run_crawlers.py --crawler ltn --output-dir /mnt/c/data/information-retrieval/raw/custom/
 
 Author: Information Retrieval System
 Date: 2025-11-17
@@ -177,7 +177,7 @@ class CrawlerManager:
         Initialize crawler manager.
 
         Args:
-            output_dir: Directory for output files (default: data/raw/)
+            output_dir: Directory for output files (default: /mnt/c/data/information-retrieval/raw/)
         """
         self.output_dir = output_dir or (project_root / 'data' / 'raw')
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -424,7 +424,7 @@ Available Crawlers:
     parser.add_argument(
         '--output-dir', '-o',
         type=str,
-        help='Output directory (default: data/raw/)'
+        help='Output directory (default: /mnt/c/data/information-retrieval/raw/)'
     )
 
     parser.add_argument(

@@ -331,7 +331,7 @@ class IncrementalIndexBuilder:
 
         Examples:
             >>> builder = IncrementalIndexBuilder()
-            >>> stats = builder.build_from_jsonl('data/raw/ltn_14days.jsonl')
+            >>> stats = builder.build_from_jsonl('/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl')
             >>> print(f"Indexed {stats['docs_indexed']} documents")
         """
         filepath = Path(filepath)
@@ -394,7 +394,7 @@ class IncrementalIndexBuilder:
 
         Examples:
             >>> builder = IncrementalIndexBuilder()
-            >>> stats = builder.build_from_directory('data/raw', pattern='*_14days.jsonl')
+            >>> stats = builder.build_from_directory('/mnt/c/data/information-retrieval/raw', pattern='*_14days.jsonl')
             >>> print(f"Total indexed: {stats['docs_indexed']}")
         """
         directory = Path(directory)
@@ -602,7 +602,7 @@ def demo():
     )
 
     # Check for data
-    data_dir = Path("data/raw")
+    data_dir = Path("/mnt/c/data/information-retrieval/raw")
     if not data_dir.exists():
         print(f"\n⚠ Data directory not found: {data_dir}")
         print("Please run crawlers first to collect data.")

@@ -54,7 +54,7 @@ CKIP 分詞 (Tokenizer)
 python scripts/search_news.py --build --limit 1000 --index-dir data/index_1k
 
 # 建立中型索引 (50,000 篇)
-python scripts/search_news.py --build --limit 50000 --index-dir data/index_50k
+python scripts/search_news.py --build --limit 50000 --index-dir /mnt/c/data/information-retrieval/index_50k
 
 # 建立完整索引 (全部文檔)
 python scripts/search_news.py --build --index-dir data/index_full
@@ -70,13 +70,13 @@ python scripts/search_news.py --build --from-db --db-name ir_news --index-dir da
 
 #### 互動式搜尋
 ```bash
-python scripts/search_news.py --index-dir data/index_50k
+python scripts/search_news.py --index-dir /mnt/c/data/information-retrieval/index_50k
 ```
 
 #### 命令列查詢
 ```bash
 # 簡單查詢
-python scripts/search_news.py --query "台灣 經濟" --index-dir data/index_50k
+python scripts/search_news.py --query "台灣 經濟" --index-dir /mnt/c/data/information-retrieval/index_50k
 
 # Boolean 查詢
 python scripts/search_news.py --query "台灣 AND 經濟" --mode boolean
@@ -194,7 +194,7 @@ source:ltn AND category:政治 AND 選舉     # 自由時報政治類選舉新�
 ```python
 from src.ir.search import UnifiedSearchEngine, QueryMode
 
-engine = UnifiedSearchEngine("data/index_50k")
+engine = UnifiedSearchEngine("/mnt/c/data/information-retrieval/index_50k")
 results = engine.search("台灣 經濟", mode=QueryMode.SIMPLE)
 ```
 
@@ -366,7 +366,7 @@ for q in queries:
 
 ```python
 # 啟用查詢快取
-engine = UnifiedSearchEngine("data/index_50k", enable_cache=True)
+engine = UnifiedSearchEngine("/mnt/c/data/information-retrieval/index_50k", enable_cache=True)
 
 # 熱門查詢會自動快取
 results = engine.search("台灣")  # 第一次: 200ms
@@ -386,7 +386,7 @@ results = engine.search("台灣")  # 第二次: 10ms (快取)
 **解決方案**:
 ```bash
 # 檢查索引狀態
-python scripts/search_news.py --stats --index-dir data/index_50k
+python scripts/search_news.py --stats --index-dir /mnt/c/data/information-retrieval/index_50k
 
 # 嘗試更寬鬆的查詢
 python scripts/search_news.py --query "台灣 OR 經濟"

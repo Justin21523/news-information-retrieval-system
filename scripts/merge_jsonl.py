@@ -6,7 +6,7 @@ This script merges multiple news source JSONL files into a single file,
 normalizing field names for consistency.
 
 Usage:
-    python scripts/merge_jsonl.py --output data/raw/merged_14days.jsonl
+    python scripts/merge_jsonl.py --output /mnt/c/data/information-retrieval/raw/merged_14days.jsonl
 
 Author: CNIRS Project
 """
@@ -196,13 +196,13 @@ def main():
     parser.add_argument(
         '--data-dir',
         type=str,
-        default='data/raw',
+        default='/mnt/c/data/information-retrieval/raw',
         help='Directory containing source JSONL files'
     )
     parser.add_argument(
         '--output',
         type=str,
-        default='data/raw/merged_14days.jsonl',
+        default='/mnt/c/data/information-retrieval/raw/merged_14days.jsonl',
         help='Output merged JSONL file'
     )
 

@@ -258,10 +258,10 @@ python scripts/search_news.py --query "台灣" --top-k 20
 
 ```bash
 # 啟動互動模式
-python scripts/search_news.py --index-dir data/index_50k
+python scripts/search_news.py --index-dir /mnt/c/data/information-retrieval/index_50k
 
 # 執行 Demo
-python scripts/demo_ir_system.py --index-dir data/index_50k
+python scripts/demo_ir_system.py --index-dir /mnt/c/data/information-retrieval/index_50k
 
 # Web 介面
 python app_simple.py

@@ -279,10 +279,14 @@ function displayResults(data) {
     resultsHeader.style.display = 'block';
 
     // Update meta info (handle faceted search response structure)
-    const totalCount = data.total_results || data.filtered_results || data.results.length;
-    resultCount.textContent = `找到 ${totalCount} 筆結果`;
+    const totalCount = data.total_matches || data.total_results || data.filtered_results || data.results.length;
+    resultCount.textContent = data.browse_mode
+        ? `符合篩選 ${totalCount} 筆，顯示 ${data.results.length} 筆`
+        : `找到 ${totalCount} 筆結果`;
     responseTime.textContent = data.response_time ? `⏱️ ${(data.response_time * 1000).toFixed(2)} ms` : '';
-    modelName.textContent = `📊 ${data.model ? data.model.toUpperCase() : 'Unknown'}`;
+    modelName.textContent = data.browse_mode
+        ? '📊 Facet Browse'
+        : `📊 ${data.model ? data.model.toUpperCase() : 'Unknown'}`;
 
     // Display results
     if (data.results.length === 0) {

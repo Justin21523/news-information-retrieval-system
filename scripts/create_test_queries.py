@@ -13,8 +13,8 @@ Approach:
 Usage:
     python scripts/create_test_queries.py \\
         --input data/preprocessed/cna_mvp_preprocessed.jsonl \\
-        --output-queries data/evaluation/test_queries.txt \\
-        --output-qrels data/evaluation/qrels.txt \\
+        --output-queries /mnt/c/data/information-retrieval/evaluation/test_queries.txt \\
+        --output-qrels /mnt/c/data/information-retrieval/evaluation/qrels.txt \\
         --num-queries 15
 
 Author: Information Retrieval System

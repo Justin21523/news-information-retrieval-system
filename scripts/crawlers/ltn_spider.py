@@ -20,6 +20,8 @@ from typing import Optional, List
 from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError
 
+from scripts.crawlers.utils.jobdir import has_pending_requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +83,7 @@ class LTNNewsSpider(scrapy.Spider):
 
         # Output settings
         'FEEDS': {
-            'data/raw/ltn_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/ltn_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -107,6 +109,15 @@ class LTNNewsSpider(scrapy.Spider):
     EARLIEST_ID = 1  # ID 1 exists but very old
     KNOWN_HISTORICAL_START = 1000000  # 2020-09-28 confirmed
     CURRENT_ID_ESTIMATE = 5250000  # Will be higher over time
+    IDS_PER_DAY_ESTIMATE = 1100  # Heuristic for auto-range in sequential mode
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(f"Detected JOBDIR resume queue; skipping start_requests seeding (JOBDIR={crawler.settings.get('JOBDIR')})")
+        return spider
 
     def __init__(self,
                  mode: str = 'list',
@@ -163,6 +174,7 @@ class LTNNewsSpider(scrapy.Spider):
             self.start_date = self.end_date - timedelta(days=int(days))
 
         # Set ID range (for sequential/hybrid mode)
+        self._start_id_provided = start_id is not None
         self.start_id = int(start_id) if start_id else self.KNOWN_HISTORICAL_START
         self.end_id = int(end_id) if end_id else None  # Will auto-detect if None
 
@@ -195,6 +207,9 @@ class LTNNewsSpider(scrapy.Spider):
         Yields:
             scrapy.Request: Initial requests
         """
+        if getattr(self, "_resume_from_jobdir", False):
+            return
+
         if self.mode == 'list':
             # List mode: Start with news list pages
             if self.category == 'all':
@@ -349,6 +364,17 @@ class LTNNewsSpider(scrapy.Spider):
             self.end_id = self.CURRENT_ID_ESTIMATE
             logger.warning(f"Could not auto-detect max ID, using estimate: {self.end_id}")
 
+        # Auto-select a bounded start_id when running sequential mode with only a day window.
+        # This keeps `mass_collect.py --years 1` from scanning multi-year ID ranges by default.
+        if self.mode == 'sequential' and not self._start_id_provided and self.end_id:
+            estimated_span = max(1, int((self.end_date - self.start_date).days)) * self.IDS_PER_DAY_ESTIMATE
+            auto_start_id = max(self.EARLIEST_ID, int(self.end_id) - int(estimated_span))
+            logger.info(
+                f"Auto range: days={int((self.end_date - self.start_date).days)} "
+                f"→ ID span≈{estimated_span:,} (start_id={auto_start_id:,}, end_id={self.end_id:,})"
+            )
+            self.start_id = auto_start_id
+
         # Now start sequential crawling
         logger.info(f"Starting sequential crawl: {self.start_id} to {self.end_id}")
         for request in self._generate_sequential_requests():
@@ -479,6 +505,15 @@ class LTNNewsSpider(scrapy.Spider):
                         response.css('div.time::text').get() or
                         response.css('span.date::text').get())
             article['publish_date'] = self.parse_date(date_text)
+
+            # Date range filtering (best-effort).
+            if article.get('publish_date'):
+                try:
+                    pub_date_obj = datetime.strptime(article['publish_date'], '%Y-%m-%d')
+                    if not (self.start_date <= pub_date_obj <= self.end_date):
+                        return
+                except ValueError:
+                    pass
 
             # Category from URL
             article['category'] = self.extract_category_from_url(response.url)

@@ -133,7 +133,7 @@ class TVBSNewsSpider(BasePlaywrightSpider):
 
         # Output settings
         'FEEDS': {
-            'data/raw/tvbs_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/tvbs_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -284,11 +284,71 @@ class TVBSNewsSpider(BasePlaywrightSpider):
         # NO Playwright for XML parsing - much faster!
         yield scrapy.Request(
             url=sitemap_url,
-            callback=self.parse_sitemap,
+            callback=self.parse_sitemap_index if self.sitemap_type == 'index' else self.parse_sitemap,
             errback=self.handle_error,
             meta={'playwright': False},  # Disable Playwright for XML
             dont_filter=True,
         )
+
+    def parse_sitemap_index(self, response):
+        """
+        Parse TVBS sitemap index and queue child sitemaps.
+
+        Expected structure:
+            <sitemapindex>
+                <sitemap>
+                    <loc>https://news.tvbs.com.tw/crontab/sitemap/....xml</loc>
+                    <lastmod>2025-11-18</lastmod>
+                </sitemap>
+            </sitemapindex>
+        """
+        logger.info(f"Parsing sitemap index: {response.url}")
+
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse sitemap index XML: {e}")
+            return
+
+        namespaces = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+        sitemaps = root.findall('.//ns:sitemap', namespaces)
+
+        # If this isn't a sitemapindex, fall back to parsing as a normal sitemap.
+        if not sitemaps:
+            yield from self.parse_sitemap(response)
+            return
+
+        queued = 0
+        for sitemap_elem in sitemaps:
+            loc = sitemap_elem.find('ns:loc', namespaces)
+            lastmod = sitemap_elem.find('ns:lastmod', namespaces)
+
+            sitemap_url = loc.text.strip() if loc is not None and loc.text else None
+            lastmod_text = lastmod.text.strip() if lastmod is not None and lastmod.text else None
+
+            if not sitemap_url:
+                continue
+
+            if lastmod_text:
+                # lastmod may be YYYY-MM-DD or full ISO format.
+                try:
+                    date_str = lastmod_text[:10]
+                    lastmod_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    if lastmod_date < self.start_date or lastmod_date > self.end_date:
+                        continue
+                except ValueError:
+                    pass
+
+            queued += 1
+            yield scrapy.Request(
+                url=sitemap_url,
+                callback=self.parse_sitemap,
+                errback=self.handle_error,
+                meta={'playwright': False},
+                dont_filter=True,
+            )
+
+        logger.info(f"Queued {queued} sitemaps from index")
 
     def _start_list_mode(self):
         """Start requests for list mode (Playwright for category pages)."""
@@ -411,6 +471,11 @@ class TVBSNewsSpider(BasePlaywrightSpider):
                 url_data = self._apply_date_filter(url_data)
                 logger.info(f"After date filtering: {len(url_data)} URLs")
 
+            if self.category != 'all' and url_data:
+                before = len(url_data)
+                url_data = [item for item in url_data if self._url_matches_selected_category(item.get('url'))]
+                logger.info(f"After category filtering ({self.category_slug}): {len(url_data)}/{before} URLs")
+
             # Queue article requests
             for item in url_data:
                 article_url = item['url']
@@ -424,13 +489,8 @@ class TVBSNewsSpider(BasePlaywrightSpider):
                     url=article_url,
                     callback=self.parse_article,
                     errback=self.handle_error,
-                    meta=self.get_playwright_meta(
-                        wait_selector='h1, div.article_title',
-                        playwright_page_methods=[
-                            PageMethod('wait_for_load_state', 'domcontentloaded'),
-                            PlaywrightPageMethods.wait_for_timeout(1000),
-                        ]
-                    ),
+                    # Article pages are server-rendered; avoid Playwright overhead in sitemap mode.
+                    meta={'playwright': False},
                     dont_filter=False,
                 )
 
@@ -443,6 +503,25 @@ class TVBSNewsSpider(BasePlaywrightSpider):
             logger.error(f"Failed to parse sitemap XML: {e}")
         except Exception as e:
             logger.error(f"Error parsing sitemap: {e}", exc_info=True)
+
+    def _url_matches_selected_category(self, url: Optional[str]) -> bool:
+        """
+        Check if a sitemap article URL matches the selected category slug.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
+        if not url:
+            return False
+        if self.category == 'all' or not self.category_slug:
+            return True
+        try:
+            parsed = urlparse(url)
+            parts = [p for p in parsed.path.split('/') if p]
+            return bool(parts) and parts[0] == self.category_slug
+        except Exception:
+            return False
 
     def _apply_date_filter(self, url_data: List[Dict]) -> List[Dict]:
         """

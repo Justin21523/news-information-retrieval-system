@@ -101,14 +101,14 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=daily \
     -a days=30 \
-    -o data/raw/yahoo_30days.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_30days.jsonl
 
 # Last 2 years (COMPLETE historical coverage)
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=daily \
     -a days=730 \
-    -o data/raw/yahoo_2years.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_2years.jsonl
 
 # Specific date range
 scrapy runspider scripts/crawlers/yahoo_spider.py \
@@ -116,7 +116,7 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a sitemap=daily \
     -a start_date=2024-01-01 \
     -a end_date=2024-12-31 \
-    -o data/raw/yahoo_2024.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_2024.jsonl
 ```
 
 ### Mode 2: Sitemap Index (Multiple Sitemap Sources)
@@ -126,13 +126,13 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=news \
-    -o data/raw/yahoo_news.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_news.jsonl
 
 # All sitemap indices (comprehensive)
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=all \
-    -o data/raw/yahoo_all_sitemaps.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_all_sitemaps.jsonl
 ```
 
 ### Mode 3: Archive (Category-Based)
@@ -142,12 +142,12 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=archive \
     -a category=politics \
-    -o data/raw/yahoo_politics_archive.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_politics_archive.jsonl
 
 # All categories
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=archive \
-    -o data/raw/yahoo_all_archives.jsonl
+    -o /mnt/c/data/information-retrieval/raw/yahoo_all_archives.jsonl
 ```
 
 ---
@@ -388,7 +388,7 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=daily \
     -a days=30 \
-    -o data/raw/yahoo_30days.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/yahoo_30days.jsonl \
     -s LOG_LEVEL=INFO
 ```
 
@@ -398,7 +398,7 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=daily \
     -a days=730 \
-    -o data/raw/yahoo_2years.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/yahoo_2years.jsonl \
     -s LOG_LEVEL=INFO
 ```
 
@@ -407,7 +407,7 @@ scrapy runspider scripts/crawlers/yahoo_spider.py \
 scrapy runspider scripts/crawlers/yahoo_spider.py \
     -a mode=sitemap \
     -a sitemap=all \
-    -o data/raw/yahoo_all_sources.jsonl \
+    -o /mnt/c/data/information-retrieval/raw/yahoo_all_sources.jsonl \
     -s LOG_LEVEL=INFO
 ```
 
@@ -418,7 +418,7 @@ for cat in politics world entertainment sports finance tech health lifestyle; do
     scrapy runspider scripts/crawlers/yahoo_spider.py \
         -a mode=archive \
         -a category=$cat \
-        -o data/raw/yahoo_${cat}_archive.jsonl \
+        -o /mnt/c/data/information-retrieval/raw/yahoo_${cat}_archive.jsonl \
         -s LOG_LEVEL=INFO
 done
 ```

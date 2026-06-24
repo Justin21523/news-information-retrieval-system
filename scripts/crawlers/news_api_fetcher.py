@@ -496,7 +496,7 @@ Examples:
   python scripts/crawlers/news_api_fetcher.py --query "AI" --days 3 --source newsapi
 
   # Fetch with custom output file
-  python scripts/crawlers/news_api_fetcher.py --query "COVID" --days 1 --output data/raw/covid_news.jsonl
+  python scripts/crawlers/news_api_fetcher.py --query "COVID" --days 1 --output /mnt/c/data/information-retrieval/raw/covid_news.jsonl
 
 Environment Variables:
   NEWSAPI_KEY    NewsAPI API key (get free key at https://newsapi.org/register)
@@ -528,8 +528,8 @@ Environment Variables:
     parser.add_argument(
         '--output', '-o',
         type=str,
-        default='data/raw/api_news.jsonl',
-        help='Output JSONL file (default: data/raw/api_news.jsonl)'
+        default='/mnt/c/data/information-retrieval/raw/api_news.jsonl',
+        help='Output JSONL file (default: /mnt/c/data/information-retrieval/raw/api_news.jsonl)'
     )
 
     parser.add_argument(

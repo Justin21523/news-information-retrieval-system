@@ -204,7 +204,7 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 2.0
 
 # 輸出格式
 FEEDS = {
-    'data/raw/cna_news_%(time)s.jsonl': {
+    '/mnt/c/data/information-retrieval/raw/cna_news_%(time)s.jsonl': {
         'format': 'jsonlines',
         'encoding': 'utf8',
         'store_empty': False,
@@ -680,7 +680,7 @@ class NewsPreprocessor:
 
 def main():
     # Load raw data
-    input_path = Path("data/raw/cna_news_2024.jsonl")
+    input_path = Path("/mnt/c/data/information-retrieval/raw/cna_news_2024.jsonl")
     output_path = Path("data/preprocessed/cna_news_2024_preprocessed.jsonl")
 
     logger.info(f"Loading data from {input_path}...")
@@ -830,7 +830,7 @@ def deduplicate(articles: list) -> list:
     return unique_articles
 
 def main():
-    input_path = "data/raw/cna_news_raw.jsonl"
+    input_path = "/mnt/c/data/information-retrieval/raw/cna_news_raw.jsonl"
     output_path = "data/cleaned/cna_news_cleaned.jsonl"
 
     # Load articles
@@ -1041,7 +1041,7 @@ QRELS = [
 ### 8.2 QRELS 檔案格式
 
 ```txt
-# data/evaluation/qrels.txt (TREC 格式)
+# /mnt/c/data/information-retrieval/evaluation/qrels.txt (TREC 格式)
 # query_id  0  doc_id  relevance
 
 Q01 0 1234 2
@@ -1122,7 +1122,7 @@ def load_embeddings_hdf5(filepath: str) -> np.ndarray:
 
 # Usage
 embeddings = model.encode(documents)  # (30000, 768)
-save_embeddings_hdf5(embeddings, 'data/indexes/bert/embeddings.h5')
+save_embeddings_hdf5(embeddings, '/mnt/c/data/information-retrieval/indexes/bert/embeddings.h5')
 ```
 
 #### FAISS 索引 (加速相似度搜尋)
@@ -1159,7 +1159,7 @@ def search_faiss(index: faiss.Index, query_embedding: np.ndarray, k: int = 10):
 
 # Usage
 index = build_faiss_index(embeddings)
-faiss.write_index(index, 'data/indexes/bert/faiss_index.bin')
+faiss.write_index(index, '/mnt/c/data/information-retrieval/indexes/bert/faiss_index.bin')
 ```
 
 ---
@@ -1196,14 +1196,14 @@ def incremental_crawl(last_update_date: str):
 
 def update_inverted_index(new_articles: list):
     """Add new articles to existing inverted index."""
-    index = load_inverted_index('data/indexes/inverted_index.pkl')
+    index = load_inverted_index('/mnt/c/data/information-retrieval/indexes/inverted_index.pkl')
 
     for article in new_articles:
         doc_id = article['id']
         tokens = article['tokens_content']
         index.add_document(doc_id, tokens)
 
-    save_inverted_index(index, 'data/indexes/inverted_index.pkl')
+    save_inverted_index(index, '/mnt/c/data/information-retrieval/indexes/inverted_index.pkl')
 ```
 
 ### 10.2 定期重建 (Periodic Rebuild)

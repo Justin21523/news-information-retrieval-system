@@ -18,6 +18,7 @@ This repository now includes a Flask-based **News Information Retrieval System**
 - Demo evaluation dashboard with cached/async Precision@K, Recall@K, MAP, MRR, nDCG, PR curves, per-query breakdown, and clearly labeled small demo qrels.
 - Ranking diagnostics for BM25 term contribution, TF-IDF vector weights, LM likelihood breakdown, query coverage, and field match heatmaps.
 - SQLite feedback analytics for clicks, explicit relevance labels, zero-result queries, CTR, feedback quality controls, and weak-supervision Learning-to-Rank sandbox.
+- Analysis Graph page for node-based visualization of query processing, indexing, ranking models, result documents, metadata facets, and feedback signals.
 
 ### Demo Flow
 
@@ -31,11 +32,13 @@ Open `http://localhost:5001/guide` for the guided walkthrough. First-time visito
 Direct demo links:
 
 1. `/?q=半導體%20人工智慧&model=hybrid&run=1` - run Hybrid search with explainable snippets and facets.
-2. Open “Why this result?” and a document detail modal to inspect Summary, Keywords, KWIC, and Related News.
-3. `/compare?q=半導體%20人工智慧&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1` - compare all demo-ready ranking models.
-4. `/corpus` - inspect corpus source distribution, taxonomy facets, metadata quality, index cache status, and Topic Explorer.
-5. `/evaluation?query_set=news_demo&models=bm25,tfidf,hybrid,lm&top_k=10&run=1` - run the small demo qrels evaluation.
-6. `/diagnostics` and `/feedback` - inspect ranking contribution breakdowns, feedback analytics, quality controls, and the weak-supervision LTR sandbox.
+2. Click a facet with an empty search box to browse all matching metadata results without a lexical query.
+3. Open “Why this result?” and a document detail modal to inspect Summary, Keywords, KWIC, and Related News.
+4. `/compare?q=半導體%20人工智慧&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1` - compare all demo-ready ranking models.
+5. `/corpus` - inspect corpus source distribution, taxonomy facets, metadata quality, index cache status, and Topic Explorer.
+6. `/evaluation?query_set=news_demo&models=bm25,tfidf,hybrid,lm&top_k=10&run=1` - run the small demo qrels evaluation.
+7. `/diagnostics` and `/feedback` - inspect ranking contribution breakdowns, feedback analytics, quality controls, and the weak-supervision LTR sandbox.
+8. `/analysis-graph?query=台灣%20經濟&models=bm25,tfidf,hybrid,lm&top_k=6` - view the IR pipeline as a hoverable node graph.
 
 ### Demo Media
 
@@ -51,14 +54,19 @@ Artifacts:
 - [Demo Guide](docs/assets/evaluation/demo-guide.png)
 - [Demo Assistant Guide](docs/assets/evaluation/demo-assistant-guide.png)
 - [Demo Assistant Search](docs/assets/evaluation/demo-assistant-search.png)
+- [Demo Assistant Facets](docs/assets/evaluation/demo-assistant-facets.png)
 - [Demo Assistant Compare](docs/assets/evaluation/demo-assistant-compare.png)
 - [Demo Assistant Corpus](docs/assets/evaluation/demo-assistant-corpus.png)
+- [Demo Assistant Analysis Graph](docs/assets/evaluation/demo-assistant-analysis-graph.png)
+- [Demo Assistant Wrap-up](docs/assets/evaluation/demo-assistant-wrap.png)
 - [Document Detail](docs/assets/evaluation/document-detail.png)
+- [Facet Browse](docs/assets/evaluation/facet-browse.png)
 - [Model Comparison](docs/assets/evaluation/model-compare.png)
 - [Corpus Dashboard](docs/assets/evaluation/corpus-dashboard.png)
 - [Corpus Topic Explorer](docs/assets/evaluation/topic-explorer.png)
 - [Evaluation Dashboard](docs/assets/evaluation/evaluation-dashboard.png)
 - [Ranking Diagnostics](docs/assets/evaluation/ranking-diagnostics.png)
+- [Analysis Graph](docs/assets/evaluation/analysis-graph.png)
 - [Feedback Analytics](docs/assets/evaluation/feedback-analytics.png)
 - [Demo Video](docs/assets/evaluation/cnirs-demo.webm)
 

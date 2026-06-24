@@ -61,6 +61,40 @@
 #### 🧪 測試
 - `tests/test_ir_app_api.py`：新增 evaluation query set discovery、真實 evaluation metrics schema、per-query breakdown 與 search log JSONL 測試。
 
+### [2025-12-26] 爬蟲長期收集穩定性與 `mass_collect.py` 強化
+
+#### 🔧 修復 / 改善
+- `scripts/crawlers/base_playwright_spider.py`：修正 scrapy-playwright request meta key（改用 `playwright_page_goto_kwargs`），並支援 `wait_selector` 自動注入 `wait_for_selector`（降低解析空頁與 timeout 機率）。
+- `scripts/crawlers/base_playwright_spider.py`：`fake_useragent` 改為 optional dependency（未安裝時使用內建 fallback UA pool），避免因缺少套件導致 Playwright 爬蟲/單元測試無法 import。
+- `scripts/crawlers/base_playwright_spider.py`：Playwright context 預設補上 `extra_http_headers`（`Accept-Language/Accept/Upgrade-Insecure-Requests`），提升部分 WAF/CDN 下的可連線性與穩定度。
+- `scripts/crawlers/tvbs_spider.py`：補上 sitemap index 解析（`sitemap=index` 時會先解析 `<sitemapindex>` 再派發子 sitemap），支援以日期範圍篩選 historical sitemaps（若站方提供）。
+- `scripts/crawlers/ltn_spider.py`、`scripts/crawlers/udn_spider.py`、`scripts/crawlers/pts_spider.py`：sequential 模式加入「依天數自動縮小 ID 範圍」邏輯（先自動偵測 end_id，再用 heuristic 計算 start_id），並加入 best-effort 日期範圍過濾，便於 `--years 1` 等長期回補。
+- `scripts/crawlers/chinatimes_spider.py`、`scripts/crawlers/ettoday_spider.py`、`scripts/crawlers/apple_daily_spider.py`：加入 `max_pages`（預設依日期窗口自動放大且有上限）避免 10 頁硬限制導致歷史資料不足。
+- `scripts/crawlers/chinatimes_spider.py`：新增 `use_playwright=auto|always|never` 與 Playwright fallback（遇到連線/403/5xx 時重試），並改用 `https://chinatimes.com/...` 作為起始 URL（降低特定環境下 `www` 路由/IPv6 連線問題）。
+- `scripts/crawlers/chinatimes_spider.py`：新增 `max_links_per_page` 參數（限制單一 list page 派發的文章連結數），用於 smoke test / CLOSESPIDER 的快速收斂與避免 shutdown 被大量 in-flight request 拖慢。
+- `scripts/crawlers/apple_daily_spider.py`：`category=all` 改為依分類頁面派發（避免重首頁導致 navigation timeout），同時加入資源阻擋（圖片/字型等）、Stealth middleware 與較穩健的 pagination（以 `page` 計數）。
+- `scripts/crawlers/ettoday_spider.py`、`scripts/crawlers/storm_spider.py`：移除易脆弱的 `wait_selector` 等待，改用小幅 `wait_for_timeout`（降低因 selector 變更造成的 timeout）。
+- `scripts/crawlers/ettoday_spider.py`：當分類 URL 變動導致 404 時，自動 fallback 到全站 news list（避免分類任務直接 0 篇）。
+- `scripts/crawlers/ftv_spider.py`：預設改以 `news.ftv.com.tw` 為主要目標站（並保留 best-effort host fallback），新增 Cloudflare block page 偵測（`blocked_by_cloudflare`）以便在被 WAF 阻擋時快速失敗並輸出可診斷的 log。
+- `scripts/crawlers/cti_spider.py`：修正 spider args 皆為字串導致 `timedelta(days=...)` crash 的問題，並以 `get_playwright_meta` 統一 Playwright meta（避免 `networkidle` 造成卡死）。
+- `scripts/crawlers/test_all_crawlers_quick.py`：對 ChinaTimes/FTV 加上 smoke run 參數界線（`max_pages/max_links_per_page/max_articles`）並新增 `blocked` 狀態（將 Cloudflare/WAF 阻擋與一般解析失敗分開呈現）。
+- `scripts/crawlers/mass_collect.py`：新增 `--topics`（politics/finance）跨站主題模式：能對支援分類的來源（SETN/ETtoday/Apple/TVBS/FTV）自動轉換成站內分類爬取，其餘來源則改為全站爬取；同時調整輸出檔名以主題（topic）作為標籤，避免不同站的分類代碼混淆。
+- `scripts/crawlers/mass_collect.py`：修復 `--background` 實際作用（會將整體收集流程以子行程背景執行，並輸出 PID 與 log 檔路徑）。
+- `scripts/crawlers/tvbs_spider.py`：sitemap 模式新增「依 `category` 篩選 sitemap URLs」避免以分類拆任務時重複爬取全部資料。
+- `scripts/crawlers/apple_daily_spider.py`：NextApple sitemap fallback 模式新增 `category` URL 篩選，讓以分類拆任務時不會重複爬取全部資料。
+- `scripts/crawlers/apple_daily_spider.py`：修正 NextApple News sitemap URL 的分類解析（改用 `urlparse`），並新增 `economy -> finance/money` alias，避免財經任務被誤過濾成 0。
+- `scripts/crawlers/mass_collect.py`：`--timeout-hours 0` 支援「不設超時」，避免 1 年以上的 long-running 任務被 runner 在固定時限內強制終止。
+- `scripts/crawlers/utils/jobdir.py` + 多個 spider：偵測 JOBDIR 中是否已有 pending queue；若是 resume 情境會跳過 `start_requests()` 的 seed，避免重啟時重複塞入大量 sequential requests（降低重跑成本）。
+- `scripts/crawlers/mass_collect.py`：新增 `--jobdir-disable-sources/--jobdir-reset-sources/--jobdir-repair-on-corruption`，用於長期回補時處理 JOBDIR queue 損毀與指定來源的 resume 例外。
+
+#### ✨ 新增
+- `scripts/crawlers/mass_collect.py`：
+  - 支援 `--parallel --max-workers N`（總並行任務數）與 `--max-playwright-workers N`（Playwright 任務上限）以更安全地吃滿多核心/多 threads。
+  - 每個任務輸出獨立 log 至 `logs/mass_collect/`，避免 parallel 模式 PIPE buffer 塞爆造成卡死。
+  - 預設為每個任務建立獨立 `JOBDIR`（`-s JOBDIR=...`）以支援 resume，並新增 `--skip-existing`。
+  - 日期參數改為以 `start_date/end_date` 傳入（對支援日期範圍的 spider 可精準對齊）。
+  - 來源清單擴充（新增 chinatimes/ettoday/apple），並調整 speed filter 為 `fast|medium|slow`。
+
 ### [2025-12-26] 註解覆蓋率提升與進度紀錄
 
 #### 📝 文檔
@@ -395,7 +429,7 @@ python app_simple.py --host 0.0.0.0 --port 5000
 - About: http://localhost:5000/about
 
 ### 文檔 *Documentation*
-- ✅ `data/stats/phase5_summary.txt` - Phase 5 完成總結
+- ✅ `/mnt/c/data/information-retrieval/stats/phase5_summary.txt` - Phase 5 完成總結
 
 ---
 
@@ -437,7 +471,7 @@ python app_simple.py --host 0.0.0.0 --port 5000
 ##### 3. 評估實驗結果
 - ✅ `data/results/evaluation_results.json` - 完整評估數據
 - ✅ `data/results/evaluation_report.txt` - 評估摘要表格
-- ✅ `data/stats/phase4_summary.txt` - Phase 4 總結報告
+- ✅ `/mnt/c/data/information-retrieval/stats/phase4_summary.txt` - Phase 4 總結報告
 
 **模型比較結果**:
 ```

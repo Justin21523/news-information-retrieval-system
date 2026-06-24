@@ -1086,6 +1086,66 @@ class SearchService:
         """
         return self.facet_service.build_facets(doc_ids, selected_filters)
 
+    def browse(
+        self,
+        filters: dict[str, Any] | None = None,
+        top_k: int = 20,
+        sort: str = "date_desc",
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Return documents by metadata filters without requiring a query.
+
+        Complexity:
+            Time: O(n log n)
+            Space: O(k)
+        """
+        started = time.perf_counter()
+        limit = max(1, min(int(top_k or 20), 100))
+        matched_ids = self.facet_service.matching_doc_ids(filters)
+        docs = [
+            self.documents_by_id[str(doc_id)]
+            for doc_id in matched_ids
+            if str(doc_id) in self.documents_by_id
+        ]
+
+        if sort == "doc_id_asc":
+            docs.sort(key=lambda doc: int(doc.get("doc_id") or 0))
+        elif sort == "doc_id_desc":
+            docs.sort(key=lambda doc: int(doc.get("doc_id") or 0), reverse=True)
+        else:
+            docs.sort(
+                key=lambda doc: (
+                    str(doc.get("published_date") or ""),
+                    int(doc.get("doc_id") or 0),
+                ),
+                reverse=True,
+            )
+
+        results = []
+        for rank, doc in enumerate(docs[:limit], 1):
+            result = self._make_result(
+                doc,
+                "",
+                [],
+                None,
+                "facet_browse",
+                rank,
+                component_scores={"facet_match": 1.0},
+                ranking_features={
+                    "browse_mode": True,
+                    "sort": sort,
+                    "matched_filters": filters or {},
+                },
+            ).to_dict()
+            result["explanation"]["matched_filters"] = filters or {}
+            results.append(result)
+
+        return results, {
+            "execution_time": time.perf_counter() - started,
+            "total_matches": len(docs),
+            "browse_mode": True,
+            "sort": sort,
+        }
+
     def corpus_distribution(self) -> dict[str, Any]:
         """Return corpus-level source/topic/content-type distributions.
 

@@ -5,7 +5,7 @@ Dataset Validation Script
 Validates collected JSONL dataset and generates statistics.
 
 Usage:
-    python scripts/crawlers/utils/validate_dataset.py --input data/raw/cna_mvp_dataset.jsonl
+    python scripts/crawlers/utils/validate_dataset.py --input /mnt/c/data/information-retrieval/raw/cna_mvp_dataset.jsonl
 
 Author: CNIRS Development Team
 License: Educational Use Only

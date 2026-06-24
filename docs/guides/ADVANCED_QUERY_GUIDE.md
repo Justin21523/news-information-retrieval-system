@@ -152,7 +152,7 @@ import pickle
 app = Flask(__name__)
 
 # 載入 Field Index (啟動時載入一次)
-with open('data/indexes/field_index.pkl', 'rb') as f:
+with open('/mnt/c/data/information-retrieval/indexes/field_index.pkl', 'rb') as f:
     field_indexer = pickle.load(f)
 
 # 載入文檔

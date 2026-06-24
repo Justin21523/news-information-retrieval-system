@@ -1,0 +1,78 @@
+{
+  "scanned": 40267,
+  "written": 21929,
+  "invalid": 489,
+  "duplicates": 17849,
+  "input_files": [
+    "/home/justin/web-projects/information-retrieval/data/preprocessed/merged_14days_preprocessed.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/processed/cna_mvp_cleaned.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_entertainment_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_finance_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_health_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_lifestyle_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_politics_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_sports_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_tech_14days.jsonl",
+    "/home/justin/web-projects/information-retrieval/data/raw/yahoo_world_14days.jsonl",
+    "/home/justin/web-projects/dcard-trending-crawler/data/dcard_crawler.db",
+    "/home/justin/web-projects/dcard-trending-crawler/data/raw/post_261244620.json",
+    "/home/justin/web-projects/dcard-trending-crawler/data/raw/post_261244838.json",
+    "/home/justin/web-projects/dcard-trending-crawler/data/raw/post_261245457.json",
+    "/home/justin/web-projects/dcard-trending-crawler/data/raw/post_261248439.json",
+    "/home/justin/web-projects/dcard-trending-crawler/data/raw/post_261249775.json"
+  ],
+  "by_source": {
+    "LTN": {
+      "scanned": 8227,
+      "written": 8227,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "NextApple": {
+      "scanned": 998,
+      "written": 998,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "SETN": {
+      "scanned": 500,
+      "written": 500,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "UDN": {
+      "scanned": 63,
+      "written": 63,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "PTS": {
+      "scanned": 20,
+      "written": 20,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "cna": {
+      "scanned": 121,
+      "written": 121,
+      "invalid": 0,
+      "duplicates": 0
+    },
+    "Yahoo": {
+      "scanned": 30333,
+      "written": 12000,
+      "invalid": 484,
+      "duplicates": 17849
+    },
+    "dcard": {
+      "scanned": 5,
+      "written": 0,
+      "invalid": 5,
+      "duplicates": 0
+    }
+  },
+  "invalid_reasons": {
+    "CONTENT_TOO_SHORT": 484,
+    "BLOCKED_PAGE": 5
+  }
+}

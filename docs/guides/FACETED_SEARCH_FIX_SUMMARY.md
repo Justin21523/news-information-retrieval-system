@@ -28,7 +28,7 @@ modelName.textContent = `📊 ${data.model ? data.model.toUpperCase() : 'Unknown
 **原因分析**:
 
 #### 2.1 當前索引狀態
-- **使用中的索引**: `data/indexes/` - 只包含 121 個文檔
+- **使用中的索引**: `/mnt/c/data/information-retrieval/indexes/` - 只包含 121 個文檔
 - **配置位置**: `app_simple.py` 第 51 行
   ```python
   app.config['INDEX_DIR'] = project_root / 'data' / 'indexes'
@@ -38,7 +38,7 @@ modelName.textContent = `📊 ${data.model ? data.model.toUpperCase() : 'Unknown
 ```bash
 # 統計結果
 總共 46 個 JSONL 檔案
-最大檔案: data/raw/ltn_14days.jsonl (8,227 篇文章)
+最大檔案: /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl (8,227 篇文章)
 總計可用: ~10,000+ 篇文章
 ```
 
@@ -49,8 +49,8 @@ modelName.textContent = `📊 ${data.model ? data.model.toUpperCase() : 'Unknown
 
 #### 2.3 大型索引建立狀態
 以下索引建立任務正在進行中但尚未完成:
-- `data/index_50k/` - 目標 50,000 篇 (僅有 meta 目錄)
-- `data/index_50k_clean/` - 目標 50,000 篇 (僅有 meta 目錄)
+- `/mnt/c/data/information-retrieval/index_50k/` - 目標 50,000 篇 (僅有 meta 目錄)
+- `/mnt/c/data/information-retrieval/index_50k_clean/` - 目標 50,000 篇 (僅有 meta 目錄)
 
 **建立進度**: 需檢查 `/tmp/build_50k_*.log` 了解進度
 
@@ -73,7 +73,7 @@ pkill -f "python app_simple.py"
 # 2. 建立 LTN 索引
 source activate ai_env
 python scripts/search_news.py --build \
-  --data-file data/raw/ltn_14days.jsonl \
+  --data-file /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl \
   --index-dir data/indexes_ltn_8k \
   --ckip-model bert-base
 
@@ -105,7 +105,7 @@ python app_simple.py
 tail -f /tmp/build_50k_clean.log
 
 # 檢查索引檔案
-ls -lh data/index_50k_clean/
+ls -lh /mnt/c/data/information-retrieval/index_50k_clean/
 
 # 檢查處理程序
 ps aux | grep search_news.py
@@ -179,7 +179,7 @@ source activate ai_env
 
 # 建立 LTN 8k 索引
 python scripts/search_news.py --build \
-  --data-file data/raw/ltn_14days.jsonl \
+  --data-file /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl \
   --index-dir data/indexes_ltn_8k \
   --ckip-model bert-base
 
@@ -261,7 +261,7 @@ pkill -9 -f "python app_simple.py"
 tail -100 /tmp/build_*.log
 
 # 檢查資料檔案
-head data/raw/ltn_14days.jsonl
+head /mnt/c/data/information-retrieval/raw/ltn_14days.jsonl
 ```
 
 ### 問題: Facet 沒有顯示

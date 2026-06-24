@@ -20,6 +20,8 @@ from typing import Optional, List
 from scrapy.spidermiddlewares.httperror import HttpError
 from twisted.internet.error import DNSLookupError, TimeoutError, TCPTimedOutError
 
+from scripts.crawlers.utils.jobdir import has_pending_requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +83,7 @@ class UDNNewsSpider(scrapy.Spider):
 
         # Output settings
         'FEEDS': {
-            'data/raw/udn_news_%(time)s.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/udn_news_%(time)s.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,
@@ -108,12 +110,25 @@ class UDNNewsSpider(scrapy.Spider):
     KNOWN_HISTORICAL_START = 7800000  # Confirmed accessible
     CURRENT_ID_ESTIMATE = 9148000  # Will be higher over time
     DEFAULT_STORY_ID = "6638"  # Politics - works for any article_id
+    IDS_PER_DAY_ESTIMATE = 1100  # Heuristic for auto-range in sequential mode
+    MAX_LIST_LINKS = 80  # Limit list-mode fan-out to keep smoke tests fast
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider._resume_from_jobdir = has_pending_requests(crawler.settings.get("JOBDIR"))
+        if spider._resume_from_jobdir:
+            logger.info(f"Detected JOBDIR resume queue; skipping start_requests seeding (JOBDIR={crawler.settings.get('JOBDIR')})")
+        return spider
 
     def __init__(self,
                  mode: str = 'list',
                  days: int = 7,
+                 start_date: str = None,
+                 end_date: str = None,
                  start_id: int = None,
                  end_id: int = None,
+                 max_list_links: int = None,
                  *args, **kwargs):
         """
         Initialize UDN spider with multi-mode support.
@@ -137,13 +152,28 @@ class UDNNewsSpider(scrapy.Spider):
             logger.warning(f"Invalid mode '{mode}', using 'list'")
             self.mode = 'list'
 
-        # Set date range (for list/hybrid mode)
-        self.end_date = datetime.now()
-        self.start_date = self.end_date - timedelta(days=int(days))
+        # Set date range
+        if start_date and end_date:
+            try:
+                self.start_date = datetime.strptime(start_date, '%Y-%m-%d')
+                self.end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            except ValueError as e:
+                logger.error(f"Invalid date format: {e}")
+                self.end_date = datetime.now()
+                self.start_date = self.end_date - timedelta(days=int(days))
+        else:
+            self.end_date = datetime.now()
+            self.start_date = self.end_date - timedelta(days=int(days))
 
         # Set ID range (for sequential/hybrid mode)
+        self._start_id_provided = start_id is not None
         self.start_id = int(start_id) if start_id else self.KNOWN_HISTORICAL_START
         self.end_id = int(end_id) if end_id else None  # Will auto-detect if None
+        if max_list_links is not None:
+            try:
+                self.MAX_LIST_LINKS = max(1, int(max_list_links))
+            except (TypeError, ValueError):
+                pass
 
         # Statistics
         self.articles_count = 0
@@ -172,6 +202,9 @@ class UDNNewsSpider(scrapy.Spider):
         Yields:
             scrapy.Request: Initial requests
         """
+        if getattr(self, "_resume_from_jobdir", False):
+            return
+
         if self.mode == 'list':
             # List mode: Start with homepage
             logger.info("List mode: Starting with https://udn.com/news/index")
@@ -247,7 +280,7 @@ class UDNNewsSpider(scrapy.Spider):
         article_links = response.css('a[href*="/news/story/"]::attr(href)').getall()
 
         articles_found = 0
-        for link in article_links:
+        for link in article_links[: self.MAX_LIST_LINKS]:
             if not link or '/news/story/' not in link:
                 continue
 
@@ -300,6 +333,16 @@ class UDNNewsSpider(scrapy.Spider):
             # Fallback to current estimate
             self.end_id = self.CURRENT_ID_ESTIMATE
             logger.warning(f"Could not auto-detect max ID, using estimate: {self.end_id}")
+
+        # Auto-select a bounded start_id when running sequential mode with only a day window.
+        if self.mode == 'sequential' and not self._start_id_provided and self.end_id:
+            estimated_span = max(1, int((self.end_date - self.start_date).days)) * self.IDS_PER_DAY_ESTIMATE
+            auto_start_id = max(0, int(self.end_id) - int(estimated_span))
+            logger.info(
+                f"Auto range: days={int((self.end_date - self.start_date).days)} "
+                f"→ ID span≈{estimated_span:,} (start_id={auto_start_id:,}, end_id={self.end_id:,})"
+            )
+            self.start_id = auto_start_id
 
         # Now start sequential crawling
         logger.info(f"Starting sequential crawl: {self.start_id} to {self.end_id}")
@@ -409,6 +452,9 @@ class UDNNewsSpider(scrapy.Spider):
                     response.css('h1::text').get() or
                     response.css('meta[property="og:title"]::attr(content)').get())
             article['title'] = self.clean_text(title)
+            if not article['title']:
+                jsonld_title = self._extract_from_jsonld(response, 'headline')
+                article['title'] = self.clean_text(jsonld_title)
 
             # Content paragraphs - multiple selectors
             content_paragraphs = (
@@ -416,22 +462,54 @@ class UDNNewsSpider(scrapy.Spider):
                 response.css('div.article-content p::text').getall() or
                 response.css('article p::text').getall()
             )
-            article['content'] = ' '.join([self.clean_text(p) for p in content_paragraphs if p])
+            content_text = ' '.join([self.clean_text(p) for p in content_paragraphs if p])
+            if not content_text or len(content_text) < 100:
+                # Fallback: broader selectors and JSON-LD
+                fallback_nodes = response.css('section.article-content__editor *::text').getall()
+                fallback_text = ' '.join([self.clean_text(p) for p in fallback_nodes if p])
+                content_text = fallback_text if len(fallback_text) > len(content_text) else content_text
+
+            if not content_text or len(content_text) < 100:
+                jsonld_body = self._extract_from_jsonld(response, 'articleBody')
+                if isinstance(jsonld_body, str) and jsonld_body.strip():
+                    content_text = self.clean_text(jsonld_body)
+
+            article['content'] = content_text
 
             # Author
             author = (response.css('span.article-content__author::text').get() or
                      response.css('div.article_author::text').get() or
                      response.css('meta[name="author"]::attr(content)').get())
             article['author'] = self.clean_text(author) if author else '聯合報'
+            if article['author'] == '聯合報':
+                jsonld_author = self._extract_from_jsonld(response, 'author')
+                if isinstance(jsonld_author, dict):
+                    article['author'] = self.clean_text(jsonld_author.get('name')) or article['author']
+                elif isinstance(jsonld_author, str):
+                    article['author'] = self.clean_text(jsonld_author) or article['author']
 
             # Publish date
             date_text = (response.css('time.article-content__time::attr(datetime)').get() or
                         response.css('time::attr(datetime)').get() or
                         response.css('meta[property="article:published_time"]::attr(content)').get())
-            article['publish_date'] = self.parse_date(date_text)
+            if not date_text:
+                date_text = self._extract_from_jsonld(response, 'datePublished')
+            article['published_date'] = self.parse_date(date_text)
+
+            # Date range filtering (best-effort).
+            if article.get('published_date'):
+                try:
+                    pub_date = datetime.strptime(article['published_date'], '%Y-%m-%d').date()
+                    start = self.start_date.date()
+                    end = self.end_date.date()
+                    if not (start <= pub_date <= end):
+                        return
+                except ValueError:
+                    pass
 
             # Category from URL
             article['category'] = self.extract_category_from_url(response.url)
+            article['category_name'] = article['category']
 
             # Tags
             keywords = response.css('meta[name="keywords"]::attr(content)').get()
@@ -604,6 +682,41 @@ class UDNNewsSpider(scrapy.Spider):
                 if info['id'] == story_id:
                     return info['name']
         return '其他'
+
+    def _extract_from_jsonld(self, response, field: str) -> Optional[str]:
+        """
+        Extract a field from JSON-LD blocks embedded in the page.
+
+        Args:
+            response: Scrapy response
+            field: JSON-LD key to extract
+
+        Returns:
+            Optional[str]: Extracted value or None
+
+        Complexity:
+            Time: O(n) where n is JSON-LD blocks
+            Space: O(1)
+        """
+        scripts = response.css('script[type="application/ld+json"]::text').getall()
+        for script in scripts:
+            try:
+                data = json.loads(script)
+            except Exception:
+                continue
+
+            candidates = data if isinstance(data, list) else [data]
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                if field in item and item[field]:
+                    return item[field]
+                graph = item.get('@graph')
+                if isinstance(graph, list):
+                    for node in graph:
+                        if isinstance(node, dict) and field in node and node[field]:
+                            return node[field]
+        return None
 
 
 # Standalone execution

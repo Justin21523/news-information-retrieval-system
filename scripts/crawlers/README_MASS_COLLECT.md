@@ -11,23 +11,33 @@
 - **指定範圍**: `--date-range 2024-01-01 2024-12-31`
 
 ### 📰 新聞網選擇
-- **全部**: 預設收集所有 11 個新聞網
-- **指定來源**: `--sources cna,pts,ltn,udn`
+- **全部**: 預設收集所有來源（目前 14 個新聞網/來源）
+- **指定來源**: `--sources chinatimes,ettoday,cna,pts,ltn,udn,nextapple,setn,yahoo,storm,tvbs,ftv,cti,apple`
 - **排除來源**: `--exclude-sources storm,tvbs,ftv,cti`
-- **速度篩選**: `--speed-filter fast` (只收集快速來源)
+- **速度篩選**: `--speed-filter fast|medium|slow` (依爬取成本分類)
 
-### 🏷️ 類別篩選
-- **支援類別的新聞網**:
-  - Yahoo: politics, world, entertainment, sports, finance, tech, health, lifestyle
-  - FTV: politics, finance, culture, international, life, all
-  - CTI: politics, money, society, world, entertainment, life, sports, tech, all
-- **使用方式**: `--categories politics,finance`
+### 🏷️ 類別 / 主題篩選
+- **主題（跨站統一）**: `--topics politics,finance`（或 `--topics 政治,財經`）
+  - 支援 topic mapping 的來源：SETN、ETtoday、Apple、TVBS、FTV
+  - 其他來源：若無法直接指定領域，會改為全站爬取（符合「無法選擇就全爬」的策略）
+- **類別（來源自帶）**: `--categories politics,business`
+  - 目前主要用於 FTV（其他來源預設以全站/全 sitemap 為主）
+  - FTV: politics, business, society, entertainment, life, sports, tech, world
 
 ### ⚙️ 執行選項
 - **CPU 優先級**: `--nice 10` (降低 CPU 優先級，0-19，越高越低優先)
-- **背景執行**: `--background` (在背景執行並記錄到 log 檔)
+- **平行執行**: `--parallel` (多任務並行)
+  - `--max-workers 32`：整體最大並行任務數（用來吃滿 CPU threads）
+  - `--max-playwright-workers 4`：Playwright 任務上限（避免大量瀏覽器同時跑造成 timeout / OOM）
+- **重試**: `--retries 2 --retry-backoff-seconds 120`（失敗重跑）
+- **續跑 (resume)**: `--jobdir data/jobdir`（預設會為每個任務建立獨立 JOBDIR）
+- **JOBDIR 重置（單站）**: `--jobdir-reset-sources yahoo`（遇到 resume queue 損毀/卡死時，先清掉該來源的 JOBDIR 再跑）
+- **JOBDIR 停用（單站）**: `--jobdir-disable-sources yahoo`（不使用 resume；適合臨時繞過特定站的 JOBDIR 問題）
+- **JOBDIR 自動修復**: `--jobdir-repair-on-corruption --retries 1`（偵測 queuelib disk queue 損毀時，備份+重建 JOBDIR 後自動重試）
+- **跳過已存在輸出**: `--skip-existing`
 - **乾跑模式**: `--dry-run` (只顯示命令不執行)
 - **日誌等級**: `--log-level INFO|ERROR|WARNING|DEBUG`
+- **超時**: `--timeout-hours 12`（每個任務的上限時間；`0` 表示不設上限）
 
 ## 使用範例
 
@@ -59,8 +69,12 @@ python scripts/crawlers/mass_collect.py --days 14 --exclude-sources cti
 # 指定日期範圍
 python scripts/crawlers/mass_collect.py --date-range 2024-01-01 2024-12-31
 
-# 收集特定類別（只從支援的新聞網）
-python scripts/crawlers/mass_collect.py --days 14 --sources ftv,cti --categories politics,finance
+# 收集 1 年的政治 + 財經主題（會自動對支援分類的來源分流）
+python scripts/crawlers/mass_collect.py --years 1 --topics politics,finance --parallel \
+  --max-workers 32 --max-playwright-workers 4 --timeout-hours 24
+
+# 收集特定類別（目前主要針對 FTV）
+python scripts/crawlers/mass_collect.py --days 14 --sources ftv --categories politics,business
 ```
 
 ### 資源控制
@@ -69,8 +83,10 @@ python scripts/crawlers/mass_collect.py --days 14 --sources ftv,cti --categories
 # 降低 CPU 優先級避免影響其他進程
 python scripts/crawlers/mass_collect.py --days 14 --nice 10
 
-# 在背景執行
-python scripts/crawlers/mass_collect.py --days 14 --nice 10 --background
+# 32 threads 大規模並行（建議限制 Playwright worker）
+python scripts/crawlers/mass_collect.py --years 1 --parallel \
+  --max-workers 32 --max-playwright-workers 4 \
+  --timeout-hours 24 --retries 1 --retry-backoff-seconds 180
 
 # 乾跑模式（預覽命令）
 python scripts/crawlers/mass_collect.py --days 14 --dry-run
@@ -79,25 +95,28 @@ python scripts/crawlers/mass_collect.py --days 14 --dry-run
 ## 新聞網速度分類
 
 ### Fast (快速 - 無需 Playwright)
-- CNA 中央社
 - PTS 公視
 - LTN 自由時報
 - UDN 聯合報
 - NextApple 壹蘋
 - SETN 三立
 - Yahoo 奇摩
+- 中時新聞網（chinatimes_spider）
 
-### Slow (慢速 - 需要 Playwright)
+### Medium (中速 - 需要 Playwright / 動態渲染)
+- CNA 中央社（cna_spider_v2）
+- 東森新聞雲（ETtoday）
+- Apple Daily / NextApple（apple_daily_spider）
 - Storm 風傳媒
 - TVBS 新聞
 - FTV 民視
 
-### Very Slow (極慢 - Playwright + Cloudflare)
+### Slow (慢速 - Playwright + Cloudflare)
 - CTI 中天
 
 ## 輸出檔案
 
-預設輸出到 `data/raw/` 目錄，檔名格式：
+預設輸出到 `/mnt/c/data/information-retrieval/raw/` 目錄，檔名格式：
 - `{source}_{suffix}.jsonl`
 - 例如：`cna_14days.jsonl`, `yahoo_3months.jsonl`
 
@@ -176,8 +195,11 @@ python scripts/crawlers/mass_collect.py --days 14 --nice 15
 
 ### 大規模長時間收集
 ```bash
-# 使用 nohup 和背景執行
-nohup python scripts/crawlers/mass_collect.py --years 1 --nice 15 &
+# 使用 nohup + 平行（建議限制 Playwright worker）
+nohup python scripts/crawlers/mass_collect.py --years 1 --parallel \
+  --max-workers 32 --max-playwright-workers 4 \
+  --timeout-hours 0 --nice 15 --jobdir-repair-on-corruption --retries 1 --retry-backoff-seconds 180 \
+  > logs/mass_collect_year1.out 2>&1 &
 ```
 
 ### 分階段收集

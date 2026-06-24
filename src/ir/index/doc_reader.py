@@ -162,7 +162,7 @@ class DocumentReader:
 
         Examples:
             >>> reader = DocumentReader()
-            >>> for doc in reader.read_jsonl('data/raw/ltn_14days.jsonl', limit=100):
+            >>> for doc in reader.read_jsonl('/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl', limit=100):
             ...     print(doc.title)
         """
         filepath = Path(filepath)
@@ -243,7 +243,7 @@ class DocumentReader:
 
         Examples:
             >>> reader = DocumentReader()
-            >>> for doc in reader.read_directory('data/raw', pattern='*_14days.jsonl'):
+            >>> for doc in reader.read_directory('/mnt/c/data/information-retrieval/raw', pattern='*_14days.jsonl'):
             ...     print(doc.source, doc.title)
         """
         directory = Path(directory)
@@ -328,7 +328,7 @@ class DocumentReader:
 
         Examples:
             >>> reader = DocumentReader()
-            >>> stats = reader.get_file_stats('data/raw/ltn_14days.jsonl')
+            >>> stats = reader.get_file_stats('/mnt/c/data/information-retrieval/raw/ltn_14days.jsonl')
             >>> print(f"Total docs: {stats['total_documents']}")
         """
         filepath = Path(filepath)
@@ -565,7 +565,7 @@ def demo():
 
     # Example: Read a few documents
     reader = DocumentReader()
-    data_dir = Path("data/raw")
+    data_dir = Path("/mnt/c/data/information-retrieval/raw")
 
     if not data_dir.exists():
         print(f"\n⚠ Data directory not found: {data_dir}")

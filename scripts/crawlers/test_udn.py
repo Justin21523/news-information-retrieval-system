@@ -39,7 +39,7 @@ def main():
 
         # Output settings
         'FEEDS': {
-            'data/raw/test_udn_news.jsonl': {
+            '/mnt/c/data/information-retrieval/raw/test_udn_news.jsonl': {
                 'format': 'jsonlines',
                 'encoding': 'utf8',
                 'store_empty': False,

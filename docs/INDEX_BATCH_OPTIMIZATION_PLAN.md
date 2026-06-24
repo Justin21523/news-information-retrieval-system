@@ -321,7 +321,7 @@ time python scripts/search_news.py \
     --build \
     --data-dir data/raw \
     --limit 50000 \
-    --index-dir data/index_50k_optimized \
+    --index-dir /mnt/c/data/information-retrieval/index_50k_optimized \
     --ckip-model bert-base
 ```
 

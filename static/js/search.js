@@ -216,7 +216,7 @@ function displayResults(data) {
 
     // Display results
     if (data.results.length === 0) {
-        resultsList.innerHTML = '<div class="no-results">沒有找到相關結果</div>';
+        resultsList.innerHTML = renderNoResults(data);
         currentSearchResults = null;
         return;
     }
@@ -266,6 +266,9 @@ function displayResults(data) {
         const fieldMatches = explanation.field_matches || {};
         const matchedTerms = explanation.matched_terms || [];
         const expandedTerms = explanation.expanded_terms || [];
+        const rankingFeatures = explanation.ranking_features || {};
+        const fieldBoost = rankingFeatures.field_boost || {};
+        const snippetSource = rankingFeatures.snippet_source || '';
         const componentHtml = Object.keys(componentScores).length
             ? Object.entries(componentScores).map(([name, score]) => `<span class="meta-chip">${name}: ${Number(score || 0).toFixed(4)}</span>`).join('')
             : '<span class="meta-chip">No component scores</span>';
@@ -274,6 +277,12 @@ function displayResults(data) {
             : '<span class="meta-chip">No field breakdown</span>';
         const expansionHtml = expandedTerms.length
             ? `<div class="result-explain-row"><strong>Expanded:</strong> ${expandedTerms.join(', ')}</div>`
+            : '';
+        const boostHtml = fieldBoost && Object.keys(fieldBoost).length
+            ? `<div class="result-explain-row"><strong>Field boost:</strong> ${formatFieldBoost(fieldBoost)}</div>`
+            : '';
+        const snippetSourceHtml = snippetSource
+            ? `<div class="result-explain-row"><strong>Snippet source:</strong> ${snippetSource}</div>`
             : '';
         const snippetHtml = result.highlighted_snippet || highlightQuery(displayText, data.query);
 
@@ -296,6 +305,8 @@ function displayResults(data) {
                 ${expansionHtml}
                 <div class="result-explain-row"><strong>Fields:</strong> ${fieldHtml}</div>
                 <div class="result-explain-row"><strong>Scores:</strong> ${componentHtml}</div>
+                ${boostHtml}
+                ${snippetSourceHtml}
             </details>
         </div>
         `;
@@ -306,6 +317,52 @@ function displayResults(data) {
 
     // Scroll to results
     resultsHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderNoResults(data) {
+    const suggestions = data.suggestions || [];
+    const suggestionHtml = suggestions.length
+        ? `
+            <div class="suggestion-list">
+                ${suggestions.map(item => `
+                    <button class="suggestion-chip" data-query="${escapeAttribute(item.query || '')}" onclick="runSuggestionSearchFromButton(this)">
+                        ${item.type}: ${item.query || (item.terms || []).join(' ')}
+                    </button>
+                `).join('')}
+            </div>
+        `
+        : '';
+    return `
+        <div class="no-results">
+            <div>沒有找到相關結果</div>
+            ${suggestionHtml}
+        </div>
+    `;
+}
+
+function runSuggestionSearch(query) {
+    if (!query) return;
+    queryInput.value = query;
+    performSearch();
+}
+
+function runSuggestionSearchFromButton(button) {
+    runSuggestionSearch(button?.dataset?.query || '');
+}
+
+function formatFieldBoost(fieldBoost) {
+    return Object.entries(fieldBoost)
+        .map(([field, value]) => Array.isArray(value) ? `${field}: ${value.join(', ')}` : `${field}: ${value}`)
+        .join(' | ');
+}
+
+function escapeAttribute(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/'/g, '&#39;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 /**

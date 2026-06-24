@@ -90,6 +90,7 @@ class SearchService:
         model = (model or "bm25").lower()
         top_k = max(1, min(int(top_k or 20), 100))
         query_terms = self.index.tokenize(query)
+        quality_terms = self.index.text_quality.matching_terms(query_terms, query)
         retrieval_top_k = len(self.documents_by_id) if filters else top_k
 
         expanded_terms: list[str] = []
@@ -119,6 +120,8 @@ class SearchService:
         else:
             raise ValueError(f"Unknown retrieval model: {model}")
 
+        base_scores = {str(doc_key): float(score) for doc_key, score in ranked}
+        ranked, field_boosts = self._rerank_with_field_boost(ranked, quality_terms)
         ranked = self._apply_filters(ranked, filters)
         ranked = ranked[:top_k]
 
@@ -127,24 +130,31 @@ class SearchService:
             doc = self.documents_by_id.get(str(doc_key))
             if not doc:
                 continue
+            doc_components = dict(component_scores.get(str(doc_key), {}))
+            doc_components.setdefault(model, base_scores.get(str(doc_key), float(score)))
+            doc_components["field_boost"] = float(field_boosts.get(str(doc_key), {}).get("boost", 0.0))
             results.append(
                 self._make_result(
                     doc,
                     query,
-                    query_terms,
+                    quality_terms or query_terms,
                     float(score),
                     model,
                     rank,
                     expanded_terms=expanded_terms,
-                    component_scores=component_scores.get(str(doc_key), {}),
+                    component_scores=doc_components,
+                    field_boost=field_boosts.get(str(doc_key), {}),
                 ).to_dict()
             )
 
+        suggestions = self.suggestions(query, query_terms) if not results else []
         meta = {
             "execution_time": time.perf_counter() - started,
             "query_terms": query_terms,
+            "significant_terms": self.index.text_quality.significant_terms(query_terms),
             "expanded_terms": expanded_terms,
             "dataset_source": self.document_service.dataset_source,
+            "suggestions": suggestions,
         }
         return results, meta
 
@@ -325,6 +335,55 @@ class SearchService:
             if str(doc_key) in allowed_doc_ids
         ]
 
+    def _rerank_with_field_boost(
+        self,
+        ranked: list[tuple[str, float]],
+        query_terms: list[str],
+    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]]]:
+        """Apply field-aware boosts on top of model scores.
+
+        Complexity:
+            Time: O(r * f * q)
+            Space: O(r)
+        """
+        boosts: dict[str, dict[str, Any]] = {}
+        adjusted: list[tuple[str, float]] = []
+        for doc_key, score in ranked:
+            boost_info = self._field_boost(doc_key, query_terms)
+            boosts[str(doc_key)] = boost_info
+            adjusted.append((doc_key, float(score) + float(boost_info["boost"])))
+        adjusted.sort(key=lambda item: item[1], reverse=True)
+        return adjusted, boosts
+
+    def _field_boost(self, doc_key: str, query_terms: list[str]) -> dict[str, Any]:
+        """Compute title/tags/category/content boost for one document.
+
+        Complexity:
+            Time: O(f * q)
+            Space: O(q)
+        """
+        weights = {
+            "title": 0.45,
+            "tags": 0.25,
+            "category": 0.18,
+            "content": 0.06,
+        }
+        field_freqs = self.index.field_term_freqs.get(str(doc_key), {})
+        matches: dict[str, list[str]] = {}
+        boost = 0.0
+        for field, weight in weights.items():
+            freqs = field_freqs.get(field, Counter())
+            hits = [term for term in query_terms if freqs.get(term, 0) > 0]
+            if not hits:
+                continue
+            unique_hits = list(dict.fromkeys(hits))
+            matches[field] = unique_hits
+            boost += weight * min(len(unique_hits), 3)
+        return {
+            **matches,
+            "boost": round(min(boost, 1.5), 6),
+        }
+
     def _document_matches_filters(self, doc: dict[str, Any], filters: dict[str, set[str]]) -> bool:
         """Check if a document matches all filters.
 
@@ -356,6 +415,7 @@ class SearchService:
         rank: int,
         expanded_terms: list[str] | None = None,
         component_scores: dict[str, float] | None = None,
+        field_boost: dict[str, Any] | None = None,
     ) -> SearchResult:
         """Build a normalized search result.
 
@@ -363,13 +423,17 @@ class SearchService:
             Time: O(n * q)
             Space: O(n)
         """
-        snippet = self._snippet(doc, query_terms)
+        snippet_info = self._snippet(doc, query_terms)
+        snippet = snippet_info["text"]
         highlighted = self._highlight(snippet, query_terms)
         matched_terms = self._matched_terms(doc, query_terms)
         doc_id = int(doc.get("doc_id"))
         component_scores = component_scores or {model: score}
+        field_boost = field_boost or {"boost": 0.0}
         ranking_features = {
             "index_cache_used": self.index.cache_used,
+            "field_boost": field_boost,
+            "snippet_source": snippet_info["source"],
         }
         if model in {"bm25", "hybrid", "fuzzy", "csoundex"}:
             bm25_explain = self.index.bm25.explain_score(query, doc_id)
@@ -452,7 +516,7 @@ class SearchService:
             "method": "rocchio_prf",
         }
 
-    def _snippet(self, doc: dict[str, Any], query_terms: list[str], window: int = 180) -> str:
+    def _snippet(self, doc: dict[str, Any], query_terms: list[str], window: int = 180) -> dict[str, str]:
         """Generate a query-centered snippet.
 
         Complexity:
@@ -460,26 +524,48 @@ class SearchService:
             Space: O(n)
         """
         content = doc.get("content") or ""
+        title = doc.get("title") or ""
+        title_matches = self._terms_in_text(title, query_terms)
+        if title_matches:
+            return {"text": title, "source": "title"}
         if not content:
-            return doc.get("title") or ""
+            return {"text": title, "source": "title"}
 
-        normalized_content = self.index.normalize_text(content)
-        positions = [
-            normalized_content.find(self.index.normalize_text(term))
-            for term in query_terms
-            if term
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=[。！？.!?])", content) if sentence.strip()]
+        scored: list[tuple[int, int, str]] = []
+        for index, sentence in enumerate(sentences):
+            hits = self._terms_in_text(sentence, query_terms)
+            if hits:
+                scored.append((len(set(hits)), -index, sentence))
+        if scored:
+            sentence = sorted(scored, reverse=True)[0][2]
+            return {"text": self._trim_snippet(sentence, window), "source": "content_sentence"}
+
+        sentence = sentences[0] if sentences else content
+        return {"text": self._trim_snippet(sentence, window), "source": "fallback_lead"}
+
+    def _trim_snippet(self, text: str, window: int) -> str:
+        """Trim a snippet to a stable display length.
+
+        Complexity:
+            Time: O(1)
+            Space: O(1)
+        """
+        text = (text or "").strip()
+        return text[:window] + ("..." if len(text) > window else "")
+
+    def _terms_in_text(self, text: str, terms: list[str]) -> list[str]:
+        """Return normalized terms present in text.
+
+        Complexity:
+            Time: O(q * n)
+            Space: O(q)
+        """
+        normalized = self.index.normalize_text(text)
+        return [
+            term for term in terms
+            if term and self.index.normalize_text(term) in normalized
         ]
-        positions = [position for position in positions if position >= 0]
-        if not positions:
-            sentence = re.split(r"[。！？.!?]", content)[0].strip()
-            return sentence[:window] + ("..." if len(sentence) > window else "")
-
-        center = min(positions)
-        start = max(0, center - window // 3)
-        end = min(len(content), start + window)
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(content) else ""
-        return f"{prefix}{content[start:end].strip()}{suffix}"
 
     def _highlight(self, text: str, query_terms: list[str]) -> str:
         """HTML-escape text and highlight matched query terms.
@@ -505,7 +591,13 @@ class SearchService:
         """
         doc_key = str(doc["doc_id"])
         freqs = self.index.doc_term_freqs.get(doc_key, {})
-        return [term for term in query_terms if freqs.get(term, 0) > 0]
+        direct = [term for term in query_terms if freqs.get(term, 0) > 0]
+        if direct:
+            return direct
+        return [
+            term for term in query_terms
+            if self._terms_in_text(self.index._document_text(doc), [term])
+        ]
 
     def _field_matches(self, doc: dict[str, Any], query_terms: list[str]) -> dict[str, list[str]]:
         """Return matched terms by visible field.
@@ -523,10 +615,56 @@ class SearchService:
         matches: dict[str, list[str]] = {}
         for field, value in fields.items():
             normalized = self.index.normalize_text(value)
-            hits = [term for term in query_terms if term and term in normalized]
+            hits = [
+                term for term in query_terms
+                if term and self.index.normalize_text(term) in normalized
+            ]
             if hits:
                 matches[field] = hits
         return matches
+
+    def suggestions(self, query: str, query_terms: list[str] | None = None) -> list[dict[str, Any]]:
+        """Return fallback suggestions for no-result searches.
+
+        Complexity:
+            Time: O(q * V)
+            Space: O(k)
+        """
+        terms = query_terms or self.index.tokenize(query)
+        suggestions: list[dict[str, Any]] = []
+        synonyms = self.index.text_quality.synonym_terms(terms)
+        if synonyms:
+            suggestions.append({
+                "type": "synonym",
+                "query": " ".join(list(dict.fromkeys(terms + synonyms))),
+                "terms": synonyms,
+            })
+        fuzzy_terms = self._fuzzy_expansion(terms)
+        if fuzzy_terms and fuzzy_terms != terms:
+            suggestions.append({
+                "type": "fuzzy",
+                "query": " ".join(fuzzy_terms),
+                "terms": fuzzy_terms,
+            })
+        csoundex_terms = self._csoundex_expansion(terms)
+        if csoundex_terms and csoundex_terms != terms:
+            suggestions.append({
+                "type": "csoundex",
+                "query": " ".join(csoundex_terms),
+                "terms": csoundex_terms,
+            })
+        try:
+            expansion = self.expand_query(query)
+            expanded_terms = expansion.get("expanded_terms") or []
+            if expanded_terms:
+                suggestions.append({
+                    "type": "rocchio",
+                    "query": expansion.get("expanded_query", query),
+                    "terms": expanded_terms,
+                })
+        except Exception:
+            pass
+        return suggestions[:5]
 
     def summarize(self, doc: dict[str, Any], method: str = "lead_k", k: int = 3) -> str:
         """Generate a lightweight extractive summary.

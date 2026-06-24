@@ -21,9 +21,10 @@ from src.ir.retrieval.fuzzy import FuzzyMatcher
 from src.ir.retrieval.language_model_retrieval import LanguageModelRetrieval
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.text.csoundex import CSoundex
+from src.ir_app.services.text_quality import TextQualityService
 
 
-INDEX_VERSION = "ir_app_v2"
+INDEX_VERSION = "ir_app_v3"
 
 
 class IndexService:
@@ -46,9 +47,11 @@ class IndexService:
         self.index_dir = Path(index_dir) if index_dir else None
         self.dataset_metadata = dataset_metadata or {}
         self.tokenizer = ChineseTokenizer(engine=tokenizer_engine)
+        self.text_quality = TextQualityService(self.tokenize, self.normalize_text)
 
         self.doc_terms: dict[str, list[str]] = {}
         self.doc_term_freqs: dict[str, Counter[str]] = {}
+        self.field_term_freqs: dict[str, dict[str, Counter[str]]] = {}
         self.inverted_index: dict[str, dict[str, int]] = defaultdict(dict)
         self.idf: dict[str, float] = {}
         self.doc_lengths: dict[str, int] = {}
@@ -162,6 +165,13 @@ class IndexService:
         self.doc_lengths = payload["doc_lengths"]
         self.avg_doc_length = payload["avg_doc_length"]
         self.tfidf_vectors = payload["tfidf_vectors"]
+        self.field_term_freqs = {
+            doc_key: {
+                field: Counter(freqs)
+                for field, freqs in fields.items()
+            }
+            for doc_key, fields in payload.get("field_term_freqs", {}).items()
+        }
         self.cache_used = True
         return True
 
@@ -191,6 +201,13 @@ class IndexService:
                 "doc_lengths": self.doc_lengths,
                 "avg_doc_length": self.avg_doc_length,
                 "tfidf_vectors": self.tfidf_vectors,
+                "field_term_freqs": {
+                    doc_key: {
+                        field: dict(freqs)
+                        for field, freqs in fields.items()
+                    }
+                    for doc_key, fields in self.field_term_freqs.items()
+                },
             }
             with cache_path.open("wb") as handle:
                 pickle.dump(payload, handle)
@@ -211,6 +228,31 @@ class IndexService:
         category = doc.get("category_name") or doc.get("category") or ""
         return f"{title} {title} {title} {tags} {category} {content}"
 
+    def _document_fields(self, doc: dict[str, Any]) -> dict[str, str]:
+        """Return searchable document fields.
+
+        Complexity:
+            Time: O(t)
+            Space: O(t)
+        """
+        tags = " ".join(doc.get("tags") or [])
+        category = " ".join(
+            str(value)
+            for value in (
+                doc.get("category_name"),
+                doc.get("category"),
+                doc.get("taxonomy_label"),
+                doc.get("taxonomy_topic"),
+            )
+            if value
+        )
+        return {
+            "title": doc.get("title") or "",
+            "content": doc.get("content") or "",
+            "tags": tags,
+            "category": category,
+        }
+
     def document_texts(self) -> list[str]:
         """Return field-weighted document texts aligned to doc_id.
 
@@ -229,6 +271,11 @@ class IndexService:
         """
         for doc in self.documents:
             doc_key = str(doc["doc_id"])
+            field_freqs: dict[str, Counter[str]] = {}
+            for field, text in self._document_fields(doc).items():
+                field_freqs[field] = Counter(self.tokenize(text))
+            self.field_term_freqs[doc_key] = field_freqs
+
             terms = self.tokenize(self._document_text(doc))
             freqs = Counter(terms)
             self.doc_terms[doc_key] = terms

@@ -89,12 +89,16 @@ def test_supported_search_models_return_stable_schema(tmp_path):
         assert payload["ok"] is True
         assert payload["data"]["model_info"]["id"] == model
         assert "query_analysis" in payload["data"]
+        assert "significant_terms" in payload["data"]["query_analysis"]
         assert payload["meta"]["execution_time"] >= 0
         assert "results" in payload["data"]
         if payload["data"]["results"]:
             result = payload["data"]["results"][0]
             assert "explanation" in result
             assert "component_scores" in result["explanation"]
+            assert "field_boost" in result["explanation"]["component_scores"]
+            assert "field_boost" in result["explanation"]["ranking_features"]
+            assert "snippet_source" in result["explanation"]["ranking_features"]
 
 
 def test_document_endpoint_returns_document(tmp_path):
@@ -308,3 +312,35 @@ def test_algorithms_endpoint_exposes_lm_capabilities(tmp_path):
     assert models["lm"]["supports_filters"] is True
     assert models["lm"]["supports_explanation"] is True
     assert models["bert"]["available"] is False
+
+
+def test_query_analysis_removes_news_boilerplate_terms(tmp_path):
+    """News boilerplate terms are exposed separately from significant terms."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/search",
+        json={"query": "中央社 information retrieval 報導", "model": "bm25"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    analysis = payload["data"]["query_analysis"]
+    assert "中央社" in analysis["removed_stopwords"]
+    assert "報導" in analysis["removed_stopwords"]
+    assert "information" in analysis["significant_terms"]
+    assert "retrieval" in analysis["significant_terms"]
+
+
+def test_no_result_search_returns_suggestions(tmp_path):
+    """No-result searches return structured suggestions when variants exist."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post("/api/search", json={"query": "ai", "model": "bm25"})
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["results"] == []
+    assert payload["data"]["suggestions"]
+    assert any(suggestion["type"] == "synonym" for suggestion in payload["data"]["suggestions"])

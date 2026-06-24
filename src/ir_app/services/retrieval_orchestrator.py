@@ -136,20 +136,15 @@ class RetrievalOrchestrator:
             Space: O(q)
         """
         raw_query = query or ""
-        normalized_query = self.search_service.index.normalize_text(raw_query)
-        query_terms = self.search_service.index.tokenize(raw_query)
+        analysis = self.search_service.index.text_quality.analysis(raw_query, filters)
         has_boolean_syntax = bool(
             re.search(r"\b(AND|OR|NOT)\b|:|\"|\(|\)", raw_query, re.IGNORECASE)
         )
         detected_type = "boolean" if has_boolean_syntax else "natural_language"
         return {
-            "raw_query": raw_query,
-            "normalized_query": normalized_query,
-            "query_terms": query_terms,
-            "term_count": len(query_terms),
+            **analysis,
             "detected_type": detected_type,
             "has_boolean_syntax": has_boolean_syntax,
-            "filters_applied": filters or {},
         }
 
     def search(

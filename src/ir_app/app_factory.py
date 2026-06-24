@@ -146,6 +146,7 @@ def register_api_routes(
             "response_time": meta["execution_time"],
             "query_analysis": meta.get("query_analysis", {}),
             "model_info": model_info,
+            "suggestions": meta.get("suggestions", []),
         }
         return api_success(
             data,
@@ -157,6 +158,7 @@ def register_api_routes(
             response_time=meta["execution_time"],
             query_analysis=data["query_analysis"],
             model_info=model_info,
+            suggestions=data["suggestions"],
         )
 
     @app.post("/api/search/faceted")

@@ -27,6 +27,11 @@ class SearchResult:
     category: str | None = None
     category_name: str | None = None
     source: str | None = None
+    source_label: str | None = None
+    content_type: str | None = None
+    taxonomy_topic: str | None = None
+    taxonomy_label: str | None = None
+    taxonomy_path: str | None = None
     author: str | None = None
     tags: list[str] = field(default_factory=list)
     rank: int = 0
@@ -53,6 +58,11 @@ class SearchResult:
             "category": self.category,
             "category_name": self.category_name,
             "source": self.source,
+            "source_label": self.source_label,
+            "content_type": self.content_type,
+            "taxonomy_topic": self.taxonomy_topic,
+            "taxonomy_label": self.taxonomy_label,
+            "taxonomy_path": self.taxonomy_path,
             "author": self.author,
             "tags": self.tags,
             "rank": self.rank,
@@ -65,6 +75,11 @@ class SearchResult:
                 "category": self.category,
                 "category_name": self.category_name,
                 "source": self.source,
+                "source_label": self.source_label,
+                "content_type": self.content_type,
+                "taxonomy_topic": self.taxonomy_topic,
+                "taxonomy_label": self.taxonomy_label,
+                "taxonomy_path": self.taxonomy_path,
                 "author": self.author,
                 "tags": self.tags,
             },

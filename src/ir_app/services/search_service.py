@@ -12,6 +12,7 @@ from typing import Any
 from src.ir_app.config import Settings
 from src.ir_app.schemas import SearchResult
 from src.ir_app.services.document_service import DocumentService
+from src.ir_app.services.facet_service import FacetService
 from src.ir_app.services.index_service import IndexService
 
 
@@ -44,6 +45,7 @@ class SearchService:
         self.documents_by_id = {
             str(doc["doc_id"]): doc for doc in self.document_service.documents
         }
+        self.facet_service = FacetService(self.document_service.documents)
 
     def stats(self) -> dict[str, Any]:
         """Return search/index stats.
@@ -61,6 +63,7 @@ class SearchService:
                 "tokenizer_engine": self.settings.tokenizer_engine,
                 "heavy_models_enabled": self.settings.enable_heavy_models,
                 "index": self.index.stats(),
+                "corpus_distribution": self.facet_service.corpus_distribution(),
             }
         )
         return stats
@@ -87,6 +90,7 @@ class SearchService:
         model = (model or "bm25").lower()
         top_k = max(1, min(int(top_k or 20), 100))
         query_terms = self.index.tokenize(query)
+        retrieval_top_k = len(self.documents_by_id) if filters else top_k
 
         expanded_terms: list[str] = []
         component_scores: dict[str, dict[str, float]] = {}
@@ -94,18 +98,18 @@ class SearchService:
         if model == "boolean":
             ranked = self._search_boolean(query, query_terms, operator)
         elif model in {"tfidf", "vsm"}:
-            ranked = self._search_tfidf(query, top_k)
+            ranked = self._search_tfidf(query, retrieval_top_k)
             model = "tfidf"
         elif model == "bm25":
-            ranked = self._search_bm25(query, top_k)
+            ranked = self._search_bm25(query, retrieval_top_k)
         elif model == "hybrid":
-            ranked, component_scores = self._search_hybrid(query, top_k)
+            ranked, component_scores = self._search_hybrid(query, retrieval_top_k)
         elif model == "fuzzy":
             expanded_terms = self._fuzzy_expansion(query_terms)
-            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), top_k)
+            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), retrieval_top_k)
         elif model == "csoundex":
             expanded_terms = self._csoundex_expansion(query_terms)
-            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), top_k)
+            ranked = self._search_bm25(" ".join(expanded_terms or query_terms), retrieval_top_k)
         elif model == "bert":
             raise FeatureUnavailableError(
                 "BERT semantic search is disabled or unavailable in lightweight startup mode."
@@ -288,20 +292,12 @@ class SearchService:
         if not filters:
             return ranked
 
-        normalized_filters = {
-            key: {str(value) for value in values if value is not None}
-            for key, values in filters.items()
-            if values
-        }
-        if not normalized_filters:
-            return ranked
-
-        filtered: list[tuple[str, float]] = []
-        for doc_key, score in ranked:
-            doc = self.documents_by_id.get(str(doc_key))
-            if doc and self._document_matches_filters(doc, normalized_filters):
-                filtered.append((doc_key, score))
-        return filtered
+        allowed_doc_ids = self.facet_service.matching_doc_ids(filters)
+        return [
+            (doc_key, score)
+            for doc_key, score in ranked
+            if str(doc_key) in allowed_doc_ids
+        ]
 
     def _document_matches_filters(self, doc: dict[str, Any], filters: dict[str, set[str]]) -> bool:
         """Check if a document matches all filters.
@@ -360,6 +356,11 @@ class SearchService:
             category=doc.get("category"),
             category_name=doc.get("category_name"),
             source=doc.get("source"),
+            source_label=doc.get("source_label"),
+            content_type=doc.get("content_type"),
+            taxonomy_topic=doc.get("taxonomy_topic"),
+            taxonomy_label=doc.get("taxonomy_label"),
+            taxonomy_path=doc.get("taxonomy_path"),
             author=doc.get("author"),
             tags=doc.get("tags") or [],
             rank=rank,
@@ -543,41 +544,57 @@ class SearchService:
             for term, score, freq in scored[:top_k]
         ]
 
-    def facets(self, doc_ids: list[str] | None = None) -> dict[str, Any]:
-        """Build facet counts for all documents or a result set.
+    def candidate_doc_ids(
+        self,
+        query: str,
+        model: str = "bm25",
+        operator: str = "AND",
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[str]:
+        """Return candidate document IDs for query-level facet counts.
 
         Complexity:
-            Time: O(n * f)
+            Time: O(q * p + r)
+            Space: O(r)
+        """
+        query = (query or "").strip()
+        if not query:
+            doc_ids = set(self.documents_by_id.keys())
+        else:
+            model = (model or "bm25").lower()
+            query_terms = self.index.tokenize(query)
+            if model == "boolean":
+                ranked = self._search_boolean(query, query_terms, operator)
+            elif model in {"tfidf", "vsm"}:
+                ranked = self._search_tfidf(query, len(self.documents_by_id))
+            elif model == "hybrid":
+                ranked, _ = self._search_hybrid(query, len(self.documents_by_id))
+            else:
+                ranked = self._search_bm25(query, len(self.documents_by_id))
+            doc_ids = {str(doc_id) for doc_id, _ in ranked}
+
+        if filters:
+            doc_ids = doc_ids.intersection(self.facet_service.matching_doc_ids(filters))
+        return list(doc_ids)
+
+    def facets(
+        self,
+        doc_ids: list[str] | set[str] | None = None,
+        selected_filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build indexed facet counts for all documents or a result set.
+
+        Complexity:
+            Time: O(f * v)
             Space: O(v)
         """
-        docs = self.document_service.documents
-        if doc_ids is not None:
-            allowed = {str(doc_id) for doc_id in doc_ids}
-            docs = [doc for doc in docs if str(doc.get("doc_id")) in allowed]
+        return self.facet_service.build_facets(doc_ids, selected_filters)
 
-        fields = {
-            "source": "來源 Source",
-            "category": "分類 Category",
-            "category_name": "分類名稱 Category Name",
-            "pub_date": "日期 Date",
-            "author": "作者 Author",
-        }
-        facets: dict[str, Any] = {}
-        for field, display_name in fields.items():
-            counts: Counter[str] = Counter()
-            for doc in docs:
-                if field == "pub_date":
-                    value = doc.get("published_date")
-                else:
-                    value = doc.get(field)
-                if value:
-                    counts[str(value)] += 1
-            if counts:
-                facets[field] = {
-                    "display_name": display_name,
-                    "values": [
-                        {"value": value, "label": value, "count": count}
-                        for value, count in counts.most_common(50)
-                    ],
-                }
-        return facets
+    def corpus_distribution(self) -> dict[str, Any]:
+        """Return corpus-level source/topic/content-type distributions.
+
+        Complexity:
+            Time: O(n)
+            Space: O(v)
+        """
+        return self.facet_service.corpus_distribution()

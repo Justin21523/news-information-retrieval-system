@@ -14,6 +14,7 @@ from src.ir_app.services.data_contract import (
     normalize_tags,
     validate_article,
 )
+from src.ir_app.services.taxonomy import normalize_taxonomy
 
 
 BLOCKED_TITLES = {"sorry, you have been blocked"}
@@ -115,7 +116,7 @@ class CorpusBuilder:
                 path = path.expanduser()
                 if not path.exists():
                     continue
-                self.stats.input_files.append(str(path))
+                self.stats.input_files.append(self._display_path(path))
                 input_written = 0
                 input_limit = max_docs_per_input
                 if input_limit is None and self._is_raw_input(path):
@@ -162,6 +163,8 @@ class CorpusBuilder:
         self.stats.scanned += 1
 
         source = str(raw.get("source") or raw.get("crawl_source") or self._infer_source(origin_path))
+        raw = {**raw, "source": source}
+        taxonomy = normalize_taxonomy(raw, origin_path)
         bucket = self.stats.source_bucket(source)
         bucket["scanned"] += 1
 
@@ -186,8 +189,9 @@ class CorpusBuilder:
         candidate = {
             "article_id": raw.get("article_id") or raw.get("post_id") or dedup_hash,
             "url": url,
-            "source": source,
-            "source_name": raw.get("source_name") or raw.get("forum_name") or source,
+            "source": taxonomy.source,
+            "source_name": taxonomy.source_name,
+            "source_label": taxonomy.source_label,
             "title": title,
             "content": content,
             "author": raw.get("author") or raw.get("school") or "",
@@ -203,6 +207,9 @@ class CorpusBuilder:
             "image_url": raw.get("image_url"),
             "crawled_at": raw.get("crawled_at"),
             "content_type": "forum_post" if source.lower() == "dcard" else "news_article",
+            "taxonomy_topic": taxonomy.taxonomy_topic,
+            "taxonomy_label": taxonomy.taxonomy_label,
+            "taxonomy_path": taxonomy.taxonomy_path,
             "origin_path": str(origin_path),
             "dedup_hash": dedup_hash,
         }
@@ -221,6 +228,21 @@ class CorpusBuilder:
         self._seen_hashes.add(dedup_hash)
 
         return candidate
+
+    def _display_path(self, path: Path) -> str:
+        """Return a portable path for build reports.
+
+        Complexity:
+            Time: O(p)
+            Space: O(p)
+        """
+        try:
+            return str(path.resolve().relative_to(self.project_root))
+        except ValueError:
+            try:
+                return str(path.resolve().relative_to(self.project_root.parent))
+            except ValueError:
+                return str(path)
 
     def _iter_records(self, path: Path) -> Iterable[dict[str, Any]]:
         """Yield dictionaries from JSONL, JSON, or supported SQLite files.

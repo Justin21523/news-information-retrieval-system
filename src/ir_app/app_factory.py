@@ -157,34 +157,48 @@ def register_api_routes(
     def facets_for_search():
         payload = request.get_json(silent=True) or {}
         query = (payload.get("query") or "").strip()
-        if not query:
-            facets = search_service.facets()
-            data = {"facets": facets, "total_documents": len(document_service.documents)}
-            return api_success(data, facets=facets, total_documents=len(document_service.documents))
-
+        filters = payload.get("filters") or None
+        started = time.perf_counter()
         try:
-            results, meta = search_service.search(
+            doc_ids = search_service.candidate_doc_ids(
                 query,
                 payload.get("model", "bm25"),
-                payload.get("top_k", 100),
                 payload.get("operator", "AND"),
+                filters,
             )
         except FeatureUnavailableError as exc:
             return api_error("FEATURE_UNAVAILABLE", str(exc), 503)
-        doc_ids = [str(result["doc_id"]) for result in results]
-        facets = search_service.facets(doc_ids)
+        facets = search_service.facets(doc_ids, filters)
+        meta = {"execution_time": time.perf_counter() - started}
         data = {
             "facets": facets,
             "total_documents": len(doc_ids),
+            "corpus_distribution": search_service.corpus_distribution(),
             "response_time": meta["execution_time"],
         }
-        return api_success(data, meta, facets=facets, total_documents=len(doc_ids))
+        return api_success(
+            data,
+            meta,
+            facets=facets,
+            total_documents=len(doc_ids),
+            corpus_distribution=data["corpus_distribution"],
+        )
 
     @app.get("/api/all_facets")
     def all_facets():
         facets = search_service.facets()
-        data = {"facets": facets, "total_documents": len(document_service.documents)}
-        return api_success(data, facets=facets, total_documents=len(document_service.documents))
+        distribution = search_service.corpus_distribution()
+        data = {
+            "facets": facets,
+            "total_documents": len(document_service.documents),
+            "corpus_distribution": distribution,
+        }
+        return api_success(
+            data,
+            facets=facets,
+            total_documents=len(document_service.documents),
+            corpus_distribution=distribution,
+        )
 
     @app.get("/api/document/<path:doc_id>")
     def document(doc_id: str):

@@ -22,7 +22,7 @@ class Settings:
     index_dir: Path
     tokenizer_engine: str = "jieba"
     enable_heavy_models: bool = False
-    max_documents: int | None = 5000
+    max_documents: int | None = 25000
     host: str = "0.0.0.0"
     port: int = 5001
     debug: bool = False
@@ -55,7 +55,7 @@ class Settings:
         if not enable_heavy and tokenizer in {"ckip", "auto"}:
             tokenizer = "jieba"
 
-        max_documents = cls._parse_optional_int(os.getenv("IR_MAX_DOCUMENTS"), default=5000)
+        max_documents = cls._parse_optional_int(os.getenv("IR_MAX_DOCUMENTS"), default=25000)
 
         return cls(
             project_root=root,

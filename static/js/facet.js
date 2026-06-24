@@ -31,6 +31,7 @@ const FacetState = {
     facets: {},
     activeFilters: {},
     searchResults: [],
+    corpusDistribution: {},
     isInitialized: false
 };
 
@@ -157,6 +158,8 @@ async function preloadAllFacets() {
         }
 
         FacetState.facets = data.facets;
+        FacetState.corpusDistribution = data.corpus_distribution || {};
+        renderCorpusDistribution(FacetState.corpusDistribution);
         renderFacets(data.facets, false); // false = not from search
 
         console.log(`Loaded facets for ${data.total_documents} documents`);
@@ -224,7 +227,8 @@ async function loadSearchFacets(query, model, topK) {
         body: JSON.stringify({
             query: query,
             model: model,
-            top_k: topK
+            top_k: topK,
+            filters: FacetState.activeFilters
         })
     });
 
@@ -239,7 +243,37 @@ async function loadSearchFacets(query, model, topK) {
     }
 
     FacetState.facets = data.facets;
+    FacetState.corpusDistribution = data.corpus_distribution || FacetState.corpusDistribution;
+    renderCorpusDistribution(FacetState.corpusDistribution);
     renderFacets(data.facets, true); // true = from search
+}
+
+
+/**
+ * Render corpus-level source/topic/content-type distribution.
+ */
+function renderCorpusDistribution(distribution) {
+    if (!DOM.facetGroups || !distribution || Object.keys(distribution).length === 0) return;
+
+    let panel = document.getElementById('corpus-distribution');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'corpus-distribution';
+        panel.className = 'corpus-distribution';
+        DOM.facetGroups.parentNode.insertBefore(panel, DOM.facetGroups);
+    }
+
+    const sourceItems = (distribution.source || []).slice(0, 8)
+        .map(item => '<span class="distribution-chip"><span>' + (item.label || item.value) + '</span><strong>' + item.count + '</strong></span>')
+        .join('');
+    const topicItems = (distribution.taxonomy_topic || []).slice(0, 8)
+        .map(item => '<span class="distribution-chip"><span>' + (item.label || item.value) + '</span><strong>' + item.count + '</strong></span>')
+        .join('');
+
+    panel.innerHTML =
+        '<div class="corpus-distribution-title">Corpus Coverage</div>' +
+        '<div class="distribution-section"><div class="distribution-label">Sources</div>' + sourceItems + '</div>' +
+        '<div class="distribution-section"><div class="distribution-label">Topics</div>' + topicItems + '</div>';
 }
 
 /**
@@ -432,7 +466,8 @@ function handleFacetChange(fieldName, value, checked) {
     // Re-run search with new filters (only if a search has been performed)
     if (FacetState.currentQuery) {
         const topK = parseInt(DOM.topkInput?.value) || 20;
-        performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK);
+        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
+            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
     }
 }
 
@@ -510,9 +545,11 @@ function updateActiveFiltersDisplay() {
         const displayName = facet?.display_name || fieldName;
 
         values.forEach(value => {
+            const facetValue = facet?.values?.find(item => item.value === value);
+            const label = facetValue?.label || value;
             html += `
                 <span class="filter-tag">
-                    ${displayName}: ${value}
+                    ${displayName}: ${label}
                     <span class="filter-tag-remove" onclick="FacetSearch.removeFilter('${fieldName}', '${value}')">&times;</span>
                 </span>
             `;
@@ -547,7 +584,8 @@ function removeFilter(fieldName, value) {
     // Re-run search if a search has been performed
     if (FacetState.currentQuery) {
         const topK = parseInt(DOM.topkInput?.value) || 20;
-        performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK);
+        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
+            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
     }
 }
 
@@ -568,7 +606,8 @@ function clearAllFilters() {
     // Re-run search if a search has been performed
     if (FacetState.currentQuery) {
         const topK = parseInt(DOM.topkInput?.value) || 20;
-        performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK);
+        loadSearchFacets(FacetState.currentQuery, FacetState.currentModel, topK)
+            .then(() => performFilteredSearch(FacetState.currentQuery, FacetState.currentModel, topK));
     }
 }
 
@@ -580,8 +619,14 @@ function getFieldIcon(fieldName) {
         'source': '📰',
         'category': '🏷️',
         'category_name': '📂',
+        'content_type': '🧾',
+        'taxonomy_topic': '🗂️',
+        'taxonomy_path': '🧭',
+        'published_year': '📅',
+        'published_month': '🗓️',
         'pub_date': '📅',
-        'author': '✍️'
+        'author': '✍️',
+        'tags': '#️⃣'
     };
     return icons[fieldName] || '🔹';
 }

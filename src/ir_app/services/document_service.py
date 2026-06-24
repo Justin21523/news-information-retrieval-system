@@ -14,6 +14,7 @@ from src.ir_app.services.data_contract import (
     normalize_tags,
     validate_article,
 )
+from src.ir_app.services.taxonomy import normalize_taxonomy
 
 
 class DocumentService:
@@ -171,6 +172,7 @@ class DocumentService:
             or raw.get("pub_date")
             or raw.get("date")
         )
+        taxonomy = normalize_taxonomy(raw)
 
         normalized = {
             "doc_id": doc_id,
@@ -181,12 +183,16 @@ class DocumentService:
             "published_date": published_date,
             "category": raw.get("category"),
             "category_name": raw.get("category_name") or raw.get("category"),
-            "source": raw.get("source"),
-            "source_name": raw.get("source_name"),
+            "source": raw.get("source") or taxonomy.source,
+            "source_name": raw.get("source_name") or taxonomy.source_name,
+            "source_label": raw.get("source_label") or taxonomy.source_label,
             "author": raw.get("author"),
             "tags": tags,
             "dedup_hash": dedup_hash or compute_dedup_hash(str(title), str(raw.get("url") or "")),
             "content_type": raw.get("content_type") or "news_article",
+            "taxonomy_topic": raw.get("taxonomy_topic") or taxonomy.taxonomy_topic,
+            "taxonomy_label": raw.get("taxonomy_label") or taxonomy.taxonomy_label,
+            "taxonomy_path": raw.get("taxonomy_path") or taxonomy.taxonomy_path,
             "origin_path": raw.get("origin_path"),
         }
         normalized["text"] = normalized["content"]
@@ -239,10 +245,14 @@ class DocumentService:
             "category_name": doc.get("category_name"),
             "source": doc.get("source"),
             "source_name": doc.get("source_name"),
+            "source_label": doc.get("source_label"),
             "author": doc.get("author"),
             "tags": doc.get("tags") or [],
             "dedup_hash": doc.get("dedup_hash"),
             "content_type": doc.get("content_type"),
+            "taxonomy_topic": doc.get("taxonomy_topic"),
+            "taxonomy_label": doc.get("taxonomy_label"),
+            "taxonomy_path": doc.get("taxonomy_path"),
             "origin_path": doc.get("origin_path"),
             "content": doc.get("content") or "",
         }

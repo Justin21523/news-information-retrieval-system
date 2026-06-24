@@ -237,8 +237,9 @@ function displayResults(data) {
         // Support both doc_id (regular search) and id (faceted search)
         const docId = result.doc_id || result.id;
         const publishedDate = result.pub_date || result.metadata?.published_date || result.metadata?.date || '';
-        const category = result.category_name || result.category || result.metadata?.category || '';
-        const source = result.source || result.metadata?.source || '';
+        const category = result.taxonomy_label || result.category_name || result.category || result.metadata?.taxonomy_label || result.metadata?.category || '';
+        const source = result.source_label || result.source || result.metadata?.source_label || result.metadata?.source || '';
+        const contentType = result.content_type || result.metadata?.content_type || '';
         const author = result.author || result.metadata?.author || '';
 
         // Build metadata chips
@@ -252,6 +253,9 @@ function displayResults(data) {
         }
         if (category) {
             metaChips += `<span class="meta-chip meta-category">🏷️ ${category}</span>`;
+        }
+        if (contentType) {
+            metaChips += `<span class="meta-chip">🧾 ${contentType}</span>`;
         }
         if (author) {
             metaChips += `<span class="meta-chip meta-author">✍️ ${author}</span>`;

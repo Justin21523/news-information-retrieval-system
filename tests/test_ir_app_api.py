@@ -143,3 +143,62 @@ def test_index_cache_reused_for_same_dataset(tmp_path):
     assert first_index.cache_used is False
     assert second_index.cache_used is True
     assert second_index.manifest["document_count"] > 0
+
+
+def test_all_facets_exposes_taxonomy_metadata(tmp_path):
+    """Facet API exposes taxonomy, content type, and corpus distribution."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/all_facets")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    facets = payload["data"]["facets"]
+    assert "taxonomy_topic" in facets
+    assert "content_type" in facets
+    assert facets["taxonomy_topic"]["field_type"] == "taxonomy"
+    assert payload["data"]["corpus_distribution"]["content_type"]
+
+
+def test_faceted_search_filters_metadata(tmp_path):
+    """Faceted search applies raw metadata filters with stable schema."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/search/faceted",
+        json={
+            "query": "retrieval",
+            "model": "bm25",
+            "filters": {"category": ["models"], "content_type": ["news_article"]},
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["results"]
+    assert all(result["category"] == "models" for result in payload["data"]["results"])
+    assert all(result["content_type"] == "news_article" for result in payload["data"]["results"])
+
+
+def test_facets_for_query_use_candidate_set_and_filters(tmp_path):
+    """Facet counts can be requested for a query and active filters."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.post(
+        "/api/facets",
+        json={
+            "query": "retrieval",
+            "model": "bm25",
+            "filters": {"category": ["models"]},
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["total_documents"] >= 1
+    assert "category" in payload["data"]["facets"]
+    category_values = payload["data"]["facets"]["category"]["values"]
+    assert any(value["value"] == "models" and value["selected"] for value in category_values)

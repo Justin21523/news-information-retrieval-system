@@ -26,7 +26,9 @@ pip install -r requirements.txt
 IR_ENABLE_HEAVY_MODELS=false python app.py
 ```
 
-Open `http://localhost:5001/guide` for the guided walkthrough, or use these direct demo links:
+Open `http://localhost:5001/guide` for the guided walkthrough. First-time visitors automatically see the **Demo Assistant 小幫手**, which walks through the portfolio demo step by step.
+
+Direct demo links:
 
 1. `/?q=半導體%20人工智慧&model=hybrid&run=1` - run Hybrid search with explainable snippets and facets.
 2. Open “Why this result?” and a document detail modal to inspect Summary, Keywords, KWIC, and Related News.
@@ -47,6 +49,10 @@ Artifacts:
 
 - [Search Results](docs/assets/evaluation/search-results.png)
 - [Demo Guide](docs/assets/evaluation/demo-guide.png)
+- [Demo Assistant Guide](docs/assets/evaluation/demo-assistant-guide.png)
+- [Demo Assistant Search](docs/assets/evaluation/demo-assistant-search.png)
+- [Demo Assistant Compare](docs/assets/evaluation/demo-assistant-compare.png)
+- [Demo Assistant Corpus](docs/assets/evaluation/demo-assistant-corpus.png)
 - [Document Detail](docs/assets/evaluation/document-detail.png)
 - [Model Comparison](docs/assets/evaluation/model-compare.png)
 - [Corpus Dashboard](docs/assets/evaluation/corpus-dashboard.png)

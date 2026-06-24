@@ -65,6 +65,8 @@ def test_guide_page_exposes_demo_walkthrough(tmp_path):
     assert response.status_code == 200
     assert "CNIRS Demo Guide" in html
     assert "Operation Flow" in html
+    assert "Start Guided Demo" in html
+    assert "demo-assistant.js" in html
     assert "run=1" in html
 
 
@@ -267,7 +269,25 @@ def test_all_facets_exposes_taxonomy_metadata(tmp_path):
     assert "taxonomy_topic" in facets
     assert "content_type" in facets
     assert facets["taxonomy_topic"]["field_type"] == "taxonomy"
+    assert "coverage" in facets["taxonomy_topic"]
+    assert "quality" in facets["taxonomy_topic"]
+    assert facets["taxonomy_topic"]["quality"]["coverage"] > 0
     assert payload["data"]["corpus_distribution"]["content_type"]
+
+
+def test_all_facets_hides_invalid_dates_and_noisy_values(tmp_path):
+    """Facet API keeps UI filters focused on usable metadata values."""
+    client = make_test_app(tmp_path).test_client()
+
+    response = client.get("/api/all_facets")
+    payload = response.get_json()
+    facets = payload["data"]["facets"]
+
+    assert response.status_code == 200
+    assert "0001" not in {item["value"] for item in facets.get("published_year", {}).get("values", [])}
+    assert "unknown" not in {item["value"] for item in facets.get("category", {}).get("values", [])}
+    for facet in facets.values():
+        assert "quality" in facet
 
 
 def test_corpus_dashboard_page_exists(tmp_path):

@@ -69,3 +69,46 @@ def test_facet_service_filters_with_and_or_semantics():
     assert facets["taxonomy_topic"]["field_type"] == "taxonomy"
     assert any(value["label"] == "科技 Tech" for value in facets["taxonomy_topic"]["values"])
     assert facets["taxonomy_topic"]["result_count"] == 2
+
+
+def test_facet_service_hides_noisy_metadata_values():
+    """Facet values hide unknown categories, invalid dates, and publisher authors."""
+    docs = [
+        {
+            "doc_id": 0,
+            "source": "LTN",
+            "source_name": "自由時報",
+            "source_label": "自由時報 LTN",
+            "author": "自由時報",
+            "category": "unknown",
+            "category_name": "",
+            "taxonomy_topic": "other",
+            "taxonomy_path": "news/other/unknown",
+            "content_type": "news_article",
+            "published_date": "0001-11-01",
+            "tags": [],
+        },
+        {
+            "doc_id": 1,
+            "source": "Yahoo",
+            "source_name": "Yahoo奇摩新聞",
+            "source_label": "Yahoo 新聞",
+            "author": "國際中心",
+            "category": "world",
+            "category_name": "國際",
+            "taxonomy_topic": "world",
+            "taxonomy_path": "news/world/world",
+            "content_type": "news_article",
+            "published_date": "2025-11-19",
+            "tags": ["台灣", "中國"],
+        },
+    ]
+    service = FacetService(docs)
+    facets = service.build_facets()
+
+    assert "0001" not in service.index["published_year"]
+    assert "unknown" not in service.index["category"]
+    assert "自由時報" not in service.index["author"]
+    assert "國際中心" in service.index["author"]
+    assert facets["published_year"]["values"][0]["value"] == "2025"
+    assert facets["author"]["quality"]["coverage"] == 0.5

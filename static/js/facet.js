@@ -35,6 +35,20 @@ const FacetState = {
     isInitialized: false
 };
 
+const FACET_FIELD_ORDER = [
+    'source',
+    'taxonomy_topic',
+    'taxonomy_path',
+    'published_year',
+    'published_month',
+    'tags',
+    'source_name',
+    'content_type',
+    'category',
+    'category_name',
+    'author'
+];
+
 // DOM Elements cache
 let DOM = {};
 
@@ -297,14 +311,20 @@ function renderFacets(facets, fromSearch = false) {
         return;
     }
 
-    // Render each facet group
-    for (const [fieldName, facet] of Object.entries(facets)) {
-        // Skip empty facets
+    const orderedFacets = Object.entries(facets).sort(([left], [right]) => (
+        facetOrder(left) - facetOrder(right) || left.localeCompare(right)
+    ));
+    for (const [fieldName, facet] of orderedFacets) {
         if (!facet.values || facet.values.length === 0) continue;
 
         const facetGroup = createFacetGroup(fieldName, facet);
         DOM.facetGroups.appendChild(facetGroup);
     }
+}
+
+function facetOrder(fieldName) {
+    const index = FACET_FIELD_ORDER.indexOf(fieldName);
+    return index === -1 ? 999 : index;
 }
 
 function applyPendingUrlFilters() {
@@ -327,18 +347,25 @@ function createFacetGroup(fieldName, facet) {
     const group = document.createElement('div');
     group.className = 'facet-group';
     group.dataset.field = fieldName;
+    if (facet.quality?.collapsed_by_default) {
+        group.classList.add('collapsed');
+    }
 
-    // Header with collapse toggle
     const header = document.createElement('div');
     header.className = 'facet-header';
     header.innerHTML = `
-        <span class="facet-title">${getFieldIcon(fieldName)} ${facet.display_name}</span>
-        <span class="facet-toggle">▼</span>
+        <span class="facet-title">${getFieldIcon(fieldName)} ${escapeHtml(facet.display_name)}</span>
+        <span class="facet-summary">${formatFacetCoverage(facet)}</span>
+        <span class="facet-toggle">${facet.quality?.collapsed_by_default ? '▶' : '▼'}</span>
     `;
     header.onclick = () => toggleFacetGroup(group);
     group.appendChild(header);
 
-    // Values container
+    const qualityNote = createFacetQualityNote(facet);
+    if (qualityNote) {
+        group.appendChild(qualityNote);
+    }
+
     const valuesContainer = document.createElement('div');
     valuesContainer.className = 'facet-values';
 
@@ -385,12 +412,35 @@ function createFacetLabel(fieldName, fv) {
 
     const text = document.createElement('span');
     text.className = 'facet-text';
-    text.innerHTML = `<span class="facet-value-name">${fv.label || fv.value}</span><span class="facet-count">${fv.count}</span>`;
+    text.innerHTML = `<span class="facet-value-name">${escapeHtml(fv.label || fv.value)}</span><span class="facet-count">${formatNumber(fv.count)}</span>`;
 
     label.appendChild(checkbox);
     label.appendChild(text);
 
     return label;
+}
+
+function createFacetQualityNote(facet) {
+    if (!facet.quality) return null;
+    const note = document.createElement('div');
+    note.className = 'facet-quality-note';
+    const coverage = Number(facet.coverage || facet.quality.coverage || 0);
+    const hidden = Number(facet.quality.missing_or_hidden_documents || 0);
+    const parts = [`${Math.round(coverage * 100)}% usable`];
+    if (hidden > 0) {
+        parts.push(`${formatNumber(hidden)} hidden/missing`);
+    }
+    if (facet.quality.is_low_information) {
+        parts.push('low variety');
+    }
+    note.textContent = parts.join(' · ');
+    return note;
+}
+
+function formatFacetCoverage(facet) {
+    const coverage = Number(facet.coverage || facet.quality?.coverage || 0);
+    if (!Number.isFinite(coverage) || coverage <= 0) return '';
+    return `${Math.round(coverage * 100)}%`;
 }
 
 /**
@@ -644,6 +694,16 @@ function getFieldIcon(fieldName) {
         'tags': '#️⃣'
     };
     return icons[fieldName] || '🔹';
+}
+
+function formatNumber(value) {
+    return Number(value || 0).toLocaleString();
+}
+
+function escapeHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = String(value ?? '');
+    return div.innerHTML;
 }
 
 /**

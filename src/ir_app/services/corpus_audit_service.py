@@ -69,6 +69,7 @@ class CorpusAuditService:
                 "validation": self.document_service.validation_stats.to_dict(),
             },
             "metadata_completeness": self._completeness(missing, total),
+            "facet_quality": self._facet_quality(),
             "distributions": {
                 "source": self._distribution(documents, "source"),
                 "source_label": self._distribution(documents, "source_label"),
@@ -169,6 +170,40 @@ class CorpusAuditService:
             }
             for value, count in counts.most_common(limit)
         ]
+
+    def _facet_quality(self) -> dict[str, Any]:
+        """Return facet-ready metadata quality from the search facet index.
+
+        Complexity:
+            Time: O(f)
+            Space: O(f)
+        """
+        facet_service = getattr(self.search_service, "facet_service", None)
+        quality = getattr(facet_service, "quality", {}) or {}
+        fields = []
+        for field, values in quality.items():
+            fields.append(
+                {
+                    "field": field,
+                    "coverage": values.get("coverage", 0.0),
+                    "usable_documents": values.get("usable_documents", 0),
+                    "missing_or_hidden_documents": values.get(
+                        "missing_or_hidden_documents", 0
+                    ),
+                    "average_values_per_document": values.get(
+                        "average_values_per_document", 0.0
+                    ),
+                    "status": self._coverage_status(values.get("coverage", 0.0)),
+                }
+            )
+        fields.sort(key=lambda item: (-item["coverage"], item["field"]))
+        return {
+            "fields": fields,
+            "notes": [
+                "Raw unknown categories and invalid dates are hidden from search facets.",
+                "Author facets exclude publisher names when author metadata is not reliable.",
+            ],
+        }
 
     def _year_distribution(self, documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Count documents by published year.

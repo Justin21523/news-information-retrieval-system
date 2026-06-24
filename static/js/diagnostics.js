@@ -8,6 +8,32 @@ const diagResults = document.getElementById('diagnostics-results');
 
 diagButton?.addEventListener('click', runDiagnostics);
 
+window.addEventListener('DOMContentLoaded', initializeDiagnosticsFromUrl);
+
+function initializeDiagnosticsFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get('q') || params.get('query');
+    const docId = params.get('doc_id') || params.get('doc');
+    const models = params.get('models');
+    const shouldRun = params.get('run') === '1' || params.get('run') === 'true';
+
+    if (query) {
+        diagQuery.value = query;
+    }
+    if (docId) {
+        diagDocId.value = docId;
+    }
+    if (models) {
+        const selected = new Set(models.split(',').map(item => item.trim()).filter(Boolean));
+        document.querySelectorAll('.diag-model').forEach(checkbox => {
+            checkbox.checked = selected.has(checkbox.value);
+        });
+    }
+    if (shouldRun) {
+        window.setTimeout(runDiagnostics, 300);
+    }
+}
+
 async function runDiagnostics() {
     const query = diagQuery.value.trim();
     const docId = diagDocId.value.trim();

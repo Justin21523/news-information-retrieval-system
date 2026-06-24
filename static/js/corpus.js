@@ -8,7 +8,26 @@ window.addEventListener('DOMContentLoaded', loadCorpusAudit);
 window.addEventListener('DOMContentLoaded', () => {
     const button = document.getElementById('run-topic-explorer');
     if (button) button.addEventListener('click', runTopicExplorer);
+    initializeCorpusFromUrl();
 });
+
+function initializeCorpusFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const topicQuery = params.get('topic_query') || params.get('q');
+    const runTopic = params.get('run_topic') === '1' || params.get('run_topic') === 'true';
+    if (topicQuery) {
+        document.getElementById('topic-query').value = topicQuery;
+    }
+    if (params.get('topic_clusters')) {
+        document.getElementById('topic-clusters').value = params.get('topic_clusters');
+    }
+    if (params.get('topic_sample_size')) {
+        document.getElementById('topic-sample-size').value = params.get('topic_sample_size');
+    }
+    if (runTopic) {
+        window.setTimeout(runTopicExplorer, 900);
+    }
+}
 
 async function loadCorpusAudit() {
     try {
@@ -35,6 +54,7 @@ function renderCorpusAudit(data, meta) {
     renderBarList('year-distribution', data.distributions.published_year);
     renderIndexCache(data.index);
     renderCompleteness(data.metadata_completeness.fields);
+    renderFacetQuality(data.facet_quality);
     renderFlow(data.flow);
     renderExternalSources(data.external_sources);
 }
@@ -125,6 +145,34 @@ function renderCompleteness(fields) {
             <small>${formatNumber(field.present)} present / ${formatNumber(field.missing)} missing</small>
         </div>
     `).join('');
+}
+
+function renderFacetQuality(quality) {
+    const fields = (quality?.fields || []).filter(field => [
+        'source',
+        'taxonomy_topic',
+        'taxonomy_path',
+        'published_year',
+        'published_month',
+        'tags',
+        'source_name',
+        'author'
+    ].includes(field.field));
+    document.getElementById('facet-quality').innerHTML = fields.map(field => `
+        <div class="completeness-item ${field.status}">
+            <div class="completeness-top">
+                <strong>${escapeHtml(field.field)}</strong>
+                <span>${(field.coverage * 100).toFixed(1)}%</span>
+            </div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:${field.coverage * 100}%"></div>
+            </div>
+            <small>${formatNumber(field.usable_documents)} usable / ${formatNumber(field.missing_or_hidden_documents)} hidden or missing</small>
+        </div>
+    `).join('');
+    document.getElementById('facet-quality-notes').innerHTML = (quality?.notes || [])
+        .map(note => `<span>${escapeHtml(note)}</span>`)
+        .join('');
 }
 
 function renderFlow(steps) {

@@ -8,8 +8,8 @@
 /* Corpus Distribution */
 .corpus-distribution {
     margin-bottom: 16px;
-    padding: 12px;
-    background: #fff;
+    padding: 14px;
+    background: #ffffff;
     border: 1px solid #dbe4f0;
     border-radius: 8px;
 }
@@ -62,7 +62,7 @@
 .facet-group {
     margin-bottom: 16px;
     padding: 12px;
-    background: #f8fafc;
+    background: #ffffff;
     border-radius: 8px;
     border: 1px solid #e2e8f0;
     transition: all 0.2s ease;
@@ -100,6 +100,18 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+}
+
+.facet-summary {
+    margin-left: auto;
+    margin-right: 8px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 10px;
+    font-weight: 700;
 }
 
 .facet-toggle {
@@ -112,6 +124,17 @@
     margin-bottom: 10px;
     padding-bottom: 8px;
     border-bottom: 1px solid #e2e8f0;
+}
+
+.facet-quality-note {
+    margin-bottom: 8px;
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.facet-group.collapsed .facet-quality-note {
+    display: none;
 }
 
 .facet-values {
@@ -154,7 +177,7 @@
 }
 
 .facet-label:hover {
-    background-color: #e2e8f0;
+    background-color: #f1f5f9;
 }
 
 .facet-label input[type="checkbox"] {
@@ -445,51 +468,6 @@
 .filter-toggle-btn:focus {
     outline: 2px solid #0d6efd;
     outline-offset: 2px;
-}
-
-/* Dark Mode Support (Optional) */
-@media (prefers-color-scheme: dark) {
-    .facet-group {
-        background: #2b3035;
-        border-color: #495057;
-    }
-
-    .facet-header {
-        color: #e9ecef;
-        border-bottom-color: #495057;
-    }
-
-    .facet-label:hover {
-        background-color: #343a40;
-    }
-
-    .facet-text {
-        color: #dee2e6;
-    }
-
-    .filter-panel {
-        background: #212529;
-        border-color: #495057;
-    }
-
-    .filter-panel h3 {
-        color: #f8f9fa;
-    }
-
-    .results-info {
-        background: #1e4620;
-        border-color: #2d5930;
-        color: #a3cfbb;
-    }
-
-    .active-filters {
-        background: #1e3a5f;
-        border-color: #375a7f;
-    }
-
-    .active-filters-header {
-        color: #9ec5fe;
-    }
 }
 
 /* Animation for facet appearance */

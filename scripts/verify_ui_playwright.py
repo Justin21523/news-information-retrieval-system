@@ -82,7 +82,15 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
 
         page.goto(f"{base_url}/guide", wait_until="networkidle")
         page.wait_for_selector(".guide-page", timeout=45000)
+        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
         page.screenshot(path=asset_dir / "demo-guide.png", full_page=True)
+        page.screenshot(path=asset_dir / "demo-assistant-guide.png", full_page=True)
+
+        page.goto(f"{base_url}/?q=半導體%20人工智慧&model=hybrid&run=1&tour=1&step=search", wait_until="networkidle")
+        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector(".search-box.demo-assistant-highlight", timeout=45000)
+        page.wait_for_selector(".result-item, .results-list", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-assistant-search.png", full_page=True)
 
         page.goto(f"{base_url}/", wait_until="networkidle")
         fill_search(page, "半導體")
@@ -96,11 +104,21 @@ def run_verification(base_url: str, asset_dir: Path) -> None:
         fill_compare(page, "人工智慧")
         page.screenshot(path=asset_dir / "model-compare.png", full_page=True)
 
+        page.goto(f"{base_url}/compare?q=美國%20中國&models=bm25,tfidf,hybrid,lm,bim,wand_bm25,maxscore_bm25&run=1&tour=1&step=compare", wait_until="networkidle")
+        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector("#comparison-container .model-results", timeout=45000)
+        page.screenshot(path=asset_dir / "demo-assistant-compare.png", full_page=True)
+
         page.goto(f"{base_url}/corpus", wait_until="networkidle")
         page.wait_for_selector("#corpus-content", state="visible", timeout=45000)
         page.screenshot(path=asset_dir / "corpus-dashboard.png", full_page=True)
         run_topic_explorer(page)
         page.screenshot(path=asset_dir / "topic-explorer.png", full_page=True)
+
+        page.goto(f"{base_url}/corpus?tour=1&step=topics&topic_query=半導體%20人工智慧&run_topic=1", wait_until="networkidle")
+        page.wait_for_selector("#demo-assistant-panel", timeout=45000)
+        page.wait_for_selector(".topic-card", timeout=60000)
+        page.screenshot(path=asset_dir / "demo-assistant-corpus.png", full_page=True)
 
         page.goto(f"{base_url}/evaluation", wait_until="networkidle")
         run_evaluation(page)

@@ -157,6 +157,8 @@ class SearchService:
         if not query_terms:
             return []
         boolean_query = query
+        if re.search(r':|"|/|\bBEFORE\b|\bAFTER\b|\bBETWEEN\b', query, re.IGNORECASE):
+            self.index.ensure_boolean_structural_indexes()
         if not re.search(r"\b(AND|OR|NOT)\b|:|\"|\(|\)", query, re.IGNORECASE):
             joiner = f" {(operator or 'AND').upper()} "
             boolean_query = joiner.join(query_terms)
@@ -166,14 +168,29 @@ class SearchService:
         return [(str(doc_id), 1.0) for doc_id in result.doc_ids]
 
     def _search_tfidf(self, query: str, top_k: int) -> list[tuple[str, float]]:
-        """Search with the formal Vector Space Model.
+        """Search with cached TF-IDF cosine vectors.
 
         Complexity:
-            Time: O(q + c log k)
+            Time: O(q * p + c log c)
             Space: O(r)
         """
-        result = self.index.vsm.search(query, topk=top_k)
-        return [(str(doc_id), float(result.scores.get(doc_id, 0.0))) for doc_id in result.doc_ids]
+        query_terms = self.index.tokenize(query)
+        query_vector = self._query_vector(query_terms)
+        if not query_vector:
+            return []
+
+        candidates: set[str] = set()
+        for term in query_vector:
+            candidates.update(self.index.inverted_index.get(term, {}).keys())
+
+        scored: list[tuple[str, float]] = []
+        for doc_key in candidates:
+            doc_vector = self.index.tfidf_vectors.get(doc_key, {})
+            score = sum(weight * doc_vector.get(term, 0.0) for term, weight in query_vector.items())
+            if score > 0:
+                scored.append((doc_key, score))
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return scored[:top_k]
 
     def _search_bm25(self, query: str, top_k: int) -> list[tuple[str, float]]:
         """Search with the formal BM25 ranker.
@@ -186,19 +203,49 @@ class SearchService:
         return [(str(doc_id), float(score)) for doc_id, score in zip(result.doc_ids, result.scores)]
 
     def _search_hybrid(self, query: str, top_k: int) -> tuple[list[tuple[str, float]], dict[str, dict[str, float]]]:
-        """Search with formal reciprocal-rank fusion over BM25 and TF-IDF.
+        """Search with reciprocal-rank fusion over BM25 and cached TF-IDF.
 
         Complexity:
-            Time: O(r * n)
+            Time: O(q * p + r)
             Space: O(r * n)
         """
-        result = self.index.hybrid.search(query, topk=top_k, ranker_topk=max(50, top_k * 5))
-        ranked = [(str(doc_id), float(score)) for doc_id, score in zip(result.doc_ids, result.scores)]
+        ranker_topk = max(50, top_k * 5)
+        bm25_ranked = self._search_bm25(query, ranker_topk)
+        tfidf_ranked = self._search_tfidf(query, ranker_topk)
+        bm25_scores = dict(bm25_ranked)
+        tfidf_scores = dict(tfidf_ranked)
+        fused: dict[str, float] = {}
+
+        for weight, ranked_list in ((0.65, bm25_ranked), (0.35, tfidf_ranked)):
+            for rank, (doc_key, _) in enumerate(ranked_list, 1):
+                fused[doc_key] = fused.get(doc_key, 0.0) + weight * (1.0 / (60 + rank))
+
+        ranked = sorted(fused.items(), key=lambda item: item[1], reverse=True)[:top_k]
         component_scores: dict[str, dict[str, float]] = {}
-        for ranker_name, scores in result.component_scores.items():
-            for doc_id, score in zip(result.doc_ids, scores):
-                component_scores.setdefault(str(doc_id), {})[ranker_name] = float(score)
+        for doc_key, _ in ranked:
+            component_scores[doc_key] = {
+                "bm25": float(bm25_scores.get(doc_key, 0.0)),
+                "tfidf": float(tfidf_scores.get(doc_key, 0.0)),
+            }
         return ranked, component_scores
+
+    def _query_vector(self, query_terms: list[str]) -> dict[str, float]:
+        """Build a normalized TF-IDF query vector.
+
+        Complexity:
+            Time: O(q)
+            Space: O(q)
+        """
+        freqs = Counter(query_terms)
+        vector = {
+            term: (1.0 + math.log10(freq)) * self.index.idf.get(term, 0.0)
+            for term, freq in freqs.items()
+            if freq > 0
+        }
+        norm = math.sqrt(sum(weight * weight for weight in vector.values()))
+        if norm <= 0:
+            return {}
+        return {term: weight / norm for term, weight in vector.items()}
 
     def _fuzzy_expansion(self, query_terms: list[str]) -> list[str]:
         """Expand query terms with edit-distance fuzzy matches.
@@ -347,7 +394,7 @@ class SearchService:
 
         ranked = self._search_bm25(query, top_k)
         relevant_vectors = [
-            self.index.vsm.get_document_vector(int(doc_id))
+            self.index.tfidf_vectors.get(str(doc_id), {})
             for doc_id, _ in ranked
         ]
         doc_scores = [score for _, score in ranked]

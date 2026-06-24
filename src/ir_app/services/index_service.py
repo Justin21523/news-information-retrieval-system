@@ -14,12 +14,10 @@ from typing import Any
 from src.ir.index.field_indexer import FieldIndexer
 from src.ir.index.inverted_index import InvertedIndex
 from src.ir.index.positional_index import PositionalIndex
-from src.ir.ranking.hybrid import HybridRanker
 from src.ir.ranking.rocchio import RocchioExpander
 from src.ir.retrieval.bm25 import BM25Ranker
 from src.ir.retrieval.boolean import BooleanQueryEngine
 from src.ir.retrieval.fuzzy import FuzzyMatcher
-from src.ir.retrieval.vsm import VectorSpaceModel
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.text.csoundex import CSoundex
 
@@ -264,9 +262,6 @@ class IndexService:
             Time: O(V + P + T_field)
             Space: O(V + P)
         """
-        metadata = self.documents
-        weighted_docs = self.document_texts()
-
         self.formal_inverted_index = InvertedIndex(tokenizer=self.tokenize)
         self.formal_inverted_index.index = {
             term: sorted((int(doc_id), tf) for doc_id, tf in postings.items())
@@ -280,11 +275,9 @@ class IndexService:
             int(doc["doc_id"]): doc for doc in self.documents
         }
 
-        self.positional_index = PositionalIndex(tokenizer=self.tokenize)
-        self.positional_index.build(weighted_docs, metadata)
-
-        self.field_indexer = FieldIndexer(tokenizer=self.tokenize)
-        self.field_indexer.build(metadata)
+        self.positional_index: PositionalIndex | None = None
+        self.field_indexer: FieldIndexer | None = None
+        self._boolean_structural_ready = False
 
         self.boolean_engine = BooleanQueryEngine(
             inverted_index=self.formal_inverted_index,
@@ -302,19 +295,31 @@ class IndexService:
         self.bm25.avg_doc_length = self.avg_doc_length
         self.bm25._compute_idf()
 
-        self.vsm = VectorSpaceModel(inverted_index=self.formal_inverted_index)
-        self.vsm.term_weighting.build_from_index(self.formal_inverted_index)
-        self.vsm._compute_document_vectors()
-
-        self.hybrid = HybridRanker(
-            {"bm25": self.bm25, "tfidf": self.vsm},
-            fusion_method="rrf",
-            weights={"bm25": 0.65, "tfidf": 0.35},
-            normalization="minmax",
-        )
         self.rocchio = RocchioExpander(max_expansion_terms=8, min_term_weight=0.01)
         self.fuzzy = FuzzyMatcher(max_distance=1, max_expansions=20)
         self.csoundex = CSoundex()
+
+    def ensure_boolean_structural_indexes(self) -> None:
+        """Build positional and field indexes for advanced Boolean syntax.
+
+        Complexity:
+            Time: O(T)
+            Space: O(T)
+        """
+        if self._boolean_structural_ready:
+            return
+
+        metadata = self.documents
+        weighted_docs = self.document_texts()
+        self.positional_index = PositionalIndex(tokenizer=self.tokenize)
+        self.positional_index.build(weighted_docs, metadata)
+
+        self.field_indexer = FieldIndexer(tokenizer=self.tokenize)
+        self.field_indexer.build(metadata)
+
+        self.boolean_engine.positional_index = self.positional_index
+        self.boolean_engine.field_indexer = self.field_indexer
+        self._boolean_structural_ready = True
 
     def vocabulary_size(self) -> int:
         """Return vocabulary size.

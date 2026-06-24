@@ -30,6 +30,7 @@ class DocumentService:
         self.dataset_hash = ""
         self.dataset_mtime: float | None = None
         self.dataset_size: int | None = None
+        self.dataset_limit = settings.max_documents
         self.validation_stats = DatasetValidationStats()
         self.documents = self._load_documents()
         self._by_doc_id = {str(doc["doc_id"]): doc for doc in self.documents}
@@ -71,6 +72,8 @@ class DocumentService:
                 if not line.strip():
                     continue
                 raw_docs.append(json.loads(line))
+                if self.dataset_limit is not None and len(raw_docs) >= self.dataset_limit:
+                    break
         return self._normalize_records(raw_docs)
 
     def _load_json(self, path: Path) -> list[dict[str, Any]]:
@@ -83,6 +86,8 @@ class DocumentService:
         self._record_dataset_file(path)
         with path.open("r", encoding="utf-8") as handle:
             raw_docs = json.load(handle)
+        if self.dataset_limit is not None:
+            raw_docs = raw_docs[: self.dataset_limit]
         return self._normalize_records(raw_docs)
 
     def _record_dataset_file(self, path: Path) -> None:
@@ -150,8 +155,14 @@ class DocumentService:
         """
         doc_id = fallback_id
         article_id = raw.get("article_id") or dedup_hash or str(fallback_id)
-        content = raw.get("content") or raw.get("text") or raw.get("body") or ""
-        title = raw.get("title") or f"Document {doc_id}"
+        content = (
+            raw.get("content")
+            or raw.get("content_clean")
+            or raw.get("text")
+            or raw.get("body")
+            or ""
+        )
+        title = raw.get("title") or raw.get("title_clean") or f"Document {doc_id}"
         tags = normalize_tags(raw.get("tags"))
 
         published_date = (
@@ -175,6 +186,8 @@ class DocumentService:
             "author": raw.get("author"),
             "tags": tags,
             "dedup_hash": dedup_hash or compute_dedup_hash(str(title), str(raw.get("url") or "")),
+            "content_type": raw.get("content_type") or "news_article",
+            "origin_path": raw.get("origin_path"),
         }
         normalized["text"] = normalized["content"]
         return normalized
@@ -206,6 +219,7 @@ class DocumentService:
             "dataset_hash": self.dataset_hash,
             "dataset_mtime": self.dataset_mtime,
             "dataset_size": self.dataset_size,
+            "dataset_limit": self.dataset_limit,
             "validation": self.validation_stats.to_dict(),
         }
 
@@ -228,6 +242,8 @@ class DocumentService:
             "author": doc.get("author"),
             "tags": doc.get("tags") or [],
             "dedup_hash": doc.get("dedup_hash"),
+            "content_type": doc.get("content_type"),
+            "origin_path": doc.get("origin_path"),
             "content": doc.get("content") or "",
         }
         return {

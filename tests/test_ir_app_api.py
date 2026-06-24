@@ -19,6 +19,7 @@ def make_test_app(tmp_path):
         index_dir=tmp_path / "indexes",
         tokenizer_engine="jieba",
         enable_heavy_models=False,
+        max_documents=None,
         host="127.0.0.1",
         port=5001,
         debug=False,
@@ -42,6 +43,7 @@ def test_app_stats_uses_structured_schema(tmp_path):
     assert payload["stats"]["total_documents"] == payload["data"]["stats"]["total_documents"]
     assert "validation" in payload["data"]["stats"]
     assert "index" in payload["data"]["stats"]
+    assert "dataset_limit" in payload["data"]["stats"]
 
 
 def test_search_requires_query(tmp_path):

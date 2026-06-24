@@ -111,7 +111,15 @@
             return;
         }
 
-        currentStepId = params.get('step') || localStorage.getItem(STEP_KEY) || 'overview';
+        currentStepId = params.get('step') || (requestedTour ? 'overview' : localStorage.getItem(STEP_KEY)) || 'overview';
+        const step = currentStep();
+        if (requestedTour && currentPath() !== step.path) {
+            localStorage.setItem(ACTIVE_KEY, '1');
+            localStorage.setItem(SEEN_KEY, '1');
+            localStorage.setItem(STEP_KEY, step.id);
+            window.location.href = withBase(step.url);
+            return;
+        }
         if (requestedTour || localStorage.getItem(ACTIVE_KEY) === '1' || firstVisit) {
             localStorage.setItem(ACTIVE_KEY, '1');
             localStorage.setItem(SEEN_KEY, '1');

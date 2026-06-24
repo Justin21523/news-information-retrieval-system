@@ -18,6 +18,7 @@ from src.ir.ranking.rocchio import RocchioExpander
 from src.ir.retrieval.bm25 import BM25Ranker
 from src.ir.retrieval.boolean import BooleanQueryEngine
 from src.ir.retrieval.fuzzy import FuzzyMatcher
+from src.ir.retrieval.language_model_retrieval import LanguageModelRetrieval
 from src.ir.text.chinese_tokenizer import ChineseTokenizer
 from src.ir.text.csoundex import CSoundex
 
@@ -295,9 +296,46 @@ class IndexService:
         self.bm25.avg_doc_length = self.avg_doc_length
         self.bm25._compute_idf()
 
+        self.language_model = LanguageModelRetrieval(
+            tokenizer=self.tokenize,
+            smoothing="dirichlet",
+            mu_param=2000.0,
+        )
+        self._hydrate_language_model()
+
         self.rocchio = RocchioExpander(max_expansion_terms=8, min_term_weight=0.01)
         self.fuzzy = FuzzyMatcher(max_distance=1, max_expansions=20)
         self.csoundex = CSoundex()
+
+    def _hydrate_language_model(self) -> None:
+        """Initialize LM retrieval from cached term-frequency statistics.
+
+        Complexity:
+            Time: O(T)
+            Space: O(V + D)
+        """
+        collection_counts: Counter[str] = Counter()
+        self.language_model.doc_count = len(self.documents)
+        self.language_model.doc_models = {}
+        self.language_model.doc_lengths = {}
+        self.language_model.vocab = set()
+
+        for doc_key, freqs in self.doc_term_freqs.items():
+            doc_id = int(doc_key)
+            self.language_model.doc_models[doc_id] = dict(freqs)
+            self.language_model.doc_lengths[doc_id] = self.doc_lengths.get(doc_key, 0)
+            collection_counts.update(freqs)
+            self.language_model.vocab.update(freqs.keys())
+
+        self.language_model.collection_size = sum(collection_counts.values())
+        if self.language_model.collection_size <= 0:
+            self.language_model.collection_model = {}
+            return
+
+        self.language_model.collection_model = {
+            term: count / self.language_model.collection_size
+            for term, count in collection_counts.items()
+        }
 
     def ensure_boolean_structural_indexes(self) -> None:
         """Build positional and field indexes for advanced Boolean syntax.

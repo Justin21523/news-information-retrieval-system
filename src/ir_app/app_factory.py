@@ -15,7 +15,12 @@ except ImportError:  # pragma: no cover
 
 from src.ir_app.config import Settings
 from src.ir_app.schemas import api_error, api_success
-from src.ir_app.services import DocumentService, FeatureUnavailableError, SearchService
+from src.ir_app.services import (
+    DocumentService,
+    FeatureUnavailableError,
+    RetrievalOrchestrator,
+    SearchService,
+)
 
 
 def create_app(settings: Settings | None = None) -> Flask:
@@ -38,11 +43,13 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     document_service = DocumentService(settings)
     search_service = SearchService(settings, document_service)
+    retrieval_orchestrator = RetrievalOrchestrator(search_service)
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
+    app.config["RETRIEVAL_ORCHESTRATOR"] = retrieval_orchestrator
 
     register_page_routes(app, settings)
-    register_api_routes(app, document_service, search_service)
+    register_api_routes(app, document_service, search_service, retrieval_orchestrator)
     return app
 
 
@@ -89,6 +96,7 @@ def register_api_routes(
     app: Flask,
     document_service: DocumentService,
     search_service: SearchService,
+    retrieval_orchestrator: RetrievalOrchestrator,
 ) -> None:
     """Register API routes.
 
@@ -123,18 +131,21 @@ def register_api_routes(
         filters = payload.get("filters") or None
 
         try:
-            results, meta = search_service.search(query, model, top_k, operator, filters)
+            results, meta = retrieval_orchestrator.search(query, model, top_k, operator, filters)
         except FeatureUnavailableError as exc:
             return api_error("FEATURE_UNAVAILABLE", str(exc), 503)
         except ValueError as exc:
             return api_error("INVALID_MODEL", str(exc), 400)
 
+        model_info = meta.get("model_info", {})
         data = {
             "query": query,
-            "model": "tfidf" if str(model).lower() == "vsm" else str(model).lower(),
+            "model": model_info.get("id", "tfidf" if str(model).lower() == "vsm" else str(model).lower()),
             "results": results,
             "total_results": len(results),
             "response_time": meta["execution_time"],
+            "query_analysis": meta.get("query_analysis", {}),
+            "model_info": model_info,
         }
         return api_success(
             data,
@@ -144,6 +155,8 @@ def register_api_routes(
             results=results,
             total_results=len(results),
             response_time=meta["execution_time"],
+            query_analysis=data["query_analysis"],
+            model_info=model_info,
         )
 
     @app.post("/api/search/faceted")
@@ -264,24 +277,36 @@ def register_api_routes(
         data = search_service.expand_query(query, payload.get("top_k", 5))
         return api_success(data, **data)
 
-    @app.post("/api/compare")
-    def compare_models():
+    def _compare_payload_response():
         payload = request.get_json(silent=True) or {}
         query = (payload.get("query") or "").strip()
         if not query:
             return api_error("QUERY_REQUIRED", "Query is required", 400)
-        models = payload.get("models") or ["bm25", "tfidf", "hybrid"]
-        comparisons = {}
-        timings = {}
-        for model in models:
-            try:
-                results, meta = search_service.search(query, model, payload.get("top_k", 10))
-            except (FeatureUnavailableError, ValueError):
-                results, meta = [], {"execution_time": 0.0}
-            comparisons[model] = results
-            timings[model] = meta["execution_time"]
-        data = {"query": query, "comparisons": comparisons, "timings": timings}
-        return api_success(data, query=query, comparisons=comparisons, timings=timings)
+        data, meta = retrieval_orchestrator.compare(
+            query=query,
+            models=payload.get("models") or ["bm25", "tfidf", "hybrid", "lm"],
+            top_k=payload.get("top_k", 10),
+            operator=payload.get("operator", "AND"),
+            filters=payload.get("filters") or None,
+        )
+        return api_success(
+            data,
+            meta,
+            query=data["query"],
+            models=data["models"],
+            comparisons=data["comparisons"],
+            timings=data["timings"],
+            comparison=data["comparison"],
+            query_analysis=data["query_analysis"],
+        )
+
+    @app.post("/api/search/compare")
+    def compare_search_models():
+        return _compare_payload_response()
+
+    @app.post("/api/compare")
+    def compare_models():
+        return _compare_payload_response()
 
     @app.post("/api/evaluate")
     def evaluate():
@@ -295,15 +320,7 @@ def register_api_routes(
     @app.get("/api/algorithms")
     def algorithms():
         data = {
-            "models": [
-                {"id": "bm25", "name": "BM25", "available": True},
-                {"id": "tfidf", "name": "TF-IDF", "available": True},
-                {"id": "boolean", "name": "Boolean", "available": True},
-                {"id": "hybrid", "name": "Hybrid RRF", "available": True},
-                {"id": "fuzzy", "name": "Fuzzy", "available": True},
-                {"id": "csoundex", "name": "CSoundex", "available": True},
-                {"id": "bert", "name": "BERT", "available": False},
-            ]
+            "models": retrieval_orchestrator.supported_models()
         }
         return api_success(data, models=data["models"])
 

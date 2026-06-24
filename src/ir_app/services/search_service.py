@@ -58,7 +58,7 @@ class SearchService:
         stats.update(
             {
                 "total_terms": self.index.vocabulary_size(),
-                "models": ["boolean", "tfidf", "bm25", "hybrid", "fuzzy", "csoundex"],
+                "models": ["boolean", "tfidf", "bm25", "hybrid", "lm", "fuzzy", "csoundex"],
                 "optional_models": ["bert"],
                 "tokenizer_engine": self.settings.tokenizer_engine,
                 "heavy_models_enabled": self.settings.enable_heavy_models,
@@ -104,6 +104,8 @@ class SearchService:
             ranked = self._search_bm25(query, retrieval_top_k)
         elif model == "hybrid":
             ranked, component_scores = self._search_hybrid(query, retrieval_top_k)
+        elif model == "lm":
+            ranked = self._search_lm(query, retrieval_top_k)
         elif model == "fuzzy":
             expanded_terms = self._fuzzy_expansion(query_terms)
             ranked = self._search_bm25(" ".join(expanded_terms or query_terms), retrieval_top_k)
@@ -233,6 +235,30 @@ class SearchService:
             }
         return ranked, component_scores
 
+    def _search_lm(self, query: str, top_k: int) -> list[tuple[str, float]]:
+        """Search with query likelihood language-model retrieval.
+
+        Complexity:
+            Time: O(n * q)
+            Space: O(n)
+        """
+        query_terms = self.index.tokenize(query)
+        if not query_terms:
+            return []
+
+        candidates: set[int] = set()
+        for term in query_terms:
+            candidates.update(int(doc_id) for doc_id in self.index.inverted_index.get(term, {}))
+        if not candidates:
+            candidates = set(range(self.index.language_model.doc_count))
+
+        scored = [
+            (str(doc_id), float(self.index.language_model.query_likelihood(query_terms, doc_id)))
+            for doc_id in candidates
+        ]
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return scored[:top_k]
+
     def _query_vector(self, query_terms: list[str]) -> dict[str, float]:
         """Build a normalized TF-IDF query vector.
 
@@ -341,8 +367,16 @@ class SearchService:
         highlighted = self._highlight(snippet, query_terms)
         matched_terms = self._matched_terms(doc, query_terms)
         doc_id = int(doc.get("doc_id"))
-        bm25_explain = self.index.bm25.explain_score(query, doc_id)
         component_scores = component_scores or {model: score}
+        ranking_features = {
+            "index_cache_used": self.index.cache_used,
+        }
+        if model in {"bm25", "hybrid", "fuzzy", "csoundex"}:
+            bm25_explain = self.index.bm25.explain_score(query, doc_id)
+            ranking_features["bm25"] = bm25_explain if "error" not in bm25_explain else {}
+        if model == "lm":
+            lm_explain = self.index.language_model.explain_score(query, doc_id)
+            ranking_features["lm"] = lm_explain if "error" not in lm_explain else {}
         return SearchResult(
             doc_id=doc.get("doc_id"),
             article_id=doc.get("article_id"),
@@ -369,10 +403,7 @@ class SearchService:
                 "expanded_terms": expanded_terms or [],
                 "field_matches": self._field_matches(doc, query_terms),
                 "component_scores": component_scores,
-                "ranking_features": {
-                    "bm25": bm25_explain if "error" not in bm25_explain else {},
-                    "index_cache_used": self.index.cache_used,
-                },
+                "ranking_features": ranking_features,
                 "query": query,
             },
         )
@@ -569,6 +600,8 @@ class SearchService:
                 ranked = self._search_tfidf(query, len(self.documents_by_id))
             elif model == "hybrid":
                 ranked, _ = self._search_hybrid(query, len(self.documents_by_id))
+            elif model == "lm":
+                ranked = self._search_lm(query, len(self.documents_by_id))
             else:
                 ranked = self._search_bm25(query, len(self.documents_by_id))
             doc_ids = {str(doc_id) for doc_id, _ in ranked}

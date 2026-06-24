@@ -15,7 +15,7 @@ This repository now includes a Flask-based **News Information Retrieval System**
 - Model comparison for BM25 / TF-IDF / Hybrid / LM on the same query.
 - Demo evaluation dashboard with cached/async Precision@K, Recall@K, MAP, MRR, nDCG, PR curves, per-query breakdown, and clearly labeled small demo qrels.
 - Ranking diagnostics for BM25 term contribution, TF-IDF vector weights, LM likelihood breakdown, query coverage, and field match heatmaps.
-- SQLite feedback analytics for clicks, explicit relevance labels, zero-result queries, CTR, and Learning-to-Rank feature export.
+- SQLite feedback analytics for clicks, explicit relevance labels, zero-result queries, CTR, feedback quality controls, and weak-supervision Learning-to-Rank sandbox.
 
 ### Demo Flow
 
@@ -31,7 +31,7 @@ Open `http://localhost:5001` and try:
 3. Visit `/compare` and compare `人工智慧` across BM25 / TF-IDF / Hybrid / LM.
 4. Visit `/evaluation`, choose `News Demo Qrels`, and run the evaluation dashboard.
 5. Visit `/diagnostics` or expand “Ranking Diagnostics” inside a result explanation panel.
-6. Visit `/feedback` to inspect feedback analytics and the Learning-to-Rank feature preview.
+6. Visit `/feedback` to inspect feedback analytics, quality controls, and the weak-supervision LTR training sandbox.
 
 ### Demo Media
 

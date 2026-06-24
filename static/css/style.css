@@ -671,6 +671,43 @@ body {
     height: 100%;
 }
 
+.feedback-notice {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    color: #1e40af;
+    margin: 14px 0 0;
+    padding: 10px 12px;
+}
+
+.ltr-train-controls {
+    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 14px 0;
+}
+
+.ltr-train-controls label {
+    color: var(--text-secondary);
+    display: grid;
+    font-weight: 700;
+    gap: 6px;
+}
+
+#ltr-limit {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    width: 130px;
+}
+
+.ltr-training-result {
+    display: grid;
+    gap: 14px;
+    margin-top: 14px;
+}
+
 .explain-chip {
     display: inline-flex;
     align-items: center;

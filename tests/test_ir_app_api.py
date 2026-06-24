@@ -550,6 +550,9 @@ def test_feedback_analytics_endpoint_summarizes_search_and_feedback(tmp_path):
     assert summary["ctr"] > 0
     assert any(item["query"] == "ai" for item in payload["data"]["zero_result_queries"])
     assert payload["data"]["model_metrics"]
+    assert "session_metrics" in payload["data"]
+    assert "quality" in payload["data"]
+    assert "position_bias" in payload["data"]
 
 
 def test_feedback_features_endpoint_exports_ltr_rows(tmp_path):
@@ -581,6 +584,60 @@ def test_feedback_features_endpoint_exports_ltr_rows(tmp_path):
     assert "field_boost" in row["features"]
     assert "bm25_score" in row["features"]
     assert row["metadata"]["title"]
+
+
+def test_feedback_analytics_marks_duplicates_and_position_bias(tmp_path):
+    """Raw feedback analytics count duplicates but expose quality warnings."""
+    client = make_test_app(tmp_path).test_client()
+    event = {
+        "event_type": "click",
+        "query": "information retrieval",
+        "model": "bm25",
+        "doc_id": 0,
+        "rank": 1,
+        "score": 1.0,
+        "metadata": {"source": "playwright_demo"},
+    }
+
+    client.post("/api/feedback", json=event, headers={"X-IR-Session": "dup-session"})
+    client.post("/api/feedback", json=event, headers={"X-IR-Session": "dup-session"})
+    payload = client.get("/api/feedback/analytics?days=365&limit=10").get_json()
+
+    quality = payload["data"]["quality"]
+    assert quality["raw_metrics_count_all_events"] is True
+    assert quality["duplicate_group_count"] >= 1
+    assert quality["duplicate_event_count"] >= 1
+    assert quality["demo_seed_event_count"] >= 2
+    assert payload["data"]["position_bias"]["buckets"]["rank_1"]["clicks"] >= 2
+
+
+def test_ltr_train_endpoint_trains_with_positive_and_negative_labels(tmp_path):
+    """LTR sandbox trains a weak-supervision model when both classes exist."""
+    client = make_test_app(tmp_path).test_client()
+
+    for doc_id, grade in [(0, 3), (1, 0), (2, 3), (3, 0)]:
+        client.post(
+            "/api/feedback",
+            json={
+                "event_type": "relevance",
+                "query": "information retrieval",
+                "model": "bm25",
+                "doc_id": doc_id,
+                "rank": doc_id + 1,
+                "score": 1.0,
+                "relevance_grade": grade,
+            },
+        )
+    response = client.post("/api/ltr/train", json={"limit": 50})
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["data"]["trained"] is True
+    assert payload["data"]["model"] == "sklearn_logistic_regression"
+    assert payload["data"]["metrics"]["training_accuracy"] >= 0
+    assert payload["data"]["coefficients"]
+    assert payload["data"]["sample_predictions"]
 
 
 def test_feedback_api_validates_relevance_grade(tmp_path):

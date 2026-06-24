@@ -8,6 +8,16 @@
 ---
 
 ## [Unreleased]
+### [2026-06-24] LTR Training Sandbox 與 Feedback Quality Controls
+
+#### ✨ 新增
+- 新增 sklearn-backed weak-supervision LTR training sandbox：`/api/ltr/train` 與 `scripts/train_ltr_demo.py`。
+- `/feedback` dashboard 新增 duplicate/demo seed/session/position-bias quality controls。
+- LTR sandbox 顯示 training metrics、feature weights 與 sample predictions，並明確標示非 production ranker。
+
+#### 🧪 測試
+- 新增 duplicate feedback quality、position bias 與 LTR training API 測試。
+
 ### [2026-06-24] Feedback Analytics 與 LTR Feature Foundation
 
 #### ✨ 新增

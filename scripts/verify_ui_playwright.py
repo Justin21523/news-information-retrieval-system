@@ -186,6 +186,17 @@ def seed_feedback(page) -> None:
                 headers: { 'Content-Type': 'application/json', 'X-IR-Session': 'playwright-demo' },
                 body: JSON.stringify({ ...base, event_type: 'relevance', relevance_grade: 3 })
             });
+            await fetch('api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-IR-Session': 'playwright-demo' },
+                body: JSON.stringify({
+                    ...base,
+                    event_type: 'relevance',
+                    doc_id: 2,
+                    rank: 2,
+                    relevance_grade: 0
+                })
+            });
         }
         """
     )
@@ -243,6 +254,8 @@ def run_feedback_dashboard(page) -> None:
     """
     page.wait_for_selector(".feedback-dashboard", timeout=45000)
     page.wait_for_selector(".feedback-summary-card", timeout=45000)
+    page.locator("button:has-text('Train Demo Ranker')").click()
+    page.wait_for_selector("#ltr-training-result table", timeout=45000)
 
 
 def parse_args() -> argparse.Namespace:

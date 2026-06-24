@@ -25,6 +25,7 @@ from src.ir_app.services import (
     FeedbackService,
     FeatureUnavailableError,
     LearningToRankFeatureService,
+    LearningToRankTrainingService,
     RankingDiagnosticsService,
     RetrievalOrchestrator,
     SearchLogService,
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         search_service,
         ranking_diagnostics_service,
     )
+    ltr_training_service = LearningToRankTrainingService(ltr_feature_service)
     app.config["DOCUMENT_SERVICE"] = document_service
     app.config["SEARCH_SERVICE"] = search_service
     app.config["DOCUMENT_DETAIL_SERVICE"] = document_detail_service
@@ -85,6 +87,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.config["FEEDBACK_ANALYTICS_SERVICE"] = feedback_analytics_service
     app.config["RANKING_DIAGNOSTICS_SERVICE"] = ranking_diagnostics_service
     app.config["LTR_FEATURE_SERVICE"] = ltr_feature_service
+    app.config["LTR_TRAINING_SERVICE"] = ltr_training_service
 
     register_page_routes(app, settings)
     register_api_routes(
@@ -100,6 +103,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         feedback_analytics_service,
         ranking_diagnostics_service,
         ltr_feature_service,
+        ltr_training_service,
     )
     return app
 
@@ -166,6 +170,7 @@ def register_api_routes(
     feedback_analytics_service: FeedbackAnalyticsService,
     ranking_diagnostics_service: RankingDiagnosticsService,
     ltr_feature_service: LearningToRankFeatureService,
+    ltr_training_service: LearningToRankTrainingService,
 ) -> None:
     """Register API routes.
 
@@ -517,6 +522,18 @@ def register_api_routes(
     def feedback_features():
         limit = request.args.get("limit", 200)
         data = ltr_feature_service.features(int(limit))
+        return api_success(data, **data)
+
+    @app.post("/api/ltr/train")
+    def train_ltr_demo():
+        payload = request.get_json(silent=True) or {}
+        data = ltr_training_service.train(payload.get("limit", 500))
+        if data.get("code") == "SKLEARN_UNAVAILABLE":
+            return api_error(
+                "FEATURE_UNAVAILABLE",
+                data.get("reason", "scikit-learn is unavailable"),
+                503,
+            )
         return api_success(data, **data)
 
     @app.post("/api/diagnostics/ranking")

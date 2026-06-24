@@ -64,6 +64,10 @@ function renderDashboard(data, features) {
                 ${renderRelevanceDistribution(data.relevance_distribution || [])}
             </article>
             <article class="feedback-card feedback-card-wide">
+                <h2>Feedback Quality Controls</h2>
+                ${renderQuality(data.quality || {}, data.session_metrics || {}, data.position_bias || {})}
+            </article>
+            <article class="feedback-card feedback-card-wide">
                 <h2>Recent Feedback</h2>
                 ${renderRecentFeedback(data.recent_feedback || [])}
             </article>
@@ -71,6 +75,16 @@ function renderDashboard(data, features) {
                 <h2>Learning-to-Rank Feature Preview</h2>
                 <p class="explain-muted">Feature foundation only. This does not train or claim a production ranking model.</p>
                 ${renderFeaturePreview(features.rows || [])}
+            </article>
+            <article class="feedback-card feedback-card-wide">
+                <h2>LTR Training Sandbox</h2>
+                <p class="explain-muted">Weak-supervision demo only. It uses click/relevance-derived labels and does not change production ranking.</p>
+                <div class="ltr-train-controls">
+                    <label for="ltr-limit">Training rows</label>
+                    <input id="ltr-limit" type="number" value="200" min="10" max="1000" step="10">
+                    <button class="btn btn-primary" type="button" onclick="trainLtrDemo()">Train Demo Ranker</button>
+                </div>
+                <div id="ltr-training-result" class="ltr-training-result"></div>
             </article>
         </section>
     `;
@@ -180,6 +194,47 @@ function renderRecentFeedback(rows) {
     `;
 }
 
+function renderQuality(quality, sessions, positionBias) {
+    const buckets = positionBias.buckets || {};
+    return `
+        <div class="feedback-summary-grid">
+            ${summaryCard('Unique Search Sessions', sessions.unique_search_sessions ?? 0)}
+            ${summaryCard('Unique Feedback Sessions', sessions.unique_feedback_sessions ?? 0)}
+            ${summaryCard('Duplicate Groups', quality.duplicate_group_count ?? 0)}
+            ${summaryCard('Duplicate Events', quality.duplicate_event_count ?? 0)}
+            ${summaryCard('Demo Seed Events', quality.demo_seed_event_count ?? 0)}
+            ${summaryCard('Avg Click Rank', positionBias.average_clicked_rank ?? '-')}
+        </div>
+        <p class="feedback-notice">${escapeHtml(quality.notice || 'Raw metrics count all events.')}</p>
+        <p class="feedback-notice">${escapeHtml(positionBias.warning || '')}</p>
+        ${renderPositionBuckets(buckets)}
+    `;
+}
+
+function renderPositionBuckets(buckets) {
+    const labels = {
+        rank_1: 'Rank 1',
+        rank_2_3: 'Rank 2-3',
+        rank_4_10: 'Rank 4-10',
+        rank_11_plus: 'Rank 11+',
+        unknown: 'Unknown'
+    };
+    return `
+        <table class="diagnostic-table">
+            <thead><tr><th>Rank Bucket</th><th>Clicks</th><th>Relevance Labels</th></tr></thead>
+            <tbody>
+                ${Object.entries(labels).map(([key, label]) => `
+                    <tr>
+                        <td>${escapeHtml(label)}</td>
+                        <td>${escapeHtml(buckets[key]?.clicks ?? 0)}</td>
+                        <td>${escapeHtml(buckets[key]?.relevance ?? 0)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
 function renderFeaturePreview(rows) {
     if (!rows.length) return '<p class="explain-muted">No feature rows yet.</p>';
     return `
@@ -196,6 +251,87 @@ function renderFeaturePreview(rows) {
                         <td>${formatScore(row.features?.bm25_score)}</td>
                         <td>${formatScore(row.features?.tfidf_score)}</td>
                         <td>${formatScore(row.features?.lm_score)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function trainLtrDemo() {
+    const limit = Number(document.getElementById('ltr-limit')?.value || 200);
+    const resultBox = document.getElementById('ltr-training-result');
+    resultBox.innerHTML = '<p class="explain-muted">Training demo ranker...</p>';
+    try {
+        const response = await fetch('api/ltr/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit })
+        });
+        const payload = await response.json();
+        if (!payload.ok && !payload.success) {
+            throw new Error(payload.error?.message || 'Training failed');
+        }
+        renderTrainingResult(payload.data || payload, resultBox);
+    } catch (error) {
+        resultBox.innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
+    }
+}
+
+function renderTrainingResult(data, resultBox) {
+    if (!data.trained) {
+        resultBox.innerHTML = `
+            <div class="feedback-empty-state">
+                <strong>${escapeHtml(data.code || 'NOT_TRAINED')}</strong><br>
+                ${escapeHtml(data.reason || 'More diverse feedback is required.')}
+            </div>
+        `;
+        return;
+    }
+    resultBox.innerHTML = `
+        <div class="feedback-summary-grid">
+            ${summaryCard('Rows', data.row_count)}
+            ${summaryCard('Accuracy', formatPercent(data.metrics?.training_accuracy))}
+            ${summaryCard('Avg Precision', formatScore(data.metrics?.average_precision))}
+            ${summaryCard('ROC AUC', formatScore(data.metrics?.roc_auc))}
+        </div>
+        <h3>Feature Weights</h3>
+        ${renderCoefficients(data.coefficients || [])}
+        <h3>Sample Predictions</h3>
+        ${renderPredictions(data.sample_predictions || [])}
+    `;
+}
+
+function renderCoefficients(rows) {
+    if (!rows.length) return '<p class="explain-muted">No coefficients.</p>';
+    return `
+        <table class="diagnostic-table">
+            <thead><tr><th>Feature</th><th>Coefficient</th><th>Direction</th></tr></thead>
+            <tbody>
+                ${rows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row.feature)}</td>
+                        <td>${formatScore(row.coefficient)}</td>
+                        <td>${escapeHtml(row.direction)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderPredictions(rows) {
+    if (!rows.length) return '<p class="explain-muted">No predictions.</p>';
+    return `
+        <table class="diagnostic-table">
+            <thead><tr><th>Query</th><th>Doc</th><th>Label</th><th>Predicted</th></tr></thead>
+            <tbody>
+                ${rows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row.query)}</td>
+                        <td>${escapeHtml(row.article_id || row.doc_id)}</td>
+                        <td>${formatScore(row.label)}</td>
+                        <td>${formatScore(row.predicted_relevance)}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -224,3 +360,5 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
+window.trainLtrDemo = trainLtrDemo;

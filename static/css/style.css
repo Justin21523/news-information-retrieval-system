@@ -392,6 +392,138 @@ body {
     align-items: center;
 }
 
+/* Unified explanation panels */
+.explain-panel {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.explain-panel summary {
+    cursor: pointer;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.explain-panel-static {
+    padding: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.explain-section {
+    margin-top: 10px;
+}
+
+.explain-section:first-child {
+    margin-top: 0;
+}
+
+.explain-section-title {
+    margin-bottom: 6px;
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.explain-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.explain-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    background: #fff;
+    color: #475569;
+    font-size: 0.78rem;
+    line-height: 1.25;
+}
+
+.explain-chip strong {
+    color: #1f2937;
+}
+
+.score-chip {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+.field-chip,
+.boost-chip {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+
+.feature-chip {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.reason-chip {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #9a3412;
+}
+
+.term-chip {
+    background: #fefce8;
+    border-color: #fde68a;
+    color: #854d0e;
+}
+
+.explain-muted {
+    color: #94a3b8;
+    font-size: 0.82rem;
+}
+
+.model-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.model-badge-name {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+.model-badge-description {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.rank-change-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.rank-change-table th,
+.rank-change-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.status-unavailable {
+    color: #991b1b;
+    font-weight: 700;
+}
+
 /* Metadata Chips */
 .meta-chip {
     display: inline-flex;

@@ -28,9 +28,10 @@
                 <div class="option-group">
                     <label>選擇模型 (可多選):</label>
                     <div class="checkbox-group">
-                        <label><input type="checkbox" name="models" value="tfidf" checked> TF-IDF</label>
                         <label><input type="checkbox" name="models" value="bm25" checked> BM25</label>
-                        <label><input type="checkbox" name="models" value="bert"> BERT</label>
+                        <label><input type="checkbox" name="models" value="tfidf" checked> TF-IDF</label>
+                        <label><input type="checkbox" name="models" value="hybrid" checked> Hybrid</label>
+                        <label><input type="checkbox" name="models" value="lm" checked> LM</label>
                         <label><input type="checkbox" name="models" value="boolean"> Boolean</label>
                     </div>
                 </div>
@@ -58,7 +59,8 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='js/document-modal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/compare.js') }}"></script>
+    <script src="static/js/explanation-panel.js"></script>
+    <script src="static/js/document-modal.js"></script>
+    <script src="static/js/compare.js"></script>
 </body>
 </html>

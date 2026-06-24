@@ -157,7 +157,7 @@ function displayDocumentDetails(data) {
 
             <section class="doc-explanation-section">
                 <h4>Why this document?</h4>
-                ${renderDocumentExplanation(explanation, taxonomy)}
+                ${window.ExplanationPanel ? window.ExplanationPanel.renderDocumentPanel(explanation, taxonomy) : renderDocumentExplanation(explanation, taxonomy)}
             </section>
 
             <div class="doc-metadata">
@@ -255,6 +255,7 @@ function displayDocumentDetails(data) {
                         ${reason.same_category ? '<span>same category</span>' : ''}
                         ${reason.same_taxonomy_topic ? '<span>same taxonomy</span>' : ''}
                     </div>
+                    ${window.ExplanationPanel ? window.ExplanationPanel.renderRelatedReason(sim) : ''}
                 </div>
             `;
         });

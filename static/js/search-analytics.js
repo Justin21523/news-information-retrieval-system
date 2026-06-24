@@ -306,40 +306,21 @@ async function runQuickModelCompare() {
     runQuickCompareBtn.disabled = true;
     runQuickCompareBtn.innerHTML = '<span class="spinner-small"></span> 比較中...';
 
-    const models = ['bm25', 'tfidf', 'bert'];
-    const results = {};
+    const models = ['bm25', 'tfidf', 'hybrid', 'lm'];
 
     try {
-        // Run searches in parallel
-        const promises = models.map(async (model) => {
-            const startTime = performance.now();
-            const response = await fetch('/api/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: query,
-                    model: model,
-                    top_k: 10
-                })
-            });
-            const endTime = performance.now();
-            const data = await response.json();
-
-            return {
-                model: model,
-                responseTime: endTime - startTime,
-                totalResults: data.total_results || (data.results ? data.results.length : 0),
-                avgScore: data.results && data.results.length > 0
-                    ? data.results.reduce((sum, r) => sum + (r.score || 0), 0) / data.results.length
-                    : 0,
-                topResult: data.results && data.results[0] ? data.results[0].title : 'N/A'
-            };
+        const response = await fetch('api/search/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: query,
+                models: models,
+                top_k: 10
+            })
         });
-
-        const compareResults = await Promise.all(promises);
-
-        // Display results
-        displayModelCompareResults(compareResults);
+        const rawData = await response.json();
+        const data = rawData.ok === true && rawData.data ? rawData.data : rawData;
+        displayModelCompareResults(data);
 
     } catch (error) {
         console.error('Model comparison error:', error);
@@ -353,17 +334,24 @@ async function runQuickModelCompare() {
 
 /**
  * Display model comparison results
- * @param {Array} results - Comparison results
+ * @param {Object} data - Comparison response
  */
-function displayModelCompareResults(results) {
-    // Sort by avg score descending
-    results.sort((a, b) => b.avgScore - a.avgScore);
-
-    const modelLabels = {
-        'bm25': 'BM25',
-        'tfidf': 'TF-IDF',
-        'bert': 'BERT'
-    };
+function displayModelCompareResults(data) {
+    const rows = Object.entries(data.models || {}).map(([model, payload]) => {
+        const results = payload.results || [];
+        const avgScore = results.length
+            ? results.reduce((sum, result) => sum + Number(result.score || 0), 0) / results.length
+            : 0;
+        return {
+            model,
+            name: payload.model_info?.name || model.toUpperCase(),
+            executionTime: payload.execution_time || 0,
+            totalResults: payload.total_results || results.length,
+            avgScore,
+            topResult: results[0],
+            available: payload.available !== false,
+        };
+    }).sort((a, b) => b.avgScore - a.avgScore);
 
     const html = `
         <table class="compare-table">
@@ -376,18 +364,18 @@ function displayModelCompareResults(results) {
                 </tr>
             </thead>
             <tbody>
-                ${results.map((r, i) => `
+                ${rows.map((r, i) => `
                     <tr class="${i === 0 ? 'best-model' : ''}">
-                        <td>${modelLabels[r.model] || r.model}</td>
-                        <td>${r.responseTime.toFixed(0)} ms</td>
+                        <td>${window.ExplanationPanel ? window.ExplanationPanel.escapeHtml(r.name) : r.name}</td>
+                        <td>${(r.executionTime * 1000).toFixed(2)} ms</td>
                         <td>${r.avgScore.toFixed(4)}</td>
-                        <td>${i === 0 ? '⭐ 最佳' : ''}</td>
+                        <td>${r.available && i === 0 ? 'best score' : (r.available ? '' : 'unavailable')}</td>
                     </tr>
                 `).join('')}
             </tbody>
         </table>
         <div class="compare-note">
-            💡 根據平均分數排序，最高分模型標記為推薦
+            根據平均分數排序；完整排名差異請使用模型對比頁。
         </div>
     `;
 

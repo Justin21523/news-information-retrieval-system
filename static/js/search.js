@@ -261,28 +261,8 @@ function displayResults(data) {
             metaChips += `<span class="meta-chip meta-author">✍️ ${author}</span>`;
         }
 
-        const explanation = result.explanation || {};
-        const componentScores = explanation.component_scores || {};
-        const fieldMatches = explanation.field_matches || {};
-        const matchedTerms = explanation.matched_terms || [];
-        const expandedTerms = explanation.expanded_terms || [];
-        const rankingFeatures = explanation.ranking_features || {};
-        const fieldBoost = rankingFeatures.field_boost || {};
-        const snippetSource = rankingFeatures.snippet_source || '';
-        const componentHtml = Object.keys(componentScores).length
-            ? Object.entries(componentScores).map(([name, score]) => `<span class="meta-chip">${name}: ${Number(score || 0).toFixed(4)}</span>`).join('')
-            : '<span class="meta-chip">No component scores</span>';
-        const fieldHtml = Object.keys(fieldMatches).length
-            ? Object.entries(fieldMatches).map(([field, terms]) => `<span class="meta-chip">${field}: ${terms.join(', ')}</span>`).join('')
-            : '<span class="meta-chip">No field breakdown</span>';
-        const expansionHtml = expandedTerms.length
-            ? `<div class="result-explain-row"><strong>Expanded:</strong> ${expandedTerms.join(', ')}</div>`
-            : '';
-        const boostHtml = fieldBoost && Object.keys(fieldBoost).length
-            ? `<div class="result-explain-row"><strong>Field boost:</strong> ${formatFieldBoost(fieldBoost)}</div>`
-            : '';
-        const snippetSourceHtml = snippetSource
-            ? `<div class="result-explain-row"><strong>Snippet source:</strong> ${snippetSource}</div>`
+        const explanationHtml = window.ExplanationPanel
+            ? window.ExplanationPanel.renderResultPanel(result)
             : '';
         const snippetHtml = result.highlighted_snippet || highlightQuery(displayText, data.query);
 
@@ -299,15 +279,7 @@ function displayResults(data) {
             <div class="result-meta" data-doc-id="${docId}">
                 ${metaChips}
             </div>
-            <details class="result-explanation">
-                <summary>Why this result?</summary>
-                <div class="result-explain-row"><strong>Matched:</strong> ${matchedTerms.join(', ') || 'None'}</div>
-                ${expansionHtml}
-                <div class="result-explain-row"><strong>Fields:</strong> ${fieldHtml}</div>
-                <div class="result-explain-row"><strong>Scores:</strong> ${componentHtml}</div>
-                ${boostHtml}
-                ${snippetSourceHtml}
-            </details>
+            ${explanationHtml}
         </div>
         `;
     }).join('');
@@ -348,12 +320,6 @@ function runSuggestionSearch(query) {
 
 function runSuggestionSearchFromButton(button) {
     runSuggestionSearch(button?.dataset?.query || '');
-}
-
-function formatFieldBoost(fieldBoost) {
-    return Object.entries(fieldBoost)
-        .map(([field, value]) => Array.isArray(value) ? `${field}: ${value.join(', ')}` : `${field}: ${value}`)
-        .join(' | ');
 }
 
 function escapeAttribute(value) {

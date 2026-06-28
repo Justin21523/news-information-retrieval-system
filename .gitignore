@@ -229,6 +229,8 @@ results/
 # Cache files
 .cache/
 *.cache
+data/cache/
+data/indexes/ir_app_cache/
 
 # Compiled models
 models/

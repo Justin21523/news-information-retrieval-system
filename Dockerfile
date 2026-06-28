@@ -23,6 +23,10 @@ COPY . /app
 
 ENV PORT=80 \
     FLASK_DEBUG=0 \
+    IR_HOST=0.0.0.0 \
+    IR_PORT=80 \
+    IR_ENABLE_HEAVY_MODELS=false \
+    IR_TOKENIZER_ENGINE=jieba \
     IR_USE_CKIP=0 \
     IR_ENABLE_BERT=0
 

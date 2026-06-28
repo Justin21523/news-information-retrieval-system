@@ -1,0 +1,37 @@
+name: CNIRS Demo Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      IR_ENABLE_HEAVY_MODELS: "false"
+      IR_TOKENIZER_ENGINE: "jieba"
+      IR_MAX_DOCUMENTS: "500"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run demo smoke checks
+        run: python scripts/smoke_demo.py
+
+      - name: Run Flask app regression tests
+        run: python -m pytest tests/test_ir_app_api.py tests/test_ir_app_text_quality.py -q

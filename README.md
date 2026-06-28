@@ -1,6 +1,3 @@
-以下是依照你提供的 README 內容，保留原本 Markdown 結構、表格、Mermaid、指令與連結後翻成英文版。
-
-````markdown
 # CNIRS Chinese News Intelligent Retrieval System
 
 > Portfolio-ready Chinese News Intelligent Retrieval System.<br>
@@ -631,5 +628,4 @@ CNIRS demonstrates the engineering ability to organize a complete information re
 
 This project is for educational and portfolio demonstration purposes. Core IR concepts reference *Introduction to Information Retrieval* by Manning, Raghavan, and Schuetze.
 
-```
 ```

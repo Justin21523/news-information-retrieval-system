@@ -1,77 +1,80 @@
-# CNIRS 中文新聞智能檢索系統
+以下是依照你提供的 README 內容，保留原本 Markdown 結構、表格、Mermaid、指令與連結後翻成英文版。
+
+````markdown
+# CNIRS Chinese News Intelligent Retrieval System
 
 > Portfolio-ready Chinese News Intelligent Retrieval System.<br>
-> 一個可搜尋、可解釋、可評估、可展示的中文新聞資訊檢索作品集專案。
+> A searchable, explainable, evaluable, and demo-ready Chinese news information retrieval portfolio project.
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](#技術-stack)
-[![Flask](https://img.shields.io/badge/Flask-Web%20API-000000?logo=flask&logoColor=white)](#後端與-api)
-[![IR](https://img.shields.io/badge/IR-BM25%20%7C%20TF--IDF%20%7C%20Hybrid-2563eb)](#檢索與-ranking)
-[![Demo](https://img.shields.io/badge/Demo-Live%20%2B%20Screenshots-16a34a)](#公開展示)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](#tech-stack)
+[![Flask](https://img.shields.io/badge/Flask-Web%20API-000000?logo=flask&logoColor=white)](#backend-and-api)
+[![IR](https://img.shields.io/badge/IR-BM25%20%7C%20TF--IDF%20%7C%20Hybrid-2563eb)](#retrieval-and-ranking)
+[![Demo](https://img.shields.io/badge/Demo-Live%20%2B%20Screenshots-16a34a)](#public-showcase)
 
-## 公開展示
+## Public Showcase
 
-| 項目 | 連結 | 用途 |
+| Item | Link | Purpose |
 | --- | --- | --- |
-| Live Demo | <https://neojustin.dothost.net/projects/information-retrieval/> | 可互動 Flask 搜尋系統 |
-| Portfolio Page | <https://justin21523.github.io/zh-TW/projects/information-retrieval/> | 面試官快速瀏覽的作品集頁 |
-| Demo Video | [docs/assets/evaluation/cnirs-demo.webm](docs/assets/evaluation/cnirs-demo.webm) | 可錄影展示的完整操作流程 |
-| Demo Guide | <https://neojustin.dothost.net/projects/information-retrieval/guide> | 五分鐘導覽腳本 |
-| API Stats | <https://neojustin.dothost.net/projects/information-retrieval/api/stats> | 線上語料與索引健康檢查 |
+| Live Demo | <https://neojustin.dothost.net/projects/information-retrieval/> | Interactive Flask search system |
+| Portfolio Page | <https://justin21523.github.io/zh-TW/projects/information-retrieval/> | Portfolio page for quick interviewer review |
+| Demo Video | [docs/assets/evaluation/cnirs-demo.webm](docs/assets/evaluation/cnirs-demo.webm) | Full operation flow for recorded demonstration |
+| Demo Guide | <https://neojustin.dothost.net/projects/information-retrieval/guide> | Five-minute walkthrough script |
+| API Stats | <https://neojustin.dothost.net/projects/information-retrieval/api/stats> | Online corpus and index health check |
 
-第一屏不是行銷頁，而是直接呈現可操作的搜尋產品：查詢框、ranking model、facet sidebar、結果列表、分數、highlight、Why this result 與 Demo Assistant。
+The first screen is not a marketing landing page. It directly presents an operable search product: query box, ranking model, facet sidebar, result list, scores, highlights, Why this result, and Demo Assistant.
 
 ![CNIRS portfolio cover](docs/assets/evaluation/search-results.png)
 
-## 專案定位
+## Project Positioning
 
-CNIRS 的重點不是只展示單一演算法，而是把課堂型資訊檢索模組整理成一個完整 Search Engine Demo。面試官可以直接看到：
+CNIRS is not focused on showcasing a single algorithm. Instead, it turns classroom-style information retrieval modules into a complete Search Engine Demo. Interviewers can directly observe:
 
-- 中文新聞查詢、metadata facet browsing、ranking model 切換。
-- BM25、TF-IDF、Boolean、Hybrid RRF、Language Model、BIM、WAND、MaxScore、Fuzzy、CSoundex。
-- 每筆結果的 snippet、highlight、component scores、field boosts、matched terms。
-- Document detail 的 summary、KWIC、keywords、taxonomy、related news。
-- Model Comparison、Evaluation Dashboard、Ranking Diagnostics、Feedback Analytics、Analysis Graph。
-- 無 GPU、無外部模型、無第三方 API 時仍可啟動的 mock-safe / lightweight demo mode。
+- Chinese news search, metadata facet browsing, and ranking model switching.
+- BM25, TF-IDF, Boolean, Hybrid RRF, Language Model, BIM, WAND, MaxScore, Fuzzy, and CSoundex.
+- Snippets, highlights, component scores, field boosts, and matched terms for each result.
+- Document detail with summary, KWIC, keywords, taxonomy, and related news.
+- Model Comparison, Evaluation Dashboard, Ranking Diagnostics, Feedback Analytics, and Analysis Graph.
+- A mock-safe / lightweight demo mode that can still start without GPU, external models, or third-party APIs.
 
-## 面試官應看的亮點
+## Highlights for Interviewers
 
-| 亮點 | 面試可觀察能力 | 對應畫面 |
+| Highlight | Observable Interview Capability | Related Page |
 | --- | --- | --- |
-| 多模型檢索 | IR model integration、ranking API design | Search / Compare |
-| 可解釋結果 | ranking diagnostics、feature attribution | Why this result / Diagnostics |
-| Faceted Search | metadata cleaning、taxonomy、exploratory search | Search / Corpus |
-| Evaluation Dashboard | qrels、Precision@K、Recall@K、MAP、MRR、nDCG | Evaluation |
-| Feedback Analytics | click logs、relevance labels、LTR feature sandbox | Feedback |
-| Analysis Graph | pipeline visualization、system explanation | Analysis Graph |
-| Demo Assistant | portfolio UX、guided walkthrough、recordable flow | Guide / all pages |
+| Multi-model Retrieval | IR model integration, ranking API design | Search / Compare |
+| Explainable Results | Ranking diagnostics, feature attribution | Why this result / Diagnostics |
+| Faceted Search | Metadata cleaning, taxonomy, exploratory search | Search / Corpus |
+| Evaluation Dashboard | qrels, Precision@K, Recall@K, MAP, MRR, nDCG | Evaluation |
+| Feedback Analytics | Click logs, relevance labels, LTR feature sandbox | Feedback |
+| Analysis Graph | Pipeline visualization, system explanation | Analysis Graph |
+| Demo Assistant | Portfolio UX, guided walkthrough, recordable flow | Guide / all pages |
 
-## Demo 操作流程
+## Demo Operation Flow
 
 ```mermaid
 flowchart LR
-    A[打開 Live Demo] --> B[Hybrid 搜尋: 半導體 人工智慧]
-    B --> C[套用 Facets: source / topic / date / tags]
-    C --> D[打開 Why this result]
-    D --> E[打開 Document Detail]
+    A[Open Live Demo] --> B[Hybrid Search: semiconductors artificial intelligence]
+    B --> C[Apply Facets: source / topic / date / tags]
+    C --> D[Open Why this result]
+    D --> E[Open Document Detail]
     E --> F[Compare: BM25 / TF-IDF / Hybrid / LM / BIM / WAND / MaxScore]
     F --> G[Corpus Dashboard + Topic Explorer]
     G --> H[Evaluation Dashboard]
     H --> I[Ranking Diagnostics]
     I --> J[Feedback Analytics + LTR Sandbox]
-    J --> K[Analysis Graph 總結資料流]
-```
+    J --> K[Analysis Graph summarizes the data flow]
+````
 
-建議五分鐘展示腳本：
+Suggested five-minute demo script:
 
-1. 開啟 <https://neojustin.dothost.net/projects/information-retrieval/guide>。
-2. 點「開始小幫手導覽」，跟著 Demo Assistant 逐步切換頁面。
-3. 在主搜尋頁搜尋 `半導體 人工智慧`，模型選 `Hybrid`。
-4. 展示左側 facets 如何不用改 query 就縮小結果。
-5. 展開第一筆結果的 Why this result，說明 matched terms、field boost、BM25/TF-IDF component scores。
-6. 開啟 Document Detail，展示 summary、KWIC、keywords、related news。
-7. 切到 Compare、Evaluation、Diagnostics、Feedback、Analysis Graph，快速說明 IR 系統如何被評估與改善。
+1. Open [https://neojustin.dothost.net/projects/information-retrieval/guide](https://neojustin.dothost.net/projects/information-retrieval/guide).
+2. Click “Start Assistant Tour” and follow the Demo Assistant to switch pages step by step.
+3. On the main search page, search for `半導體 人工智慧` and select the `Hybrid` model.
+4. Demonstrate how the left-side facets narrow results without changing the query.
+5. Expand Why this result for the first result and explain matched terms, field boost, and BM25/TF-IDF component scores.
+6. Open Document Detail and demonstrate summary, KWIC, keywords, and related news.
+7. Switch to Compare, Evaluation, Diagnostics, Feedback, and Analysis Graph to briefly explain how the IR system is evaluated and improved.
 
-## 系統總覽
+## System Overview
 
 ```mermaid
 flowchart TB
@@ -116,7 +119,7 @@ flowchart TB
     IR --> Data
 ```
 
-## 架構分層
+## Architecture Layers
 
 ```mermaid
 flowchart LR
@@ -135,16 +138,16 @@ flowchart LR
     FeedbackService --> FeedbackDB[(SQLite)]
 ```
 
-| Layer | 主要責任 | 代表檔案 |
-| --- | --- | --- |
-| Page UI | 可展示頁面、操作流程、截圖狀態 | `templates/`, `static/js/`, `static/css/` |
-| API | 統一 JSON response、錯誤格式、demo endpoints | `src/ir_app/app_factory.py`, `src/ir_app/schemas/` |
-| Service | 搜尋、facet、文件詳情、評估、回饋、診斷 | `src/ir_app/services/` |
-| IR Core | 演算法實作與可測模組 | `src/ir/` |
-| Data | JSONL corpus、qrels、index cache、feedback logs | `data/`, `datasets/` |
-| Demo Ops | smoke test、Playwright 截圖錄影、Docker | `scripts/smoke_demo.py`, `scripts/verify_ui_playwright.py`, `Dockerfile` |
+| Layer    | Main Responsibility                                                 | Representative Files                                                     |
+| -------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Page UI  | Demo-ready pages, operation flow, screenshot states                 | `templates/`, `static/js/`, `static/css/`                                |
+| API      | Unified JSON responses, error format, demo endpoints                | `src/ir_app/app_factory.py`, `src/ir_app/schemas/`                       |
+| Service  | Search, facets, document details, evaluation, feedback, diagnostics | `src/ir_app/services/`                                                   |
+| IR Core  | Algorithm implementations and testable modules                      | `src/ir/`                                                                |
+| Data     | JSONL corpus, qrels, index cache, feedback logs                     | `data/`, `datasets/`                                                     |
+| Demo Ops | Smoke tests, Playwright screenshots and recording, Docker           | `scripts/smoke_demo.py`, `scripts/verify_ui_playwright.py`, `Dockerfile` |
 
-## 資料流
+## Data Flow
 
 ```mermaid
 sequenceDiagram
@@ -156,7 +159,7 @@ sequenceDiagram
     participant Doc as DocumentService
     participant Facet as FacetService
 
-    User->>UI: 輸入 query + model + facets
+    User->>UI: Enter query + model + facets
     UI->>API: POST /api/search
     API->>Search: normalize query and filters
     Search->>Index: tokenize + retrieve candidates
@@ -168,7 +171,7 @@ sequenceDiagram
     UI-->>User: results, highlights, scores, facets
 ```
 
-## 檢索與 Ranking
+## Retrieval and Ranking
 
 ```mermaid
 flowchart TB
@@ -192,20 +195,20 @@ flowchart TB
     FieldBoost --> Explain[Explainable Result Payload]
 ```
 
-| Model | Demo 狀態 | 說明 |
-| --- | --- | --- |
-| BM25 | Ready | 主要 lexical ranking baseline |
-| TF-IDF / VSM | Ready | cosine similarity baseline |
-| Boolean | Ready | AND / OR / NOT、phrase、field-aware syntax |
-| Hybrid RRF | Ready | BM25 + TF-IDF reciprocal-rank fusion |
-| LM | Ready | query likelihood language model |
-| BIM | Ready | Binary Independence Model |
-| WAND BM25 | Ready | optimized top-k retrieval demonstration |
-| MaxScore BM25 | Ready | optimized top-k retrieval demonstration |
-| Fuzzy / CSoundex | Ready | 中文容錯與音近字探索 |
-| BERT / CKIP heavy models | Optional disabled | demo-safe mode 回傳 structured unavailable，不讓服務崩潰 |
+| Model                    | Demo Status       | Description                                                                   |
+| ------------------------ | ----------------- | ----------------------------------------------------------------------------- |
+| BM25                     | Ready             | Main lexical ranking baseline                                                 |
+| TF-IDF / VSM             | Ready             | Cosine similarity baseline                                                    |
+| Boolean                  | Ready             | AND / OR / NOT, phrase, field-aware syntax                                    |
+| Hybrid RRF               | Ready             | BM25 + TF-IDF reciprocal-rank fusion                                          |
+| LM                       | Ready             | Query likelihood language model                                               |
+| BIM                      | Ready             | Binary Independence Model                                                     |
+| WAND BM25                | Ready             | Optimized top-k retrieval demonstration                                       |
+| MaxScore BM25            | Ready             | Optimized top-k retrieval demonstration                                       |
+| Fuzzy / CSoundex         | Ready             | Chinese error tolerance and phonetic-similarity exploration                   |
+| BERT / CKIP heavy models | Optional disabled | Demo-safe mode returns structured unavailable instead of crashing the service |
 
-## 後端與 API
+## Backend and API
 
 ```mermaid
 flowchart LR
@@ -219,19 +222,19 @@ flowchart LR
     Static --> GraphAPI[GET /api/analysis/graph]
 ```
 
-| Endpoint | 用途 |
-| --- | --- |
-| `GET /api/stats` | corpus、index、model readiness |
-| `POST /api/search` | query search + explanations |
-| `POST /api/search/browse` | 無 query 的 facet browsing |
-| `POST /api/search/compare` | 多模型 ranking comparison |
-| `GET /api/all_facets` | facet metadata + quality |
-| `GET /api/document/<doc_id>` | summary、KWIC、keywords、related docs |
-| `POST /api/evaluate` | demo qrels metrics |
-| `POST /api/diagnostics/ranking` | term contribution and score breakdown |
-| `GET /api/feedback/analytics` | click/relevance/zero-result analytics |
-| `POST /api/ltr/train` | weak-supervision LTR sandbox |
-| `GET /api/analysis/graph` | IR pipeline node graph |
+| Endpoint                        | Purpose                               |
+| ------------------------------- | ------------------------------------- |
+| `GET /api/stats`                | Corpus, index, and model readiness    |
+| `POST /api/search`              | Query search + explanations           |
+| `POST /api/search/browse`       | Facet browsing without query          |
+| `POST /api/search/compare`      | Multi-model ranking comparison        |
+| `GET /api/all_facets`           | Facet metadata + quality              |
+| `GET /api/document/<doc_id>`    | Summary, KWIC, keywords, related docs |
+| `POST /api/evaluate`            | Demo qrels metrics                    |
+| `POST /api/diagnostics/ranking` | Term contribution and score breakdown |
+| `GET /api/feedback/analytics`   | Click/relevance/zero-result analytics |
+| `POST /api/ltr/train`           | Weak-supervision LTR sandbox          |
+| `GET /api/analysis/graph`       | IR pipeline node graph                |
 
 ## Mock-safe Demo Mode
 
@@ -251,17 +254,17 @@ flowchart TD
 
 Runtime defaults:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `IR_ENABLE_HEAVY_MODELS` | `false` | Disable CKIP/BERT-style startup risk |
-| `IR_TOKENIZER_ENGINE` | `jieba` | CPU-safe tokenizer |
-| `IR_DATASET_PATH` | first available prepared JSONL | Main corpus |
-| `IR_FALLBACK_DATASET_PATH` | `datasets/mini/ir_documents.json` | Small deterministic fallback |
-| `IR_INDEX_DIR` | `data/indexes` | persistent lexical index cache |
-| `IR_MAX_DOCUMENTS` | `25000` | startup document cap |
-| `IR_HOST` / `IR_PORT` | `0.0.0.0` / `5001` | Flask bind settings |
+| Variable                   | Default                           | Purpose                              |
+| -------------------------- | --------------------------------- | ------------------------------------ |
+| `IR_ENABLE_HEAVY_MODELS`   | `false`                           | Disable CKIP/BERT-style startup risk |
+| `IR_TOKENIZER_ENGINE`      | `jieba`                           | CPU-safe tokenizer                   |
+| `IR_DATASET_PATH`          | first available prepared JSONL    | Main corpus                          |
+| `IR_FALLBACK_DATASET_PATH` | `datasets/mini/ir_documents.json` | Small deterministic fallback         |
+| `IR_INDEX_DIR`             | `data/indexes`                    | Persistent lexical index cache       |
+| `IR_MAX_DOCUMENTS`         | `25000`                           | Startup document cap                 |
+| `IR_HOST` / `IR_PORT`      | `0.0.0.0` / `5001`                | Flask bind settings                  |
 
-## 部署架構
+## Deployment Architecture
 
 ```mermaid
 flowchart LR
@@ -279,12 +282,12 @@ flowchart LR
     CaseStudy --> Media[cover + screenshots + webm]
 ```
 
-GitHub Pages 適合展示 portfolio case study、截圖和影片；不適合直接執行 Flask API。因此本專案採用雙路徑：
+GitHub Pages is suitable for showcasing the portfolio case study, screenshots, and videos. It is not suitable for directly running Flask APIs. Therefore, this project uses a dual-path approach:
 
-- `neojustin.dothost.net/projects/information-retrieval/`: dynamic Flask demo。
-- `justin21523.github.io/zh-TW/projects/information-retrieval/`: static portfolio page with media。
+* `neojustin.dothost.net/projects/information-retrieval/`: dynamic Flask demo.
+* `justin21523.github.io/zh-TW/projects/information-retrieval/`: static portfolio page with media.
 
-## 快速啟動
+## Quick Start
 
 ```bash
 pip install -r requirements.txt
@@ -293,11 +296,11 @@ IR_ENABLE_HEAVY_MODELS=false python app.py
 
 Open:
 
-- Local: <http://localhost:5001/>
-- Guide: <http://localhost:5001/guide>
-- Stats: <http://localhost:5001/api/stats>
+* Local: [http://localhost:5001/](http://localhost:5001/)
+* Guide: [http://localhost:5001/guide](http://localhost:5001/guide)
+* Stats: [http://localhost:5001/api/stats](http://localhost:5001/api/stats)
 
-建議 demo query:
+Suggested demo queries:
 
 ```text
 半導體 人工智慧
@@ -307,19 +310,19 @@ Open:
 
 ## Smoke Test
 
-本機 Flask test client:
+Local Flask test client:
 
 ```bash
 python scripts/smoke_demo.py
 ```
 
-公開 demo:
+Public demo:
 
 ```bash
 python scripts/smoke_demo.py --base-url https://neojustin.dothost.net/projects/information-retrieval
 ```
 
-手動 curl:
+Manual curl:
 
 ```bash
 curl -I http://127.0.0.1:5001/
@@ -329,47 +332,47 @@ curl -s -H "Content-Type: application/json" \
   http://127.0.0.1:5001/api/search | python -m json.tool | head
 ```
 
-## 測試與驗證
+## Testing and Verification
 
-| Command | 目的 | 目前用途 |
-| --- | --- | --- |
-| `python -m pytest tests/test_ir_app_api.py tests/test_ir_app_text_quality.py -q` | Web/API demo regression | demo 必跑 |
-| `python -m pytest -m "not slow" -q` | fast suite | release 前必跑 |
-| `python scripts/smoke_demo.py` | local smoke | demo 必跑 |
-| `python scripts/smoke_demo.py --base-url ...` | deployed smoke | deploy 後必跑 |
-| `python scripts/verify_ui_playwright.py` | 截圖與 WebM 錄影 | media 更新時執行 |
-| `black --check ...` / `flake8 ...` / `mypy ...` | code quality audit | 目前有 legacy debt，需分階段清理 |
+| Command                                                                          | Purpose                        | Current Usage                                     |
+| -------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------- |
+| `python -m pytest tests/test_ir_app_api.py tests/test_ir_app_text_quality.py -q` | Web/API demo regression        | Required for demo                                 |
+| `python -m pytest -m "not slow" -q`                                              | Fast suite                     | Required before release                           |
+| `python scripts/smoke_demo.py`                                                   | Local smoke                    | Required for demo                                 |
+| `python scripts/smoke_demo.py --base-url ...`                                    | Deployed smoke                 | Required after deployment                         |
+| `python scripts/verify_ui_playwright.py`                                         | Screenshots and WebM recording | Run when updating media                           |
+| `black --check ...` / `flake8 ...` / `mypy ...`                                  | Code quality audit             | Existing legacy debt; should be cleaned in phases |
 
-目前已知品質狀態：
+Current known quality status:
 
-- Demo/API smoke 可通過。
-- Fast pytest suite 可通過。
-- 全 repo `black --check`、`flake8`、`mypy` 有大量既有舊債，不在 portfolio hardening commit 中做大規模格式化，以免混入不相關變更。
+* Demo/API smoke tests pass.
+* Fast pytest suite passes.
+* Full-repo `black --check`, `flake8`, and `mypy` still have significant existing legacy debt. These are not mass-formatted in the portfolio hardening commit to avoid mixing unrelated changes.
 
 ## Demo Media
 
-Playwright 腳本會將可截圖狀態與錄影輸出到 `docs/assets/evaluation/`。
+The Playwright script outputs screenshot-ready states and recordings to `docs/assets/evaluation/`.
 
 ```bash
 python scripts/verify_ui_playwright.py
 ```
 
-主要資產：
+Main assets:
 
-| Asset | 說明 |
-| --- | --- |
-| [search-results.png](docs/assets/evaluation/search-results.png) | 主搜尋頁、facets、結果與小幫手 |
-| [facet-browse.png](docs/assets/evaluation/facet-browse.png) | 無 query 的 metadata browsing |
-| [document-detail.png](docs/assets/evaluation/document-detail.png) | 文章詳情 modal |
-| [model-compare.png](docs/assets/evaluation/model-compare.png) | 多模型比較 |
-| [corpus-dashboard.png](docs/assets/evaluation/corpus-dashboard.png) | 語料庫與 metadata dashboard |
-| [evaluation-dashboard.png](docs/assets/evaluation/evaluation-dashboard.png) | qrels evaluation |
-| [ranking-diagnostics.png](docs/assets/evaluation/ranking-diagnostics.png) | 排序診斷 |
-| [analysis-graph.png](docs/assets/evaluation/analysis-graph.png) | IR pipeline graph |
-| [feedback-analytics.png](docs/assets/evaluation/feedback-analytics.png) | feedback + LTR sandbox |
-| [cnirs-demo.webm](docs/assets/evaluation/cnirs-demo.webm) | 完整 demo recording |
+| Asset                                                                       | Description                                      |
+| --------------------------------------------------------------------------- | ------------------------------------------------ |
+| [search-results.png](docs/assets/evaluation/search-results.png)             | Main search page, facets, results, and assistant |
+| [facet-browse.png](docs/assets/evaluation/facet-browse.png)                 | Metadata browsing without query                  |
+| [document-detail.png](docs/assets/evaluation/document-detail.png)           | Article detail modal                             |
+| [model-compare.png](docs/assets/evaluation/model-compare.png)               | Multi-model comparison                           |
+| [corpus-dashboard.png](docs/assets/evaluation/corpus-dashboard.png)         | Corpus and metadata dashboard                    |
+| [evaluation-dashboard.png](docs/assets/evaluation/evaluation-dashboard.png) | qrels evaluation                                 |
+| [ranking-diagnostics.png](docs/assets/evaluation/ranking-diagnostics.png)   | Ranking diagnostics                              |
+| [analysis-graph.png](docs/assets/evaluation/analysis-graph.png)             | IR pipeline graph                                |
+| [feedback-analytics.png](docs/assets/evaluation/feedback-analytics.png)     | Feedback + LTR sandbox                           |
+| [cnirs-demo.webm](docs/assets/evaluation/cnirs-demo.webm)                   | Full demo recording                              |
 
-## 技術 Stack
+## Tech Stack
 
 ```mermaid
 mindmap
@@ -412,7 +415,7 @@ mindmap
       GitHub Pages Portfolio
 ```
 
-## 專案檔案與資料夾結構
+## Project Files and Folder Structure
 
 ```text
 information-retrieval/
@@ -486,77 +489,77 @@ information-retrieval/
 └── tests/
 ```
 
-| Path | 主要功能 |
-| --- | --- |
-| `app.py` | Flask demo entrypoint，呼叫 `src.ir_app.app_factory.run()` |
-| `src/ir_app/app_factory.py` | 建立 Flask app、註冊頁面 route 和 API route |
-| `src/ir_app/config/settings.py` | runtime env settings、dataset fallback、heavy model toggle |
-| `src/ir_app/schemas/` | API response envelope 和 search result schema |
-| `src/ir_app/services/document_service.py` | 載入 JSONL/mini dataset、正規化 metadata、doc lookup |
-| `src/ir_app/services/search_service.py` | 統一 search API、model dispatch、snippet、highlight、explanation |
-| `src/ir_app/services/index_service.py` | tokenizer、inverted index、TF-IDF、BM25 cache |
-| `src/ir_app/services/facet_service.py` | metadata facet counts、quality、browse filters |
-| `src/ir_app/services/document_detail_service.py` | summary、KWIC、keywords、related documents |
-| `src/ir_app/services/evaluation_service.py` | demo qrels metrics、per-query breakdown |
-| `src/ir_app/services/ranking_diagnostics_service.py` | BM25/TF-IDF/LM term contribution diagnostics |
-| `src/ir_app/services/feedback_service.py` | SQLite feedback event storage |
-| `src/ir_app/services/feedback_analytics_service.py` | CTR、zero-result、duplicates、quality controls |
-| `src/ir_app/services/learning_to_rank_*` | weak-supervision LTR feature preview and sandbox training |
-| `src/ir/` | reusable IR algorithms used by tests, CLI, and app service layer |
-| `templates/search.html` | 主搜尋 UI，第一屏展示產品本體 |
-| `templates/guide.html` | 面試 demo walkthrough |
-| `templates/compare.html` | model comparison UI |
-| `templates/corpus.html` | corpus readiness、topic explorer |
-| `templates/evaluation.html` | qrels evaluation dashboard |
-| `templates/diagnostics.html` | ranking diagnostics dashboard |
-| `templates/feedback.html` | feedback analytics and LTR sandbox |
-| `templates/analysis_graph.html` | node-based IR pipeline visualization |
-| `static/js/demo-assistant.js` | guided portfolio tour and screenshot-ready states |
-| `static/js/search.js` | main search interaction |
-| `static/js/facet.js` | facet loading, filtering, browse mode |
-| `static/js/document-modal.js` | document detail modal |
-| `static/js/evaluation.js` | evaluation dashboard client |
-| `static/js/diagnostics.js` | ranking diagnostics client |
-| `static/js/feedback-analytics.js` | feedback dashboard client |
-| `static/js/analysis-graph.js` | analysis graph rendering |
-| `data/processed/cna_mvp_cleaned.jsonl` | small tracked news corpus for local demo |
-| `datasets/mini/ir_documents.json` | deterministic mini fallback for tests |
-| `data/evaluation/demo_qrels.json` | curated demo relevance judgments |
-| `docs/assets/evaluation/` | screenshots and WebM demo video |
-| `scripts/smoke_demo.py` | local/remote portfolio smoke checks |
-| `scripts/verify_ui_playwright.py` | screenshot and video generation |
-| `Dockerfile` | production container for dothost Flask deployment |
+| Path                                                 | Main Function                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| `app.py`                                             | Flask demo entrypoint that calls `src.ir_app.app_factory.run()`     |
+| `src/ir_app/app_factory.py`                          | Creates Flask app and registers page routes and API routes          |
+| `src/ir_app/config/settings.py`                      | Runtime env settings, dataset fallback, heavy model toggle          |
+| `src/ir_app/schemas/`                                | API response envelope and search result schema                      |
+| `src/ir_app/services/document_service.py`            | Loads JSONL/mini dataset, normalizes metadata, handles doc lookup   |
+| `src/ir_app/services/search_service.py`              | Unified search API, model dispatch, snippet, highlight, explanation |
+| `src/ir_app/services/index_service.py`               | Tokenizer, inverted index, TF-IDF, BM25 cache                       |
+| `src/ir_app/services/facet_service.py`               | Metadata facet counts, quality, browse filters                      |
+| `src/ir_app/services/document_detail_service.py`     | Summary, KWIC, keywords, related documents                          |
+| `src/ir_app/services/evaluation_service.py`          | Demo qrels metrics and per-query breakdown                          |
+| `src/ir_app/services/ranking_diagnostics_service.py` | BM25/TF-IDF/LM term contribution diagnostics                        |
+| `src/ir_app/services/feedback_service.py`            | SQLite feedback event storage                                       |
+| `src/ir_app/services/feedback_analytics_service.py`  | CTR, zero-result, duplicates, quality controls                      |
+| `src/ir_app/services/learning_to_rank_*`             | Weak-supervision LTR feature preview and sandbox training           |
+| `src/ir/`                                            | Reusable IR algorithms used by tests, CLI, and app service layer    |
+| `templates/search.html`                              | Main search UI; the first screen presents the actual product        |
+| `templates/guide.html`                               | Interview demo walkthrough                                          |
+| `templates/compare.html`                             | Model comparison UI                                                 |
+| `templates/corpus.html`                              | Corpus readiness and topic explorer                                 |
+| `templates/evaluation.html`                          | qrels evaluation dashboard                                          |
+| `templates/diagnostics.html`                         | Ranking diagnostics dashboard                                       |
+| `templates/feedback.html`                            | Feedback analytics and LTR sandbox                                  |
+| `templates/analysis_graph.html`                      | Node-based IR pipeline visualization                                |
+| `static/js/demo-assistant.js`                        | Guided portfolio tour and screenshot-ready states                   |
+| `static/js/search.js`                                | Main search interaction                                             |
+| `static/js/facet.js`                                 | Facet loading, filtering, browse mode                               |
+| `static/js/document-modal.js`                        | Document detail modal                                               |
+| `static/js/evaluation.js`                            | Evaluation dashboard client                                         |
+| `static/js/diagnostics.js`                           | Ranking diagnostics client                                          |
+| `static/js/feedback-analytics.js`                    | Feedback dashboard client                                           |
+| `static/js/analysis-graph.js`                        | Analysis graph rendering                                            |
+| `data/processed/cna_mvp_cleaned.jsonl`               | Small tracked news corpus for local demo                            |
+| `datasets/mini/ir_documents.json`                    | Deterministic mini fallback for tests                               |
+| `data/evaluation/demo_qrels.json`                    | Curated demo relevance judgments                                    |
+| `docs/assets/evaluation/`                            | Screenshots and WebM demo video                                     |
+| `scripts/smoke_demo.py`                              | Local/remote portfolio smoke checks                                 |
+| `scripts/verify_ui_playwright.py`                    | Screenshot and video generation                                     |
+| `Dockerfile`                                         | Production container for dothost Flask deployment                   |
 
-## 已完成功能
+## Completed Features
 
-- Unified Flask demo app with page routes and structured JSON APIs.
-- Search modes: BM25, TF-IDF, Boolean, Hybrid, LM, BIM, WAND, MaxScore, fuzzy, CSoundex.
-- Faceted filtering and facet-only browse mode.
-- Result explanation, field boost, component scores, snippets and highlights.
-- Document detail enrichment: summary, KWIC, keywords, taxonomy, related documents.
-- Corpus dashboard: source/topic/content-type distribution, metadata completeness, index cache.
-- Topic explorer and clustering cards.
-- Evaluation dashboard with demo qrels, PR curve data, per-query metrics.
-- Ranking diagnostics with term contribution and field match matrix.
-- Feedback analytics with click/relevance logs, quality controls and LTR sandbox.
-- Analysis graph that visualizes query-processing-ranking-document-feedback flow.
-- Demo assistant for guided walkthrough and reproducible screenshot states.
-- Playwright screenshot and video generation.
-- Docker deployment behind portfolio nginx gateway.
+* Unified Flask demo app with page routes and structured JSON APIs.
+* Search modes: BM25, TF-IDF, Boolean, Hybrid, LM, BIM, WAND, MaxScore, fuzzy, CSoundex.
+* Faceted filtering and facet-only browse mode.
+* Result explanation, field boost, component scores, snippets, and highlights.
+* Document detail enrichment: summary, KWIC, keywords, taxonomy, related documents.
+* Corpus dashboard: source/topic/content-type distribution, metadata completeness, index cache.
+* Topic explorer and clustering cards.
+* Evaluation dashboard with demo qrels, PR curve data, and per-query metrics.
+* Ranking diagnostics with term contribution and field match matrix.
+* Feedback analytics with click/relevance logs, quality controls, and LTR sandbox.
+* Analysis graph that visualizes query-processing-ranking-document-feedback flow.
+* Demo assistant for guided walkthrough and reproducible screenshot states.
+* Playwright screenshot and video generation.
+* Docker deployment behind portfolio nginx gateway.
 
-## 缺失與風險
+## Gaps and Risks
 
-| 風險 | 現況 | 緩解方式 |
-| --- | --- | --- |
-| Full benchmark 不完整 | qrels 是 demo-scale，不是假裝正式 benchmark | UI 和 README 明確標示 demo evaluation |
-| Heavy semantic models | CKIP/BERT/BERTopic/FAISS 可能缺權重或資源 | default disabled，回傳 structured unavailable |
-| Full repo lint/type debt | 舊研究模組有 black/flake8/mypy debt | portfolio commit 不混入大規模格式化，另開 cleanup |
-| Public Flask hosting | GitHub Pages 不能跑 Flask | dynamic demo 放 dothost，static portfolio 放 GitHub Pages |
-| Corpus size差異 | local tracked corpus 較小，server corpus 較完整 | README 註明 fallback，API stats 可直接驗證 |
+| Risk                         | Current Status                                                   | Mitigation                                                                    |
+| ---------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Full benchmark is incomplete | qrels are demo-scale and are not presented as a formal benchmark | UI and README clearly label demo evaluation                                   |
+| Heavy semantic models        | CKIP/BERT/BERTopic/FAISS may be missing weights or resources     | Disabled by default; returns structured unavailable                           |
+| Full repo lint/type debt     | Older research modules have black/flake8/mypy debt               | Portfolio commit avoids large-scale formatting; cleanup should be separate    |
+| Public Flask hosting         | GitHub Pages cannot run Flask                                    | Dynamic demo is hosted on dothost; static portfolio is hosted on GitHub Pages |
+| Corpus size differences      | Local tracked corpus is smaller; server corpus is more complete  | README documents fallback behavior; API stats can verify directly             |
 
-## Portfolio 整合
+## Portfolio Integration
 
-主 portfolio repo:
+Main portfolio repo:
 
 ```text
 /home/justin/web-projects/justin-portfolio/
@@ -589,7 +592,7 @@ curl -I https://justin21523.github.io/portfolio/projects/information-retrieval/c
 curl -I https://justin21523.github.io/portfolio/projects/information-retrieval/demo/cnirs-demo.webm
 ```
 
-## 本機開發指令
+## Local Development Commands
 
 ```bash
 # install
@@ -611,7 +614,7 @@ python scripts/smoke_demo.py
 python scripts/verify_ui_playwright.py
 ```
 
-## CLI 範例
+## CLI Examples
 
 ```bash
 python scripts/boolean_search.py --query "information AND retrieval"
@@ -620,10 +623,13 @@ python scripts/eval_run.py --results results.json --qrels qrels.txt --metrics MA
 python scripts/csoundex_encode.py --text "三聚氰胺"
 ```
 
-## 專案價值總結
+## Project Value Summary
 
-CNIRS 展示的是一個完整資訊檢索系統的工程整理能力：從資料清理、索引、ranking、facets、explanation、evaluation、feedback、UI demo、media packaging 到部署驗證。它適合用在面試中說明如何把研究型或課堂型演算法模組，整理成面試官能直接操作、截圖、錄影並快速理解的 portfolio project。
+CNIRS demonstrates the engineering ability to organize a complete information retrieval system: from data cleaning, indexing, ranking, facets, explanation, evaluation, feedback, UI demo, media packaging, to deployment verification. It is suitable for explaining how research-oriented or classroom-style algorithm modules can be turned into a portfolio project that users can directly operate, screenshot, record, and quickly understand.
 
 ## License
 
 This project is for educational and portfolio demonstration purposes. Core IR concepts reference *Introduction to Information Retrieval* by Manning, Raghavan, and Schuetze.
+
+```
+```
